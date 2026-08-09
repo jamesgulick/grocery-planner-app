@@ -2310,6 +2310,54 @@ function PlanConfirm({ mode = "confirm", checkedIds, stapleFlags, quantities = {
 }
 
 
+// ── PLAN RECONCILE ─────────────────────────────────────────────────────────────
+// Final step: a manual cross-check that everything expected made it into the order.
+// Minimal by design — lists what should have been ordered (excluding in-stock and
+// in-cart items) and lets you tick each off. Rendered at step 5 of the plan flow.
+function PlanReconcile({ db, persistDB, onDone, checkedIds, stapleFlags, mealPlan, meals, ingredients }) {
+  const cartIngredientIds = db.plans?.slice(-1)[0]?.cartIngredientIds || [];
+  const plannedNames = Object.values(mealPlan).flat();
+  const plannedMeals = meals.filter(m => plannedNames.includes(m.name));
+  const mealIngIds   = new Set(plannedMeals.flatMap(m => m.ingredients || []));
+
+  const seen = new Set();
+  const dedup = arr => arr.filter(i => { if (seen.has(i.id)) return false; seen.add(i.id); return true; });
+  const alwaysNeeded = dedup(ingredients.filter(i => i.tier==="always" && !checkedIds.includes(i.id)));
+  const stapleNeeded = dedup(ingredients.filter(i => i.tier==="staple" && stapleFlags[i.id] && !checkedIds.includes(i.id)));
+  const mealNeeded   = dedup(ingredients.filter(i => mealIngIds.has(i.id) && i.tier==="specialty" && !checkedIds.includes(i.id)));
+  const expected = [...alwaysNeeded, ...stapleNeeded, ...mealNeeded]
+    .filter(i => !cartIngredientIds.includes(i.id))
+    .sort((a,b) => a.name.localeCompare(b.name));
+
+  const [confirmed, setConfirmed] = useState([]);
+  const toggle = id => setConfirmed(prev => prev.includes(id) ? prev.filter(x => x!==id) : [...prev, id]);
+
+  return (
+    <div>
+      <div style={S.card}>
+        <div style={S.sectionLabel}>Cross-check order</div>
+        <div style={S.h2}>Confirm what came in</div>
+        <div style={{ fontSize:13, color:C.muted, lineHeight:1.5 }}>
+          Check off each item as you confirm it's in your order. {expected.length} expected this week
+          {cartIngredientIds.length > 0 && ` (${cartIngredientIds.length} already marked in-cart, not listed here)`}.
+        </div>
+      </div>
+      <div style={S.card}>
+        {expected.length === 0
+          ? <div style={{ fontSize:13, color:C.muted, textAlign:"center", padding:"12px 0" }}>Nothing left to check — everything's in-stock or already in cart.</div>
+          : expected.map((i, idx) => (
+              <div key={i.id} style={{ ...S.row, padding:"10px 0", ...(idx===expected.length-1?S.rowLast:{}) }} onClick={() => toggle(i.id)}>
+                <div style={{ flex:1, textDecoration: confirmed.includes(i.id) ? "line-through" : "none", color: confirmed.includes(i.id) ? C.faint : C.text }}>{i.name}</div>
+                <Toggle value={confirmed.includes(i.id)} onChange={() => toggle(i.id)} />
+              </div>
+            ))}
+      </div>
+      <button style={{ ...S.btn, ...S.btnP }} onClick={onDone}>Finish week</button>
+    </div>
+  );
+}
+
+
 // ── MANAGE TAB ─────────────────────────────────────────────────────────────────
 
 function ManageTab({ db, persistDB }) {
