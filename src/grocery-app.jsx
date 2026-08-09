@@ -562,8 +562,8 @@ const bakedWeekLabel = () => {
 // planning household's location. Inside a restricted sandbox the fetch may be
 // blocked and resolve to {} — every consumer treats a missing day as neutral, so
 // nothing breaks; it simply shows no live data until hosted.
-const FORECAST_LAT = 39.44843;            // configure for your location (default: generic US point)
-const FORECAST_LON = -75.71768;
+const FORECAST_LAT = 39.7456;            // configure for your location (default: generic US point)
+const FORECAST_LON = -75.5466;
 const FORECAST_CACHE_KEY = "grocery_forecast_cache";
 const FORECAST_CACHE_TTL_MS = 6 * 60 * 60 * 1000; // 6 hours
 
@@ -1434,6 +1434,17 @@ function PlanMeals({ mealPlan, setMealPlan, commitMealToPlan, awayHome, setAwayH
   const totalMeals = Object.values(mealPlan).flat().length;
 
   const [seenSuggestions, setSeenSuggestions] = useState([]);
+  // Live weather: fetch once on mount (cached 6h). Falls back to {} when blocked
+  // or offline, which every consumer treats as neutral. See fetchLiveForecast.
+  // NOTE: declared BEFORE the pill-derive effect below, which reads them — const
+  // has no hoisting, so using them earlier throws a temporal-dead-zone ReferenceError.
+  const [forecast, setForecast] = useState({});
+  const [forecastLoaded, setForecastLoaded] = useState(false);
+  useEffect(() => {
+    let cancelled = false;
+    fetchLiveForecast().then(f => { if (!cancelled) { setForecast(f); setForecastLoaded(true); } });
+    return () => { cancelled = true; };
+  }, []);
   // Auto-derive pills ONCE if this plan has none yet. Gated on forecastLoaded so a
   // slow/blocked weather fetch can't cause this plan to miss its one shot at
   // auto-flagging grill days. After that, the user's edits always win.
@@ -1464,15 +1475,6 @@ function PlanMeals({ mealPlan, setMealPlan, commitMealToPlan, awayHome, setAwayH
     setDayPills(prev => ({ ...prev, [day]: [...(prev?.[day]||[]), { label:l, source:"manual" }] }));
     setNewPillLabel("");
   };
-  // Live weather: fetch once on mount (cached 6h). Falls back to {} when blocked
-  // or offline, which every consumer treats as neutral. See fetchLiveForecast.
-  const [forecast, setForecast] = useState({});
-  const [forecastLoaded, setForecastLoaded] = useState(false);
-  useEffect(() => {
-    let cancelled = false;
-    fetchLiveForecast().then(f => { if (!cancelled) { setForecast(f); setForecastLoaded(true); } });
-    return () => { cancelled = true; };
-  }, []);
 
   const regenerate = async () => {
     setLoading(true);
