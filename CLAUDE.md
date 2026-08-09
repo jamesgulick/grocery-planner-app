@@ -140,6 +140,18 @@ care.
   pass the bundler but throw `ReferenceError` at runtime. This exact bug happened
   with `initMaxStep`. When moving code between components, recompute from available
   props rather than assuming a name is in scope.
+- **Temporal-dead-zone (use-before-declaration) errors are a RECURRING bug here and
+  the bundler does NOT catch them.** This is a large single-file component with many
+  hooks; it's easy to reference a `const`/`let` (e.g. a `useState` pair, a computed
+  value) *above* the line that declares it. `const`/`let` do not hoist, so this
+  throws `Cannot access 'X' before initialization` at runtime — and in minified prod
+  builds `X` is a renamed token like `de`, so the message is opaque. It has bitten
+  this project at least twice (`initMaxStep`, and the `forecast`/`forecastLoaded`
+  state feeding the pill-derivation effect). **When editing a component — especially
+  when reordering hooks, moving `useState`/`useEffect` blocks, or porting code —
+  verify that every variable a hook or effect reads is DECLARED ABOVE the point of
+  use.** A clean `npm run build` does not prove this is correct; it only proves the
+  syntax is valid. Sanity-check by actually loading the affected screen.
 - **Controlled inputs need stable refs.** An inline `ref={el => ...}` callback gets a
   new identity each render, making React detach/re-attach the node and steal focus
   on every keystroke. Module-level components with a stable `useRef` avoid this (see
