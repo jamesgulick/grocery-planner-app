@@ -116,14 +116,16 @@ const buildPublished = db => {
   const settings    = db.settings || DEFAULT_SETTINGS;
   const { days, daysFull } = getWeekFromDay(settings.shoppingDay || "Wednesday");
 
-  // The active meal plan lives in planDraft.mealPlan during planning (keyed by
-  // day abbr, values are meal NAMES). The committed plan record (db.plans) only
-  // carries meals if explicitly written, so prefer the draft. Fall back to the
-  // last plan's meals, then empty.
-  const draftMeals = db.planDraft?.mealPlan;
+  // Always the CURRENT plan (the week actually being shopped/lived), never
+  // "next" — the family shouldn't be told about a week that isn't happening
+  // yet, even while the owner is mid-edit on next week's draft. The live
+  // mealPlan (keyed by day abbr -> meal NAMES) is preferred over the last
+  // committed meals snapshot, falling back to empty.
+  const plan       = getCurrentPlan(db);
+  const draftMeals = plan?.mealPlan;
   const planMeals  = (draftMeals && Object.values(draftMeals).some(a => (a||[]).length))
     ? draftMeals
-    : (db.plans?.slice(-1)[0]?.meals || {});
+    : (plan?.meals || {});
 
   const mealText = abbr => {
     const m = planMeals[abbr] || [];
@@ -416,7 +418,7 @@ const DEFAULT_SETTINGS = {
   familyContacts: FAMILY.map(f => ({...f, phone:""})),
 };
 
-const DEFAULT_DB = { settings:DEFAULT_SETTINGS, meals:SEED_MEALS, ingredients:SEED_INGREDIENTS, plans:[], planDraft:null, outbox:null, published:null, mealHistory:[] };
+const DEFAULT_DB = { settings:DEFAULT_SETTINGS, meals:SEED_MEALS, ingredients:SEED_INGREDIENTS, plans:{ current:null, next:null }, activePlan:"current", _planModelVer:1, outbox:null, published:null, mealHistory:[] };
 
 // outbox shape (legacy single-slot, still used by in-app TonightTab queue):
 // { message, recipients:[phone...], mode:"group"|"individual", label, queuedAt, sent:false }
@@ -426,7 +428,111 @@ const DEFAULT_DB = { settings:DEFAULT_SETTINGS, meals:SEED_MEALS, ingredients:SE
 // joined bodies. See buildPublished above for details.
 // { v:2, publishedAt, items:[ { key, label, body }, ... ] }
 
-// planDraft shape: { step, awayHome, mealPlan, checkedIds, dayNotes, stapleFlags, weather, startedAt }
+// plan shape (db.plans.current / db.plans.next — see SPEC-two-plan-model.md):
+// { step, maxStep, awayHome, mealPlan, checkedIds, dayNotes, dayPills,
+//   notesTouched, stapleFlags, quantities, weather, startedAt, _stepsVer,
+//   meals, items, cartItems, cartIngredientIds, dismissedShared, notes,
+//   weekOf, weekStartDate }
+// mealPlan is the live-editing meal grid (day abbr -> meal NAMES); meals is the
+// last-committed snapshot of the same shape, written by savePlan. weekStartDate
+// (ISO YYYY-MM-DD) drives auto-retire and is distinct from weekOf (legacy,
+// "date this plan record was last touched").
+
+// ── Active-plan accessors ────────────────────────────────────────────────────
+// db.plans is a two-slot object: { current, next }. db.activePlan ("current" |
+// "next") remembers which plan the owner was last EDITING in the Plan tab —
+// getActivePlan follows that toggle and is what the Plan-tab flow (Meals,
+// Inventory, Confirm, Sparky) reads and writes.
+//
+// Prep ("mark what's already bought") and Tonight, plus the family Shortcut
+// export (buildPublished), are about the week actually being SHOPPED AND LIVED
+// — not whichever plan the owner happens to be drafting — so they always read
+// getCurrentPlan regardless of db.activePlan. Never route those through
+// getActivePlan; they must stay pinned to "current" even mid-edit on "next".
+const getActivePlan = db => {
+  const key = db.activePlan || "current";
+  return db.plans?.[key] || null;
+};
+const getCurrentPlan = db => db.plans?.current || null;
+
+// Overwrite the plan at the active slot. Plan-tab flow only — Prep/Tonight/the
+// family export never write plans.
+const writeActivePlan = (db, plan) => {
+  const key = db.activePlan || "current";
+  return { ...db, plans: { ...(db.plans || { current:null, next:null }), [key]: plan } };
+};
+
+// Overwrite plans.current directly, independent of db.activePlan. Prep is the
+// one place besides the migration/lifecycle code that writes a plan, and it
+// always means "the plan being shopped," not whichever plan is being drafted.
+const writeCurrentPlan = (db, plan) => ({ ...db, plans: { ...(db.plans || { current:null, next:null }), current: plan } });
+
+// Plan count that tolerates both the legacy array shape (pre-migration db, e.g.
+// an old recovery snapshot or pasted import awaiting confirmation) and the
+// current { current, next } object shape.
+const planCount = plans => Array.isArray(plans) ? plans.length : Object.values(plans || {}).filter(Boolean).length;
+
+// Apply fn to whichever of current/next are non-null (e.g. scrubbing a deleted
+// ingredient's id out of every silo's cart/items, since both must stay clean).
+const mapBothPlans = (db, fn) => ({
+  ...db,
+  plans: {
+    current: db.plans?.current ? fn(db.plans.current) : db.plans?.current ?? null,
+    next: db.plans?.next ? fn(db.plans.next) : db.plans?.next ?? null,
+  },
+});
+
+// ── Plan-model migration (legacy single-slot → two-slot current/next) ──────────
+// Pre-migration dbs carry TWO single-slot concepts: db.planDraft (live-editing
+// state) and db.plans (array, .slice(-1)[0] = the one committed record). This
+// merges them into db.plans = { current, next }, with the single existing plan
+// becoming "current" (the owner's explicit choice). Idempotent — a db already
+// at _planModelVer >= 1 is returned unchanged. mealHistory is untouched.
+const PLAN_MODEL_VER = 1;
+const migrateDB = db => {
+  if (!db || db._planModelVer >= PLAN_MODEL_VER) return db;
+
+  const draft     = db.planDraft || null;
+  const legacy    = Array.isArray(db.plans) ? db.plans : [];
+  const committed = legacy.slice(-1)[0] || null;
+
+  let current = null;
+  if (draft || committed) {
+    current = {
+      step: draft?.step ?? 0,
+      maxStep: draft?.maxStep ?? draft?.step ?? 0,
+      awayHome: draft?.awayHome || {},
+      mealPlan: draft?.mealPlan || committed?.meals || {},
+      checkedIds: draft?.checkedIds || [],
+      dayNotes: draft?.dayNotes || {},
+      dayPills: draft?.dayPills || {},
+      notesTouched: draft?.notesTouched || false,
+      stapleFlags: draft?.stapleFlags || {},
+      quantities: draft?.quantities || {},
+      weather: draft?.weather || "hot",
+      startedAt: draft?.startedAt || committed?.weekOf || new Date().toISOString(),
+      _stepsVer: draft?._stepsVer ?? 4,
+      meals: committed?.meals || draft?.mealPlan || {},
+      items: committed?.items || [],
+      cartItems: committed?.cartItems || [],
+      cartIngredientIds: committed?.cartIngredientIds || [],
+      dismissedShared: committed?.dismissedShared || [],
+      notes: committed?.notes || "",
+      weekOf: committed?.weekOf || new Date().toISOString().split("T")[0],
+      // Infer from the existing shopping-day anchor: the committed record's
+      // weekOf if present, else the draft's start date, else today.
+      weekStartDate: committed?.weekOf || (draft?.startedAt ? draft.startedAt.split("T")[0] : new Date().toISOString().split("T")[0]),
+    };
+  }
+
+  return {
+    ...db,
+    plans: { current, next: null },
+    activePlan: "current",
+    planDraft: undefined,
+    _planModelVer: PLAN_MODEL_VER,
+  };
+};
 
 // ── Storage ────────────────────────────────────────────────────────────────────
 //
@@ -457,7 +563,7 @@ async function loadDB() {
       const parsed = JSON.parse(r.value);
       storageHealth = "ok";
       console.log("[DB] Loaded:", parsed.meals?.length, "meals,", parsed.ingredients?.length, "items");
-      return parsed;
+      return migrateDB(parsed);
     }
     // Storage reachable but empty (first run, or never saved) — not a failure.
     storageHealth = "ok";
@@ -881,17 +987,19 @@ function PillSelect({ options, value, onChange }) {
 // ── PREP TAB ───────────────────────────────────────────────────────────────────
 
 function PrepTab({ db, persistDB }) {
-  const currentPlan       = db.plans?.slice(-1)[0] || null;
+  // Always plans.current — the week actually being shopped — regardless of
+  // which plan is active in the Plan tab. See getCurrentPlan's doc comment.
+  const currentPlan       = getCurrentPlan(db);
   const cartItems         = currentPlan?.cartItems || [];
   const cartIngredientIds = currentPlan?.cartIngredientIds || [];
   const [newItem, setNewItem]         = useState("");
   const [cartSearch, setCartSearch]   = useState("");
 
+  const freshPlanBase = () => ({ weekOf:new Date().toISOString().split("T")[0], weekStartDate:new Date().toISOString().split("T")[0], notes:"", meals:{}, items:[], cartItems:[], cartIngredientIds:[] });
+
   const updatePlan = updates => {
-    const base = currentPlan || { weekOf:new Date().toISOString().split("T")[0], notes:"", meals:{}, items:[], cartItems:[], cartIngredientIds:[] };
-    const updated = { ...base, ...updates };
-    const plans   = currentPlan ? db.plans.map(p => p === currentPlan ? updated : p) : [...db.plans, updated];
-    persistDB({ ...db, plans });
+    const base = currentPlan || freshPlanBase();
+    persistDB(writeCurrentPlan(db, { ...base, ...updates }));
   };
 
   // Quick-add a brand-new ingredient from Prep search and mark it in-cart in one
@@ -902,10 +1010,9 @@ function PrepTab({ db, persistDB }) {
     const name = rawName.trim();
     if (!name) return;
     const newIng = { id:"i"+Date.now()+Math.random().toString(36).slice(2,5), createdAt:new Date().toISOString(), name:name.charAt(0).toUpperCase()+name.slice(1), storageLocation:"Unassigned", tier:"specialty", optional:false, defaultQuantity:"" };
-    const base = currentPlan || { weekOf:new Date().toISOString().split("T")[0], notes:"", meals:{}, items:[], cartItems:[], cartIngredientIds:[] };
+    const base = currentPlan || freshPlanBase();
     const updatedPlan = { ...base, cartIngredientIds:[...new Set([...(base.cartIngredientIds||[]), newIng.id])] };
-    const plans = currentPlan ? db.plans.map(p => p === currentPlan ? updatedPlan : p) : [...db.plans, updatedPlan];
-    persistDB({ ...db, ingredients:[...db.ingredients, newIng], plans });
+    persistDB(writeCurrentPlan({ ...db, ingredients:[...db.ingredients, newIng] }, updatedPlan));
     setCartSearch("");
   };
 
@@ -1018,7 +1125,11 @@ function PrepTab({ db, persistDB }) {
 
 function PlanTab({ db, persistDB }) {
   const { days, daysFull, effortMap } = getWeekFromDay(db.settings?.shoppingDay || "Wednesday");
-  const draft = db.planDraft;
+  // The plan the owner is currently EDITING — follows db.activePlan (current or
+  // next), unlike Prep/Tonight which are pinned to current. This plan object
+  // doubles as both the live-editing draft and the committed record (they were
+  // merged by the two-plan-model migration).
+  const draft = getActivePlan(db);
 
   // Step-flow migrations, applied in sequence so a draft from ANY prior version
   // lands correctly:
@@ -1060,19 +1171,23 @@ function PlanTab({ db, persistDB }) {
   const meals       = db.meals || [];
   const ingredients = db.ingredients || [];
 
-  // Persist the current plan state into db.planDraft. Accepts a patch so callers
-  // can save the new value synchronously (React state updates are async).
+  // Persist the current editing state into the active plan slot. Spreads the
+  // existing plan first so committed fields (meals, items, cart*,
+  // dismissedShared, weekOf, weekStartDate) survive — only draft-editing fields
+  // are updated here. Accepts a patch so callers can save the new value
+  // synchronously (React state updates are async).
   const saveDraft = (patch = {}) => {
     const next = {
+      ...draft,
       step, maxStep, awayHome, mealPlan, checkedIds, dayNotes, dayPills, stapleFlags, quantities, weather,
       _stepsVer: 4,
       startedAt: draft?.startedAt || new Date().toISOString(),
       ...patch,
     };
-    persistDB({ ...db, planDraft: next });
+    persistDB(writeActivePlan(db, next));
   };
 
-  const clearDraft = () => persistDB({ ...db, planDraft: null });
+  const clearDraft = () => persistDB(writeActivePlan(db, null));
 
   // Navigate to any step. maxStep only ever grows, so once you've visited a step
   // it stays unlocked even after you jump backward.
@@ -1096,6 +1211,8 @@ function PlanTab({ db, persistDB }) {
   // Single-write committer for placing a meal on the planner. If the name is new,
   // it creates a stub meal record. Meals + mealPlan + draft are written in ONE
   // persistDB so the two mutations can't clobber each other's stale-closure db.
+  // Spreads ...draft first so committed fields (cart*, items, dismissedShared,
+  // weekOf, weekStartDate) and dayPills survive — only the listed fields change.
   const commitMealToPlan = (newMealPlan, maybeNewName) => {
     setMealPlan(newMealPlan);
     let meals = db.meals || [];
@@ -1103,8 +1220,8 @@ function PlanTab({ db, persistDB }) {
     if (nm && !meals.some(m => m.name.toLowerCase() === nm.toLowerCase())) {
       meals = [...meals, { id:"m"+Date.now()+Math.random().toString(36).slice(2,5), createdAt:new Date().toISOString(), name:nm, effort:"medium", type:"dinner", weather:"any", tempAffinity:"neutral", grillable:false, leftovers:"none", preferences:[], notes:"", ingredients:[] }];
     }
-    const nextDraft = { step, maxStep, awayHome, mealPlan:newMealPlan, checkedIds, dayNotes, stapleFlags, quantities, weather, startedAt: draft?.startedAt || new Date().toISOString() };
-    persistDB({ ...db, meals, planDraft: nextDraft });
+    const nextDraft = { ...draft, step, maxStep, awayHome, mealPlan:newMealPlan, checkedIds, dayNotes, stapleFlags, quantities, weather, startedAt: draft?.startedAt || new Date().toISOString() };
+    persistDB(writeActivePlan({ ...db, meals }, nextDraft));
   };
 
   const startFresh = () => {
@@ -1122,8 +1239,9 @@ function PlanTab({ db, persistDB }) {
 
     // Archive the outgoing week's meals before clearing, so the recommender can
     // rotate variety across recent weeks. Source from the draft, falling back to
-    // the committed plan. Keep the last 6 weeks (covers the 2–3 week window).
-    const outgoingMeals = Object.values(draft?.mealPlan || db.plans?.slice(-1)[0]?.meals || {}).flat()
+    // the committed snapshot on the same (now-merged) plan object. Keep the last
+    // 6 weeks (covers the 2–3 week window).
+    const outgoingMeals = Object.values(draft?.mealPlan || draft?.meals || {}).flat()
       .filter(n => n && n !== "Choose your own night" && n !== "Choose your own");
     const prevHistory = db.mealHistory || [];
     const mealHistory = outgoingMeals.length
@@ -1134,17 +1252,22 @@ function PlanTab({ db, persistDB }) {
     // items pre-loaded mid-week for the new week (the capture flow). Everything
     // else (meals, notes, list items) is per-week and gets wiped. Past meals are
     // already archived to mealHistory above, so nothing is lost.
-    const prevPlan = db.plans?.slice(-1)[0];
-    const freshPlans = prevPlan
-      ? [{ weekOf:new Date().toISOString().split("T")[0], notes:"", meals:{}, items:[],
-           cartItems:prevPlan.cartItems || [], cartIngredientIds:prevPlan.cartIngredientIds || [] }]
-      : [];
+    // NOTE: this is the pre-two-plan-model reset; layer 3/4 replace it with
+    // date-driven auto-retire + an explicit "start next week" that doesn't
+    // touch the current plan at all.
+    const today = new Date().toISOString().split("T")[0];
+    const freshPlan = {
+      weekOf: today, weekStartDate: today, notes:"", meals:{}, items:[],
+      cartItems: draft?.cartItems || [], cartIngredientIds: draft?.cartIngredientIds || [], dismissedShared: [],
+      // Auto-populate day notes from this week's baked-in schedule so a new plan
+      // never starts blank (previously required remembering the reset button,
+      // which silently produced empty-note printouts). notesTouched tracks
+      // manual edits so a later refresh can tell "never edited" from
+      // "deliberately changed".
+      step:1, maxStep:1, awayHome:freshAway, mealPlan:freshMeals, checkedIds:[], dayNotes:{ ...defaultNotes }, dayPills:{}, notesTouched:false, _stepsVer:4, stapleFlags:{}, quantities:{}, weather:"hot", startedAt:new Date().toISOString(),
+    };
 
-    // Auto-populate day notes from this week's baked-in schedule so a new plan
-    // never starts blank (previously required remembering the reset button, which
-    // silently produced empty-note printouts). notesTouched tracks manual edits so
-    // a later refresh can tell "never edited" from "deliberately changed".
-    persistDB({ ...db, mealHistory, plans:freshPlans, planDraft: { step:1, maxStep:1, awayHome:freshAway, mealPlan:freshMeals, checkedIds:[], dayNotes:{ ...defaultNotes }, dayPills:{}, notesTouched:false, _stepsVer:4, stapleFlags:{}, quantities:{}, weather:"hot", startedAt:new Date().toISOString() } });
+    persistDB(writeActivePlan({ ...db, mealHistory }, freshPlan));
   };
 
   // Exit the planning flow WITHOUT destroying anything. The draft IS the living
@@ -1204,7 +1327,7 @@ function PlanTab({ db, persistDB }) {
       <StepNav />
       <div style={S.body}>
         {step === 1 && <PlanMeals   mealPlan={mealPlan} setMealPlan={setMealPlanP} commitMealToPlan={commitMealToPlan} awayHome={awayHome} setAwayHome={setAwayHomeP} meals={meals} onNext={() => goToStep(2)} days={days} daysFull={daysFull} effortMap={effortMap} dayNotes={dayNotes} setDayNotes={setDayNotesP} dayPills={dayPills} setDayPills={setDayPillsP} db={db} persistDB={persistDB} />}
-        {step === 2 && <PlanInventory checkedIds={checkedIds} setCheckedIds={setCheckedIdsP} stapleFlags={stapleFlags} setStapleFlags={setStapleFlagsP} quantities={quantities} setQuantities={setQuantitiesP} mealPlan={mealPlan} meals={meals} ingredients={ingredients} onNext={() => goToStep(3)} days={days} cartIngredientIds={db.plans?.slice(-1)[0]?.cartIngredientIds || []} onChangeItemTier={(id, tier, subtype) => persistDB({ ...db, ingredients: db.ingredients.map(i => i.id === id ? { ...i, tier, stapleType: subtype || undefined } : i) })} />}
+        {step === 2 && <PlanInventory checkedIds={checkedIds} setCheckedIds={setCheckedIdsP} stapleFlags={stapleFlags} setStapleFlags={setStapleFlagsP} quantities={quantities} setQuantities={setQuantitiesP} mealPlan={mealPlan} meals={meals} ingredients={ingredients} onNext={() => goToStep(3)} days={days} cartIngredientIds={draft?.cartIngredientIds || []} onChangeItemTier={(id, tier, subtype) => persistDB({ ...db, ingredients: db.ingredients.map(i => i.id === id ? { ...i, tier, stapleType: subtype || undefined } : i) })} />}
         {step === 3 && <PlanConfirm mode="confirm" checkedIds={checkedIds} stapleFlags={stapleFlags} quantities={quantities} setQuantities={setQuantitiesP} mealPlan={mealPlan} meals={meals} ingredients={ingredients} onNext={() => goToStep(4)} db={db} persistDB={persistDB} days={days} daysFull={daysFull} />}
         {step === 4 && <PlanConfirm mode="sparky" checkedIds={checkedIds} stapleFlags={stapleFlags} quantities={quantities} setQuantities={setQuantitiesP} mealPlan={mealPlan} meals={meals} ingredients={ingredients} onFinish={finishPlan} db={db} persistDB={persistDB} days={days} daysFull={daysFull} />}
         {step > 1 && (
@@ -1280,7 +1403,7 @@ function PlanWelcome({ onStart, onResume, draft, persistDB, db }) {
       {db && (() => {
         const ings       = db.ingredients || [];
         const meals      = db.meals || [];
-        const plan       = db.plans?.slice(-1)[0];
+        const plan       = getActivePlan(db);
         const always     = ings.filter(i => i.tier === "always").length;
         const staple     = ings.filter(i => i.tier === "staple").length;
         const specialty  = ings.filter(i => i.tier === "specialty").length;
@@ -1927,18 +2050,19 @@ function PlanConfirm({ mode = "confirm", checkedIds, stapleFlags, quantities = {
   const [reconcileCopied, setReconcileCopied] = useState(false);
   const [sharedSparkyCopied, setSharedSparkyCopied] = useState(false);
 
-  const cartIngredientIds = db.plans?.slice(-1)[0]?.cartIngredientIds || [];
-  const cartItems         = db.plans?.slice(-1)[0]?.cartItems || [];
-  const dismissedShared   = db.plans?.slice(-1)[0]?.dismissedShared || [];
+  const activePlan         = getActivePlan(db);
+  const cartIngredientIds = activePlan?.cartIngredientIds || [];
+  const cartItems         = activePlan?.cartItems || [];
+  const dismissedShared   = activePlan?.dismissedShared || [];
   // Dismiss a shared-item flag for THIS list only (e.g. butter — a package always
   // covers several meals). Lives on the plan record, so it survives leaving and
   // returning to this step, and clears when a new week starts.
   const toggleDismissShared = id => {
-    const plan = db.plans?.slice(-1)[0];
+    const plan = activePlan;
     if (!plan) return;
     const cur = plan.dismissedShared || [];
     const next = cur.includes(id) ? cur.filter(x => x !== id) : [...cur, id];
-    persistDB({ ...db, plans: db.plans.map(p => p === plan ? { ...p, dismissedShared: next } : p) });
+    persistDB(writeActivePlan(db, { ...plan, dismissedShared: next }));
   };
 
   const plannedNames = Object.values(mealPlan).flat();
@@ -2055,11 +2179,12 @@ function PlanConfirm({ mode = "confirm", checkedIds, stapleFlags, quantities = {
   };
 
   const savePlan = () => {
-    const currentPlan = db.plans?.slice(-1)[0];
-    const listItems   = allNeeded.map(i => ({ ingredientId:i.id, status:"ordering", quantity:(quantities[i.id] !== undefined ? quantities[i.id] : (i.defaultQuantity||"")) }));
-    const updated     = currentPlan ? { ...currentPlan, meals:mealPlan, items:listItems } : { weekOf:new Date().toISOString().split("T")[0], notes:"", cartItems:[], cartIngredientIds:[], meals:mealPlan, items:listItems };
-    const plans       = currentPlan ? db.plans.map(p => p===currentPlan?updated:p) : [...(db.plans||[]), updated];
-    persistDB({ ...db, plans });
+    const listItems = allNeeded.map(i => ({ ingredientId:i.id, status:"ordering", quantity:(quantities[i.id] !== undefined ? quantities[i.id] : (i.defaultQuantity||"")) }));
+    const today     = new Date().toISOString().split("T")[0];
+    const updated   = activePlan
+      ? { ...activePlan, meals:mealPlan, items:listItems }
+      : { weekOf:today, weekStartDate:today, notes:"", cartItems:[], cartIngredientIds:[], dismissedShared:[], meals:mealPlan, items:listItems };
+    persistDB(writeActivePlan(db, updated));
   };
 
   const QtyChip = ({ ing }) => {
@@ -2813,8 +2938,7 @@ function ManageItems({ db, persistDB }) {
       onConfirm: () => {
         const ingredients = db.ingredients.filter(i => i.id !== id);
         const meals = db.meals.map(m => ({...m, ingredients:(m.ingredients||[]).filter(i => i !== id)}));
-        const plans = db.plans.map(p => ({...p, cartIngredientIds:(p.cartIngredientIds||[]).filter(i => i !== id), items:(p.items||[]).filter(i => i.ingredientId !== id)}));
-        persistDB({...db, ingredients, meals, plans});
+        persistDB(mapBothPlans({...db, ingredients, meals}, p => ({...p, cartIngredientIds:(p.cartIngredientIds||[]).filter(i => i !== id), items:(p.items||[]).filter(i => i.ingredientId !== id)})));
         setEditing(null);
         setConfirmDelete(null);
       }
@@ -2843,8 +2967,7 @@ function ManageItems({ db, persistDB }) {
       onConfirm: () => {
         const ingredients = db.ingredients.filter(i => !ids.includes(i.id));
         const meals = db.meals.map(m => ({...m, ingredients:(m.ingredients||[]).filter(id => !ids.includes(id))}));
-        const plans = db.plans.map(p => ({...p, cartIngredientIds:(p.cartIngredientIds||[]).filter(id => !ids.includes(id)), items:(p.items||[]).filter(i => !ids.includes(i.ingredientId))}));
-        persistDB({...db, ingredients, meals, plans});
+        persistDB(mapBothPlans({...db, ingredients, meals}, p => ({...p, cartIngredientIds:(p.cartIngredientIds||[]).filter(id => !ids.includes(id)), items:(p.items||[]).filter(i => !ids.includes(i.ingredientId))})));
         setSelected(new Set());
         setConfirmDelete(null);
       }
@@ -3036,8 +3159,9 @@ function ManageUpload({ db, persistDB }) {
       setEditNames(names);
 
       // Reconcile receipt against this week's saved shopping list (ground truth
-      // for what we ordered vs. what we intended).
-      const plan       = db.plans?.slice(-1)[0];
+      // for what we ordered vs. what we intended). Always the plan actually
+      // being shopped, never "next".
+      const plan       = getCurrentPlan(db);
       const planItems  = (plan?.items || []).filter(li => li.status === "ordering");
       const receiptIds = new Set(withMatch.filter(i => i.matchedId).map(i => i.matchedId));
       const missed     = planItems
@@ -3312,7 +3436,7 @@ function ManageConfig({ db, persistDB }) {
 
       <div style={S.card}>
         <div style={S.sectionLabel}>Cross-device sync — iCloud Drive</div>
-        <div style={{ fontSize:13, color:C.muted, marginBottom:6 }}>{db.meals.length} meals · {db.ingredients.length} items · {db.plans.length} plans</div>
+        <div style={{ fontSize:13, color:C.muted, marginBottom:6 }}>{db.meals.length} meals · {db.ingredients.length} items · {planCount(db.plans)} plans</div>
         <div style={{ fontSize:12, color:C.faint, marginBottom:12 }}>Save to GroceryDB.json in iCloud Drive via shortcut or manual copy</div>
 
         <button style={{ ...S.btn, background:"#4A90D9", color:"#fff", marginBottom:8 }} onClick={() => window.open("https://www.icloud.com/iclouddrive/","_blank")}>
@@ -3360,7 +3484,9 @@ function TonightTab({ db, persistDB }) {
   const [recipient, setRecipient] = useState("all");
   const [queued, setQueued] = useState(false);
 
-  const currentPlan = db.plans?.slice(-1)[0];
+  // Always the current plan — tonight's dinner is about the week actually
+  // being lived, never whichever plan is being drafted in the Plan tab.
+  const currentPlan = getCurrentPlan(db);
   const planMeals   = currentPlan?.meals || {};
   const { days, daysFull } = getWeekFromDay(db.settings?.shoppingDay || "Wednesday");
 
@@ -3550,7 +3676,10 @@ export default function App() {
   }, []);
 
   const persistDB = next => {
-    const stamped = { ...next, savedAt:new Date().toISOString() };
+    // migrateDB is idempotent, so this is a cheap no-op for an already-current
+    // db and a safety net for anything entering via recovery/import that might
+    // still carry the legacy single-slot plan shape.
+    const stamped = { ...migrateDB(next), savedAt:new Date().toISOString() };
     setDB(stamped);
     dbRef.current = stamped;
     saveDB(stamped).then(ok => setSaveOk(ok)).catch(() => setSaveOk(false));
@@ -3657,7 +3786,7 @@ export default function App() {
                 <div style={{ display:"flex", justifyContent:"space-around", textAlign:"center" }}>
                   <div><div style={{ fontSize:26, fontWeight:800, color:C.primary }}>{recovery.db.meals.length}</div><div style={{ fontSize:11, color:C.muted, fontWeight:700 }}>MEALS</div></div>
                   <div><div style={{ fontSize:26, fontWeight:800, color:C.primary }}>{recovery.db.ingredients.length}</div><div style={{ fontSize:11, color:C.muted, fontWeight:700 }}>ITEMS</div></div>
-                  <div><div style={{ fontSize:26, fontWeight:800, color:C.primary }}>{(recovery.db.plans||[]).length}</div><div style={{ fontSize:11, color:C.muted, fontWeight:700 }}>PLANS</div></div>
+                  <div><div style={{ fontSize:26, fontWeight:800, color:C.primary }}>{planCount(recovery.db.plans)}</div><div style={{ fontSize:11, color:C.muted, fontWeight:700 }}>PLANS</div></div>
                 </div>
               </div>
               <button style={{ ...S.btn, ...S.btnP }} onClick={acceptRecovery}>Restore this</button>
@@ -3677,7 +3806,7 @@ export default function App() {
                     <div style={{ display:"flex", justifyContent:"space-around", textAlign:"center" }}>
                       <div><div style={{ fontSize:28, fontWeight:800, color:C.primary }}>{sessionPendingConfirm.meals.length}</div><div style={{ fontSize:11, color:C.muted, fontWeight:700 }}>MEALS</div></div>
                       <div><div style={{ fontSize:28, fontWeight:800, color:C.primary }}>{sessionPendingConfirm.ingredients.length}</div><div style={{ fontSize:11, color:C.muted, fontWeight:700 }}>ITEMS</div></div>
-                      <div><div style={{ fontSize:28, fontWeight:800, color:C.primary }}>{(sessionPendingConfirm.plans||[]).length}</div><div style={{ fontSize:11, color:C.muted, fontWeight:700 }}>PLANS</div></div>
+                      <div><div style={{ fontSize:28, fontWeight:800, color:C.primary }}>{planCount(sessionPendingConfirm.plans)}</div><div style={{ fontSize:11, color:C.muted, fontWeight:700 }}>PLANS</div></div>
                     </div>
                     {sessionPendingConfirm.savedAt && <div style={{ fontSize:12, color:C.muted, textAlign:"center", marginTop:10 }}>Saved {formatSavedAt(sessionPendingConfirm.savedAt)}</div>}
                   </div>
