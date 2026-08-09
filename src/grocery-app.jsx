@@ -534,6 +534,38 @@ const migrateDB = db => {
   };
 };
 
+// ── Auto-retire (two-plan-model lifecycle) ──────────────────────────────────────
+// Runs once per app load, never mid-session. If plans.next exists and its
+// weekStartDate has arrived, the outgoing current week is archived to
+// mealHistory (same format startFresh has always used — archivedAt + unique
+// meal names, filtering placeholders, keeping the last 6 weeks) and next is
+// promoted to current. This is the ONLY destructive operation in the two-plan
+// model; editing current, editing next, and switching between them never lose
+// data. Silent and automatic — no prompt, no confirmation. Returns the SAME db
+// reference when nothing retires, so callers can tell "no-op" from "changed"
+// without a deep-equal check.
+const autoRetirePlans = db => {
+  const next = db.plans?.next;
+  if (!next || !next.weekStartDate) return db;
+  const today = new Date().toISOString().split("T")[0];
+  if (next.weekStartDate > today) return db;
+
+  const outgoing = db.plans?.current;
+  const outgoingMeals = Object.values(outgoing?.mealPlan || outgoing?.meals || {}).flat()
+    .filter(n => n && n !== "Choose your own night" && n !== "Choose your own");
+  const prevHistory = db.mealHistory || [];
+  const mealHistory = outgoingMeals.length
+    ? [...prevHistory, { archivedAt:new Date().toISOString(), meals:[...new Set(outgoingMeals)] }].slice(-6)
+    : prevHistory;
+
+  return {
+    ...db,
+    mealHistory,
+    plans: { current: next, next: null },
+    activePlan: db.activePlan === "next" ? "current" : (db.activePlan || "current"),
+  };
+};
+
 // ── Storage ────────────────────────────────────────────────────────────────────
 //
 // Local persistence is ATTEMPTED on every platform (including mobile), but never
@@ -3639,8 +3671,16 @@ export default function App() {
   useEffect(() => {
     (async () => {
       const loaded = await loadDB();
-      setDB(loaded);
-      dbRef.current = loaded;
+      // Auto-retire runs once per load, never mid-session: promotes plans.next
+      // to current if its weekStartDate has arrived. Persist immediately if it
+      // fired, so a reload doesn't re-archive the same outgoing week.
+      const retired = autoRetirePlans(loaded);
+      if (retired !== loaded) {
+        persistDB(retired);
+      } else {
+        setDB(loaded);
+        dbRef.current = loaded;
+      }
       setLoading(false);
       setSaveOk(getStorageHealth() !== "unavailable");
       const restoredReal = getStorageHealth() === "ok" && loaded !== DEFAULT_DB;
