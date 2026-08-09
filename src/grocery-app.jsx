@@ -562,8 +562,8 @@ const bakedWeekLabel = () => {
 // planning household's location. Inside a restricted sandbox the fetch may be
 // blocked and resolve to {} — every consumer treats a missing day as neutral, so
 // nothing breaks; it simply shows no live data until hosted.
-const FORECAST_LAT = 39.7456;            // configure for your location (default: generic US point)
-const FORECAST_LON = -75.5466;
+const FORECAST_LAT = 39.44843;            // configure for your location (default: generic US point)
+const FORECAST_LON = -75.71768;
 const FORECAST_CACHE_KEY = "grocery_forecast_cache";
 const FORECAST_CACHE_TTL_MS = 6 * 60 * 60 * 1000; // 6 hours
 
