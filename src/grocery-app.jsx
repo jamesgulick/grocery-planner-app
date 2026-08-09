@@ -50,7 +50,7 @@ const DB_KEY           = "grocery_db";
 const RECOVERY_KEY     = "grocery_recovery";
 const SHORTCUT_GET     = "shortcuts://run-shortcut?name=Get%20My%20Grocery%20Data";
 const SHORTCUT_SAVE    = "shortcuts://run-shortcut?name=Save%20My%20Grocery%20Data";
-const PLAN_STEPS       = ["Welcome","Meals","Inventory","Confirm","Sparky","Reconcile"];
+const PLAN_STEPS       = ["Welcome","Meals","Inventory","Confirm","Sparky"];
 
 const isPC = () => !/Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent);
 
@@ -1028,16 +1028,20 @@ function PlanTab({ db, persistDB }) {
   //   v2 → v3: List split into Confirm+Sparky, Print removed. Flow becomes
   //     Welcome·Meals·Inventory·Confirm·Sparky·Reconcile. Map: 0→0,1→1,2→2,3→3,
   //     4→4(Print→Sparky),5→5.
+  //   v3 → v4: Reconcile step removed. Flow becomes Welcome·Meals·Inventory·
+  //     Confirm·Sparky (5 steps, indices 0–4). Any step 5 clamps to 4 (Sparky).
   const migrateV2 = s => [0,1,1,2,3,4,4,5][s] ?? 0;
   const migrateV3 = s => [0,1,2,3,4,5][s] ?? 0;   // old Print(4) folds onto Sparky(4)
+  const migrateV4 = s => s === 5 ? 4 : s;         // old Reconcile(5) folds onto Sparky(4)
   const ver = draft?._stepsVer || (draft?._stepsV2 ? 2 : 1);
   const migrateStep = s => {
     let x = s;
     if (ver < 2) x = migrateV2(x);
     if (ver < 3) x = migrateV3(x);
+    if (ver < 4) x = migrateV4(x);
     return x;
   };
-  const needsMigrate = draft && ver < 3;
+  const needsMigrate = draft && ver < 4;
   const initStep    = draft ? (needsMigrate ? migrateStep(draft.step) : draft.step) : 0;
   const initMaxStep = draft ? (needsMigrate ? migrateStep(draft.maxStep ?? draft.step) : (draft.maxStep ?? draft.step)) : 0;
 
@@ -1061,7 +1065,7 @@ function PlanTab({ db, persistDB }) {
   const saveDraft = (patch = {}) => {
     const next = {
       step, maxStep, awayHome, mealPlan, checkedIds, dayNotes, dayPills, stapleFlags, quantities, weather,
-      _stepsVer: 3,
+      _stepsVer: 4,
       startedAt: draft?.startedAt || new Date().toISOString(),
       ...patch,
     };
@@ -1140,7 +1144,7 @@ function PlanTab({ db, persistDB }) {
     // never starts blank (previously required remembering the reset button, which
     // silently produced empty-note printouts). notesTouched tracks manual edits so
     // a later refresh can tell "never edited" from "deliberately changed".
-    persistDB({ ...db, mealHistory, plans:freshPlans, planDraft: { step:1, maxStep:1, awayHome:freshAway, mealPlan:freshMeals, checkedIds:[], dayNotes:{ ...defaultNotes }, dayPills:{}, notesTouched:false, _stepsVer:3, stapleFlags:{}, quantities:{}, weather:"hot", startedAt:new Date().toISOString() } });
+    persistDB({ ...db, mealHistory, plans:freshPlans, planDraft: { step:1, maxStep:1, awayHome:freshAway, mealPlan:freshMeals, checkedIds:[], dayNotes:{ ...defaultNotes }, dayPills:{}, notesTouched:false, _stepsVer:4, stapleFlags:{}, quantities:{}, weather:"hot", startedAt:new Date().toISOString() } });
   };
 
   // Exit the planning flow WITHOUT destroying anything. The draft IS the living
@@ -1203,7 +1207,6 @@ function PlanTab({ db, persistDB }) {
         {step === 2 && <PlanInventory checkedIds={checkedIds} setCheckedIds={setCheckedIdsP} stapleFlags={stapleFlags} setStapleFlags={setStapleFlagsP} quantities={quantities} setQuantities={setQuantitiesP} mealPlan={mealPlan} meals={meals} ingredients={ingredients} onNext={() => goToStep(3)} days={days} cartIngredientIds={db.plans?.slice(-1)[0]?.cartIngredientIds || []} onChangeItemTier={(id, tier, subtype) => persistDB({ ...db, ingredients: db.ingredients.map(i => i.id === id ? { ...i, tier, stapleType: subtype || undefined } : i) })} />}
         {step === 3 && <PlanConfirm mode="confirm" checkedIds={checkedIds} stapleFlags={stapleFlags} quantities={quantities} setQuantities={setQuantitiesP} mealPlan={mealPlan} meals={meals} ingredients={ingredients} onNext={() => goToStep(4)} db={db} persistDB={persistDB} days={days} daysFull={daysFull} />}
         {step === 4 && <PlanConfirm mode="sparky" checkedIds={checkedIds} stapleFlags={stapleFlags} quantities={quantities} setQuantities={setQuantitiesP} mealPlan={mealPlan} meals={meals} ingredients={ingredients} onFinish={finishPlan} db={db} persistDB={persistDB} days={days} daysFull={daysFull} />}
-        {step === 5 && <PlanReconcile db={db} persistDB={persistDB} onDone={finishPlan} checkedIds={checkedIds} stapleFlags={stapleFlags} mealPlan={mealPlan} meals={meals} ingredients={ingredients} />}
         {step > 1 && (
           <button style={{ background:"none", border:`1px solid ${C.border}`, borderRadius:10, padding:"10px 16px", fontSize:14, color:C.muted, cursor:"pointer", width:"100%", marginTop:4 }} onClick={() => goToStep(step - 1)}>
             ← Back
@@ -1228,9 +1231,10 @@ function PlanWelcome({ onStart, onResume, draft, persistDB, db }) {
   // lives in PlanTab, not here, so migrate locally. Mirrors PlanTab's migration.
   const _mV2 = s => [0,1,1,2,3,4,4,5][s] ?? 0;
   const _mV3 = s => [0,1,2,3,4,5][s] ?? 0;
+  const _mV4 = s => s === 5 ? 4 : s;
   const _ver = draft?._stepsVer || (draft?._stepsV2 ? 2 : 1);
   const _rawStep = draft?.maxStep ?? draft?.step ?? 0;
-  const _resumeStep = draft ? (_ver < 2 ? _mV3(_mV2(_rawStep)) : _ver < 3 ? _mV3(_rawStep) : _rawStep) : 0;
+  const _resumeStep = draft ? _mV4(_ver < 2 ? _mV3(_mV2(_rawStep)) : _ver < 3 ? _mV3(_rawStep) : _rawStep) : 0;
   const draftStepName  = draft ? PLAN_STEPS[_resumeStep] : null;
   const draftMealCount = draft ? Object.values(draft.mealPlan || {}).flat().length : 0;
   const draftStarted   = draft?.startedAt ? new Date(draft.startedAt).toLocaleDateString("en-US",{weekday:"short",month:"short",day:"numeric"}) : null;
@@ -2303,56 +2307,7 @@ function PlanConfirm({ mode = "confirm", checkedIds, stapleFlags, quantities = {
         </div>
       )}
       <button style={{ ...S.btn, ...S.btnP }} onClick={() => { try { savePlan(); } finally { onFinish && onFinish(); } }}>Done — finish plan</button>
-      <div style={{ fontSize:12, color:C.faint, textAlign:"center", marginTop:8 }}>You can still open Reconcile later to check the placed order.</div>
       </>}
-    </div>
-  );
-}
-
-
-// ── PLAN RECONCILE ─────────────────────────────────────────────────────────────
-// Final step: a manual cross-check that everything expected made it into the order.
-// Minimal by design — lists what should have been ordered (excluding in-stock and
-// in-cart items) and lets you tick each off. Rendered at step 5 of the plan flow.
-function PlanReconcile({ db, persistDB, onDone, checkedIds, stapleFlags, mealPlan, meals, ingredients }) {
-  const cartIngredientIds = db.plans?.slice(-1)[0]?.cartIngredientIds || [];
-  const plannedNames = Object.values(mealPlan).flat();
-  const plannedMeals = meals.filter(m => plannedNames.includes(m.name));
-  const mealIngIds   = new Set(plannedMeals.flatMap(m => m.ingredients || []));
-
-  const seen = new Set();
-  const dedup = arr => arr.filter(i => { if (seen.has(i.id)) return false; seen.add(i.id); return true; });
-  const alwaysNeeded = dedup(ingredients.filter(i => i.tier==="always" && !checkedIds.includes(i.id)));
-  const stapleNeeded = dedup(ingredients.filter(i => i.tier==="staple" && stapleFlags[i.id] && !checkedIds.includes(i.id)));
-  const mealNeeded   = dedup(ingredients.filter(i => mealIngIds.has(i.id) && i.tier==="specialty" && !checkedIds.includes(i.id)));
-  const expected = [...alwaysNeeded, ...stapleNeeded, ...mealNeeded]
-    .filter(i => !cartIngredientIds.includes(i.id))
-    .sort((a,b) => a.name.localeCompare(b.name));
-
-  const [confirmed, setConfirmed] = useState([]);
-  const toggle = id => setConfirmed(prev => prev.includes(id) ? prev.filter(x => x!==id) : [...prev, id]);
-
-  return (
-    <div>
-      <div style={S.card}>
-        <div style={S.sectionLabel}>Cross-check order</div>
-        <div style={S.h2}>Confirm what came in</div>
-        <div style={{ fontSize:13, color:C.muted, lineHeight:1.5 }}>
-          Check off each item as you confirm it's in your order. {expected.length} expected this week
-          {cartIngredientIds.length > 0 && ` (${cartIngredientIds.length} already marked in-cart, not listed here)`}.
-        </div>
-      </div>
-      <div style={S.card}>
-        {expected.length === 0
-          ? <div style={{ fontSize:13, color:C.muted, textAlign:"center", padding:"12px 0" }}>Nothing left to check — everything's in-stock or already in cart.</div>
-          : expected.map((i, idx) => (
-              <div key={i.id} style={{ ...S.row, padding:"10px 0", ...(idx===expected.length-1?S.rowLast:{}) }} onClick={() => toggle(i.id)}>
-                <div style={{ flex:1, textDecoration: confirmed.includes(i.id) ? "line-through" : "none", color: confirmed.includes(i.id) ? C.faint : C.text }}>{i.name}</div>
-                <Toggle value={confirmed.includes(i.id)} onChange={() => toggle(i.id)} />
-              </div>
-            ))}
-      </div>
-      <button style={{ ...S.btn, ...S.btnP }} onClick={onDone}>Finish week</button>
     </div>
   );
 }
