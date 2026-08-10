@@ -63,11 +63,15 @@ const exportMeta = db => {
   const now = new Date();
   const et = now.toLocaleString("en-US", { timeZone:"America/New_York", weekday:"short", month:"short", day:"numeric", hour:"numeric", minute:"2-digit" });
   return {
-    app:        "GroceryDB",
-    summary:    `${(db.meals||[]).length} meals | ${(db.ingredients||[]).length} items | ${et} ET`,
-    mealCount:  (db.meals||[]).length,
-    itemCount:  (db.ingredients||[]).length,
-    exportedAt: now.toISOString(),
+    app:            "GroceryDB",
+    summary:        `${(db.meals||[]).length} meals | ${(db.ingredients||[]).length} items | ${et} ET`,
+    mealCount:      (db.meals||[]).length,
+    itemCount:      (db.ingredients||[]).length,
+    exportedAt:     now.toISOString(),
+    // Carried through so a re-import can show real provenance (as-of time,
+    // seed-vs-real) instead of re-deriving it from the fresh export moment.
+    dataChangedAt:  db.dataChangedAt || null,
+    lastExportedAt: db.lastExportedAt || null,
   };
 };
 
@@ -432,7 +436,7 @@ const DEFAULT_SETTINGS = {
   familyContacts: FAMILY.map(f => ({...f, phone:""})),
 };
 
-const DEFAULT_DB = { settings:DEFAULT_SETTINGS, meals:SEED_MEALS, ingredients:SEED_INGREDIENTS, plans:{ current:null, next:null }, activePlan:"current", _planModelVer:1, outbox:null, published:null, mealHistory:[] };
+const DEFAULT_DB = { settings:DEFAULT_SETTINGS, meals:SEED_MEALS, ingredients:SEED_INGREDIENTS, plans:{ current:null, next:null }, activePlan:"current", _planModelVer:1, outbox:null, published:null, mealHistory:[], _isSeed:true, dataChangedAt:null, lastExportedAt:null };
 
 // outbox shape (legacy single-slot, still used by in-app TonightTab queue):
 // { message, recipients:[phone...], mode:"group"|"individual", label, queuedAt, sent:false }
@@ -504,48 +508,61 @@ const mapBothPlans = (db, fn) => ({
 // at _planModelVer >= 1 is returned unchanged. mealHistory is untouched.
 const PLAN_MODEL_VER = 1;
 const migrateDB = db => {
-  if (!db || db._planModelVer >= PLAN_MODEL_VER) return db;
+  if (!db) return db;
+  let out = db;
 
-  const draft     = db.planDraft || null;
-  const legacy    = Array.isArray(db.plans) ? db.plans : [];
-  const committed = legacy.slice(-1)[0] || null;
+  if (out._planModelVer < PLAN_MODEL_VER) {
+    const draft     = out.planDraft || null;
+    const legacy    = Array.isArray(out.plans) ? out.plans : [];
+    const committed = legacy.slice(-1)[0] || null;
 
-  let current = null;
-  if (draft || committed) {
-    current = {
-      step: draft?.step ?? 0,
-      maxStep: draft?.maxStep ?? draft?.step ?? 0,
-      awayHome: draft?.awayHome || {},
-      mealPlan: draft?.mealPlan || committed?.meals || {},
-      checkedIds: draft?.checkedIds || [],
-      dayNotes: draft?.dayNotes || {},
-      dayPills: draft?.dayPills || {},
-      notesTouched: draft?.notesTouched || false,
-      stapleFlags: draft?.stapleFlags || {},
-      quantities: draft?.quantities || {},
-      weather: draft?.weather || "hot",
-      startedAt: draft?.startedAt || committed?.weekOf || new Date().toISOString(),
-      _stepsVer: draft?._stepsVer ?? 4,
-      meals: committed?.meals || draft?.mealPlan || {},
-      items: committed?.items || [],
-      cartItems: committed?.cartItems || [],
-      cartIngredientIds: committed?.cartIngredientIds || [],
-      dismissedShared: committed?.dismissedShared || [],
-      notes: committed?.notes || "",
-      weekOf: committed?.weekOf || new Date().toISOString().split("T")[0],
-      // Infer from the existing shopping-day anchor: the committed record's
-      // weekOf if present, else the draft's start date, else today.
-      weekStartDate: committed?.weekOf || (draft?.startedAt ? draft.startedAt.split("T")[0] : new Date().toISOString().split("T")[0]),
+    let current = null;
+    if (draft || committed) {
+      current = {
+        step: draft?.step ?? 0,
+        maxStep: draft?.maxStep ?? draft?.step ?? 0,
+        awayHome: draft?.awayHome || {},
+        mealPlan: draft?.mealPlan || committed?.meals || {},
+        checkedIds: draft?.checkedIds || [],
+        dayNotes: draft?.dayNotes || {},
+        dayPills: draft?.dayPills || {},
+        notesTouched: draft?.notesTouched || false,
+        stapleFlags: draft?.stapleFlags || {},
+        quantities: draft?.quantities || {},
+        weather: draft?.weather || "hot",
+        startedAt: draft?.startedAt || committed?.weekOf || new Date().toISOString(),
+        _stepsVer: draft?._stepsVer ?? 4,
+        meals: committed?.meals || draft?.mealPlan || {},
+        items: committed?.items || [],
+        cartItems: committed?.cartItems || [],
+        cartIngredientIds: committed?.cartIngredientIds || [],
+        dismissedShared: committed?.dismissedShared || [],
+        notes: committed?.notes || "",
+        weekOf: committed?.weekOf || new Date().toISOString().split("T")[0],
+        // Infer from the existing shopping-day anchor: the committed record's
+        // weekOf if present, else the draft's start date, else today.
+        weekStartDate: committed?.weekOf || (draft?.startedAt ? draft.startedAt.split("T")[0] : new Date().toISOString().split("T")[0]),
+      };
+    }
+
+    out = {
+      ...out,
+      plans: { current, next: null },
+      activePlan: "current",
+      planDraft: undefined,
+      _planModelVer: PLAN_MODEL_VER,
     };
   }
 
-  return {
-    ...db,
-    plans: { current, next: null },
-    activePlan: "current",
-    planDraft: undefined,
-    _planModelVer: PLAN_MODEL_VER,
-  };
+  // Data-provenance fields (added later than the rest of the schema): backfill
+  // for any db that predates them, so pre-existing REAL data isn't mistaken
+  // for seed data and gets a sane freshness baseline instead of "unknown".
+  // DEFAULT_DB already sets all three explicitly, so this is a no-op for it.
+  if (out._isSeed === undefined)       out = { ...out, _isSeed: false };
+  if (out.dataChangedAt === undefined) out = { ...out, dataChangedAt: out.savedAt || null };
+  if (out.lastExportedAt === undefined) out = { ...out, lastExportedAt: null };
+
+  return out;
 };
 
 // ── Auto-retire (two-plan-model lifecycle) ──────────────────────────────────────
@@ -1202,8 +1219,10 @@ function PlanTab({ db, persistDB }) {
   // existing plan first so committed fields (meals, items, cart*,
   // dismissedShared, weekOf, weekStartDate) survive — only draft-editing fields
   // are updated here. Accepts a patch so callers can save the new value
-  // synchronously (React state updates are async).
-  const saveDraft = (patch = {}) => {
+  // synchronously (React state updates are async). opts forwards to persistDB
+  // (e.g. { background: true } for the weather-driven pill auto-derive, which
+  // must not look like a user edit — see SPEC-data-provenance.md).
+  const saveDraft = (patch = {}, opts = {}) => {
     const next = {
       ...draft,
       step, maxStep, awayHome, mealPlan, checkedIds, dayNotes, dayPills, stapleFlags, quantities, weather,
@@ -1211,7 +1230,7 @@ function PlanTab({ db, persistDB }) {
       startedAt: draft?.startedAt || new Date().toISOString(),
       ...patch,
     };
-    persistDB(writeActivePlan(db, next));
+    persistDB(writeActivePlan(db, next), opts);
   };
 
   const clearDraft = () => persistDB(writeActivePlan(db, null));
@@ -1230,7 +1249,7 @@ function PlanTab({ db, persistDB }) {
   const setMealPlanP    = v => { const nv = typeof v === "function" ? v(mealPlan)    : v; setMealPlan(nv);    saveDraft({ mealPlan: nv }); };
   const setCheckedIdsP  = v => { const nv = typeof v === "function" ? v(checkedIds)  : v; setCheckedIds(nv);  saveDraft({ checkedIds: nv }); };
   const setDayNotesP    = v => { const nv = typeof v === "function" ? v(dayNotes)    : v; setDayNotes(nv);    saveDraft({ dayNotes: nv }); };
-  const setDayPillsP    = v => { const nv = typeof v === "function" ? v(dayPills)    : v; setDayPills(nv);    saveDraft({ dayPills: nv }); };
+  const setDayPillsP    = (v, opts) => { const nv = typeof v === "function" ? v(dayPills)    : v; setDayPills(nv);    saveDraft({ dayPills: nv }, opts); };
   const setStapleFlagsP = v => { const nv = typeof v === "function" ? v(stapleFlags) : v; setStapleFlags(nv); saveDraft({ stapleFlags: nv }); };
   const setQuantitiesP  = v => { const nv = typeof v === "function" ? v(quantities)  : v; setQuantities(nv);  saveDraft({ quantities: nv }); };
   const setWeatherP     = v => { const nv = typeof v === "function" ? v(weather)     : v; setWeather(nv);     saveDraft({ weather: nv }); };
@@ -1644,7 +1663,9 @@ function PlanMeals({ mealPlan, setMealPlan, commitMealToPlan, awayHome, setAwayH
   useEffect(() => {
     if (!forecastLoaded) return;
     const anySet = days.some(d => (dayPills?.[d] || []).length > 0);
-    if (!anySet) setDayPills(derivePills(days, effortMap, forecast));
+    // background:true — this is an automatic weather-driven write, not a user
+    // edit, so it must not bump dataChangedAt (see SPEC-data-provenance.md).
+    if (!anySet) setDayPills(derivePills(days, effortMap, forecast), { background: true });
   }, [forecastLoaded]);
   // Notes safety net (carried over from the old Partner step): if this step opens
   // with every day note blank, fill from the baked schedule once. Fires only when
@@ -3714,7 +3735,7 @@ export default function App() {
       // fired, so a reload doesn't re-archive the same outgoing week.
       const retired = autoRetirePlans(loaded);
       if (retired !== loaded) {
-        persistDB(retired);
+        persistDB(retired, { background: true });
       } else {
         setDB(loaded);
         dbRef.current = loaded;
@@ -3753,11 +3774,20 @@ export default function App() {
     };
   }, []);
 
-  const persistDB = next => {
+  // dataChangedAt is the single source of truth for "when did the user's
+  // actual grocery data last change" (SPEC-data-provenance.md). Every call
+  // stamps it EXCEPT the two known background writers — weather-driven pill
+  // auto-derivation and auto-retire's next→current promotion — which pass
+  // { background: true } so opening the app doesn't itself look like a change.
+  const persistDB = (next, opts = {}) => {
     // migrateDB is idempotent, so this is a cheap no-op for an already-current
     // db and a safety net for anything entering via recovery/import that might
     // still carry the legacy single-slot plan shape.
-    const stamped = { ...migrateDB(next), savedAt:new Date().toISOString() };
+    const stamped = {
+      ...migrateDB(next),
+      savedAt: new Date().toISOString(),
+      ...(opts.background ? {} : { dataChangedAt: new Date().toISOString() }),
+    };
     setDB(stamped);
     dbRef.current = stamped;
     saveDB(stamped).then(ok => setSaveOk(ok)).catch(() => setSaveOk(false));
