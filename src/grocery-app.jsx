@@ -99,6 +99,34 @@ const parseJSONArray = text => {
 
 const stripExportNodes = ({ _meta, published, ...rest }) => rest;
 
+// A backup (download or copy) stamps lastExportedAt with the SAME instant
+// embedded in the artifact's own _meta, so the file/clipboard content is
+// self-consistent with what the app now believes just happened. Shared by
+// the Manage > Config export section and the header's contextual backup
+// action (SPEC-data-provenance.md).
+const buildBackupPayload = db => {
+  const now = new Date().toISOString();
+  const fresh = buildExportDB({ ...db, lastExportedAt: now });
+  return { now, text: JSON.stringify(fresh, null, 2) };
+};
+
+// Writes an actual .json file via Blob + a temporary <a download>, then
+// stamps lastExportedAt as a background write (backing up isn't itself a
+// change to the grocery data).
+const downloadBackup = (db, persistDB) => {
+  const { now, text } = buildBackupPayload(db);
+  const blob = new Blob([text], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "grocery_db.json";
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  persistDB({ ...db, lastExportedAt: now }, { background: true });
+};
+
 // Build the "published" menu the mid-week Shortcut reads. This is a generic,
 // extensible framework: the app emits a flat list of SENDABLE ITEMS, each with
 // a menu `label` and a ready-to-send `body`. The Shortcut is a dumb picker —
@@ -963,6 +991,7 @@ const S = {
   header:      { background:C.primary, color:"#E8F5EE", padding:"12px 16px 0", position:"sticky", top:0, zIndex:10 },
   headerTop:   { display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:10 },
   headerTitle: { fontSize:16, fontWeight:700 },
+  statusAction: { background:"rgba(255,255,255,0.92)", border:"none", color:C.primary, fontSize:11, fontWeight:700, padding:"5px 10px", borderRadius:8, cursor:"pointer", whiteSpace:"nowrap" },
   tabs:        { display:"flex" },
   tab: a => ({ flex:1, padding:"9px 2px", textAlign:"center", fontSize:11, fontWeight:700, color:a?"#fff":C.accentMuted, borderBottom:a?"2px solid #fff":"2px solid transparent", cursor:"pointer", background:"none", border:"none" }),
   body:        { padding:"16px 16px 20px" },
@@ -2527,8 +2556,12 @@ function PlanConfirm({ mode = "confirm", checkedIds, stapleFlags, quantities = {
 
 // ── MANAGE TAB ─────────────────────────────────────────────────────────────────
 
-function ManageTab({ db, persistDB }) {
-  const [sub, setSub] = useState("meals");
+function ManageTab({ db, persistDB, initialSub }) {
+  // ManageTab is unmounted/remounted on every tab switch (App only renders it
+  // while tab==="manage"), so a caller can land the user on a specific
+  // sub-tab (e.g. the header's Import action → Config) just by setting this
+  // prop before switching tab — no lifted state needed.
+  const [sub, setSub] = useState(initialSub || "meals");
   const SUBS = [{id:"meals",label:"Meals"},{id:"items",label:"Items"},{id:"upload",label:"Upload"},{id:"config",label:"Config"},{id:"help",label:"Help"}];
   return (
     <div>
@@ -3480,37 +3513,14 @@ function ManageConfig({ db, persistDB }) {
   const exportDB   = buildExportDB(db);
   const exportJSON = JSON.stringify(exportDB, null, 2);
 
-  // A backup (download OR copy) stamps lastExportedAt with the SAME instant
-  // that's embedded in the artifact's own _meta, so the file/clipboard
-  // content is self-consistent with what the app now believes. background:
-  // true because backing up isn't a change to the grocery data itself.
-  const buildBackupPayload = () => {
-    const now = new Date().toISOString();
-    const fresh = buildExportDB({ ...db, lastExportedAt: now });
-    return { now, text: JSON.stringify(fresh, null, 2) };
-  };
-  const stampBackup = now => persistDB({ ...db, lastExportedAt: now }, { background: true });
-
-  const downloadDB = () => {
-    const { now, text } = buildBackupPayload();
-    const blob = new Blob([text], { type: "application/json" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = "grocery_db.json";
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-    stampBackup(now);
-  };
+  const downloadDB = () => downloadBackup(db, persistDB);
 
   const copyExport = () => {
-    const { now, text } = buildBackupPayload();
+    const { now, text } = buildBackupPayload(db);
     copyToClipboard(text);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
-    stampBackup(now);
+    persistDB({ ...db, lastExportedAt: now }, { background: true });
   };
 
   // Shared by file-import and paste-import: validates, clears _isSeed (this
@@ -3773,18 +3783,53 @@ class ErrorBoundary extends React.Component {
   }
 }
 
+// ── Header data-status severity ladder (SPEC-data-provenance.md) ───────────────
+// Priority: urgent (storage broken) shows ALONE; caution (seed data, or
+// backup overdue) shows alongside the calm info line; calm is the base state
+// with no action. Only one caution at a time -- seed wins over
+// backup-overdue, since you can't be overdue backing up data that was never
+// real to begin with. No dismiss controls: a state clears itself the moment
+// its underlying condition resolves (storage recovers, a real import lands,
+// a backup happens).
+const BACKUP_OVERDUE_DAYS = 4;
+function computeDataStatus(db, storageOk) {
+  const changed  = db.dataChangedAt  ? new Date(db.dataChangedAt)  : null;
+  const exported = db.lastExportedAt ? new Date(db.lastExportedAt) : null;
+  const asOf     = formatAsOf(db.dataChangedAt);
+  const calm     = asOf ? `Your data · as of ${asOf}` : "Your data";
+
+  if (!storageOk) {
+    return { severity:"urgent", calm, message:"⚠ Storage isn't saving — export now.", action:"export", actionLabel:"Export now" };
+  }
+  if (db._isSeed) {
+    return { severity:"caution", calm, message:"⚠ Example data — import your file to begin.", action:"import", actionLabel:"Import" };
+  }
+
+  const hasChangesSinceBackup = !!changed && (!exported || changed.getTime() > exported.getTime());
+  const backupIsStale = !exported || (Date.now() - exported.getTime() > BACKUP_OVERDUE_DAYS * 24*60*60*1000);
+  if (hasChangesSinceBackup && backupIsStale) {
+    let backupMsg = "you haven't backed up yet";
+    if (exported) {
+      const days = Math.floor((Date.now() - exported.getTime()) / (24*60*60*1000));
+      backupMsg = `last backup ${days <= 0 ? "today" : days + " day" + (days===1?"":"s") + " ago"}`;
+    }
+    return { severity:"caution", calm, message:`You've made changes; ${backupMsg}.`, action:"backup", actionLabel:"Back up" };
+  }
+
+  return { severity:"calm", calm: asOf ? `Your data · as of ${asOf} · storage OK` : "Your data · storage OK", message:null, action:null, actionLabel:null };
+}
+
 export default function App() {
   const [db, setDB]               = useState(null);
   const [tab, setTab]             = useState("prep");
   const [loading, setLoading]     = useState(true);
   const [showOpenSession, setShowOpenSession]   = useState(false);
-  const [showCloseSession, setShowCloseSession] = useState(false);
   const [sessionImport, setSessionImport]       = useState("");
   const [sessionPendingConfirm, setSessionPendingConfirm] = useState(null); // parsed db awaiting accept
   const [sessionError, setSessionError]         = useState("");
-  const [closeCopied, setCloseCopied]           = useState(false);
   const [saveOk, setSaveOk]                     = useState(true);
   const [recovery, setRecovery]                 = useState(null); // { savedAt, db } awaiting restore
+  const [manageInitialSub, setManageInitialSub] = useState(undefined); // header's Import action lands Manage on Config
   const dbRef = useRef(null);
 
   useEffect(() => {
@@ -3865,11 +3910,6 @@ export default function App() {
     if (!restoredReal) setShowOpenSession(true);
   };
 
-  // Build the export text used when closing a session. Pure JSON (_meta summary
-  // + fresh published menu + full db), no prepended text header.
-  const closeExportDB   = db ? buildExportDB(db) : null;
-  const closeExportText = closeExportDB ? JSON.stringify(closeExportDB, null, 2) : "";
-
   const acceptSessionImport = () => {
     try {
       const parsed = stripExportNodes(JSON.parse(extractJSON(sessionImport)));
@@ -3889,25 +3929,6 @@ export default function App() {
     setShowOpenSession(false);
   };
 
-  const doCloseSession = () => {
-    // Copy export to clipboard for paste into iCloud. Use the robust two-path
-    // approach (hidden textarea + execCommand, plus the clipboard API) because
-    // the clipboard API alone is blocked in the iOS webview.
-    let ok = false;
-    try {
-      const ta = document.createElement("textarea");
-      ta.value = closeExportText;
-      ta.style.cssText = "position:fixed;top:0;left:0;width:1px;height:1px;opacity:0;";
-      document.body.appendChild(ta);
-      ta.focus(); ta.select();
-      ok = document.execCommand("copy");
-      document.body.removeChild(ta);
-    } catch (e) { ok = false; }
-    if (navigator.clipboard?.writeText) navigator.clipboard.writeText(closeExportText).then(() => {}).catch(() => {});
-    setCloseCopied(true);
-    setTimeout(() => setCloseCopied(false), 2500);
-  };
-
   if (loading || !db) {
     return (
       <div style={{ ...S.app, display:"flex", alignItems:"center", justifyContent:"center", minHeight:"100vh" }}>
@@ -3919,7 +3940,11 @@ export default function App() {
     );
   }
 
-  const savedLabel = formatSavedAt(db.savedAt);
+  const dataStatus = computeDataStatus(db, saveOk);
+  const runStatusAction = () => {
+    if (dataStatus.action === "export" || dataStatus.action === "backup") downloadBackup(db, persistDB);
+    else if (dataStatus.action === "import") { setManageInitialSub("config"); setTab("manage"); }
+  };
 
   return (
     <ErrorBoundary>
@@ -3927,16 +3952,28 @@ export default function App() {
         <div style={S.header}>
           <div style={S.headerTop}>
             <div style={S.headerTitle}>Grocery Planner</div>
-            <div style={{ display:"flex", gap:8, alignItems:"center" }}>
-              <span style={{ fontSize:11, fontWeight:700, color:C.accentMuted }}>{db.meals.length}m / {db.ingredients.length}i</span>
-              {saveOk
-                ? (savedLabel && <span style={{ fontSize:10, color:C.accentMuted }}>saved {savedLabel}</span>)
-                : <span style={{ fontSize:10, color:"#F0B050", fontWeight:700 }} title="This device isn't saving locally — use End session to export before closing">⚠ not saving — export on exit</span>}
-              <button style={{ background:"rgba(255,255,255,0.15)", border:"none", color:"#fff", fontSize:11, fontWeight:700, padding:"5px 10px", borderRadius:8, cursor:"pointer" }} onClick={() => { setShowCloseSession(true); doCloseSession(); }}>
-                End session
-              </button>
-            </div>
+            {dataStatus.severity === "calm" && (
+              <span style={{ fontSize:11, color:C.accentMuted }}>{dataStatus.calm}</span>
+            )}
           </div>
+
+          {dataStatus.severity === "urgent" && (
+            <div style={{ background:"rgba(211,51,51,0.25)", border:"1px solid rgba(211,51,51,0.5)", borderRadius:8, padding:"8px 10px", marginBottom:10, display:"flex", alignItems:"center", justifyContent:"space-between", gap:10 }}>
+              <span style={{ fontSize:12, fontWeight:700, color:"#FFB3B3" }}>{dataStatus.message}</span>
+              <button style={S.statusAction} onClick={runStatusAction}>{dataStatus.actionLabel}</button>
+            </div>
+          )}
+
+          {dataStatus.severity === "caution" && (
+            <div style={{ marginBottom:10 }}>
+              <div style={{ fontSize:11, color:C.accentMuted, marginBottom:4 }}>{dataStatus.calm}</div>
+              <div style={{ background:"rgba(240,176,80,0.22)", border:"1px solid rgba(240,176,80,0.5)", borderRadius:8, padding:"8px 10px", display:"flex", alignItems:"center", justifyContent:"space-between", gap:10 }}>
+                <span style={{ fontSize:12, fontWeight:700, color:"#F0B050" }}>{dataStatus.message}</span>
+                <button style={S.statusAction} onClick={runStatusAction}>{dataStatus.actionLabel}</button>
+              </div>
+            </div>
+          )}
+
           <div style={S.tabs}>
             {TABS.map(t => <button key={t.id} style={S.tab(tab===t.id)} onClick={() => setTab(t.id)}>{t.label}</button>)}
           </div>
@@ -4000,26 +4037,9 @@ export default function App() {
           </div>
         )}
 
-        {/* Close session modal — push latest to iCloud */}
-        {showCloseSession && (
-          <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.5)", zIndex:100, display:"flex", alignItems:"flex-end", justifyContent:"center" }}>
-            <div style={{ background:"#fff", borderRadius:"18px 18px 0 0", padding:20, width:"100%", maxWidth:480, maxHeight:"85vh", overflowY:"auto" }}>
-              <div style={{ fontSize:18, fontWeight:700, marginBottom:6 }}>End session</div>
-              <div style={{ fontSize:13, color:C.muted, marginBottom:14, lineHeight:1.5 }}>Save your latest data back to iCloud so your other devices stay current. {closeCopied ? "" : "Copy the data below, then run the save shortcut."}</div>
-              {closeCopied && <div style={{ background:C.primaryLight, borderRadius:10, padding:"10px 14px", marginBottom:12, fontSize:13, color:C.primary, fontWeight:600 }}>✓ Copied to clipboard — now run the shortcut to save it</div>}
-              <div style={{ fontSize:13, color:C.muted, marginBottom:8, padding:"10px 12px", background:"#EFF4FB", borderRadius:8, border:"1px solid #D3E1F2" }}>
-                📲 Copy above, then run <b>"Save My Grocery Data"</b> from your Shortcuts app or home screen. (In-app launch is blocked by iOS here.)
-              </div>
-              <button style={{ ...S.btn, ...S.btnS }} onClick={doCloseSession}>{closeCopied ? "✓ Copied" : "Copy data again"}</button>
-              <textarea readOnly value={closeExportText} style={{ ...S.input, height:80, fontSize:11, fontFamily:"monospace", resize:"none", marginBottom:8 }} onFocus={e => e.target.select()} />
-              <button style={{ ...S.btn, ...S.btnP, marginBottom:0 }} onClick={() => setShowCloseSession(false)}>Done</button>
-            </div>
-          </div>
-        )}
-
         {tab==="prep"    && <PrepTab    db={db} persistDB={persistDB} />}
         {tab==="plan"    && <PlanTab    key={db.activePlan || "current"} db={db} persistDB={persistDB} />}
-        {tab==="manage"  && <ManageTab  db={db} persistDB={persistDB} />}
+        {tab==="manage"  && <ManageTab  db={db} persistDB={persistDB} initialSub={manageInitialSub} />}
         {tab==="tonight" && <TonightTab db={db} persistDB={persistDB} />}
       </div>
     </ErrorBoundary>
