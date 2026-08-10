@@ -3457,23 +3457,78 @@ function ManageUpload({ db, persistDB }) {
 
 // ── Manage Config ──────────────────────────────────────────────────────────────
 
+// "Aug 8, 2:14pm" style label for an ISO timestamp, used in the import
+// confirmation and nowhere else — the header's own "as of" formatting
+// (layer 3) may want the same shape; keep in sync if so.
+const formatAsOf = iso => {
+  if (!iso) return null;
+  const d = new Date(iso);
+  if (isNaN(d)) return null;
+  return d.toLocaleString("en-US", { month:"short", day:"numeric", hour:"numeric", minute:"2-digit" }).replace(" AM","am").replace(" PM","pm");
+};
+
 function ManageConfig({ db, persistDB }) {
   const upd = (k, v) => persistDB({...db, settings:{...db.settings,[k]:v}});
   const fileRef = useRef();
   const [showExport, setShowExport]     = useState(false);
   const [pasteText, setPasteText]       = useState("");
   const [importError, setImportError]   = useState("");
-  const [importSuccess, setImportSuccess] = useState(null);
+  const [importSuccess, setImportSuccess] = useState(null); // { meals, items, asOf }
   const [copied, setCopied]             = useState(false);
   // Pure-JSON export: _meta summary + fresh published menu + full db, no
   // prepended text header. Valid JSON from byte one so the Shortcut parses it.
   const exportDB   = buildExportDB(db);
   const exportJSON = JSON.stringify(exportDB, null, 2);
 
+  // A backup (download OR copy) stamps lastExportedAt with the SAME instant
+  // that's embedded in the artifact's own _meta, so the file/clipboard
+  // content is self-consistent with what the app now believes. background:
+  // true because backing up isn't a change to the grocery data itself.
+  const buildBackupPayload = () => {
+    const now = new Date().toISOString();
+    const fresh = buildExportDB({ ...db, lastExportedAt: now });
+    return { now, text: JSON.stringify(fresh, null, 2) };
+  };
+  const stampBackup = now => persistDB({ ...db, lastExportedAt: now }, { background: true });
+
+  const downloadDB = () => {
+    const { now, text } = buildBackupPayload();
+    const blob = new Blob([text], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "grocery_db.json";
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    stampBackup(now);
+  };
+
+  const copyExport = () => {
+    const { now, text } = buildBackupPayload();
+    copyToClipboard(text);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+    stampBackup(now);
+  };
+
+  // Shared by file-import and paste-import: validates, clears _isSeed (this
+  // is real external data, not the seed set), and surfaces a specific
+  // confirmation (counts + as-of from the imported _meta.dataChangedAt)
+  // instead of a bare "Imported!" alert.
+  const applyImport = imp => {
+    if (!imp.meals || !imp.ingredients) throw new Error("Invalid format");
+    const asOf = imp._meta?.dataChangedAt || null;
+    const parsed = { ...stripExportNodes(imp), _isSeed: false };
+    persistDB(parsed);
+    setImportSuccess({ meals: parsed.meals.length, items: parsed.ingredients.length, asOf });
+  };
+
   const importDB = file => {
     const r = new FileReader();
     r.onload = e => {
-      try { const imp=JSON.parse(e.target.result); if(!imp.meals||!imp.ingredients) throw new Error("Invalid"); persistDB(stripExportNodes(imp)); alert("Imported!"); }
+      try { applyImport(JSON.parse(e.target.result)); }
       catch(err) { alert("Could not import: " + err.message); }
     };
     r.readAsText(file);
@@ -3481,11 +3536,8 @@ function ManageConfig({ db, persistDB }) {
 
   const importFromPaste = () => {
     try {
-      const parsed = stripExportNodes(JSON.parse(extractJSON(pasteText)));
-      if (!parsed.meals || !parsed.ingredients) throw new Error("Invalid format");
-      persistDB(parsed);
+      applyImport(JSON.parse(extractJSON(pasteText)));
       setPasteText(""); setImportError("");
-      setImportSuccess({ meals:parsed.meals.length, items:parsed.ingredients.length });
     } catch(e) { setImportError("Could not parse: " + e.message); }
   };
 
@@ -3530,20 +3582,28 @@ function ManageConfig({ db, persistDB }) {
           ☁️ Open iCloud Drive
         </button>
 
-        <button style={{ ...S.btn, ...S.btnP, marginBottom:8 }} onClick={() => setShowExport(v=>!v)}>
+        <button style={{ ...S.btn, ...S.btnP, marginBottom:8 }} onClick={downloadDB}>
+          ⬇️ Download grocery_db.json
+        </button>
+
+        <button style={{ ...S.btn, ...S.btnS, marginBottom:8 }} onClick={() => setShowExport(v=>!v)}>
           📤 {showExport?"Hide export":"Export — copy to iCloud Drive"}
         </button>
         {showExport && (
           <div style={{ marginBottom:8 }}>
-            <div style={{ fontSize:12, color:C.muted, marginBottom:6, lineHeight:1.5 }}>Select all below (Ctrl+A) and copy, then paste into GroceryDB.json in iCloud Drive.</div>
-            <textarea readOnly value={exportJSON} style={{ ...S.input, height:100, fontSize:11, fontFamily:"monospace", resize:"none", marginBottom:0 }} onFocus={e => e.target.select()} />
+            <div style={{ fontSize:12, color:C.muted, marginBottom:6, lineHeight:1.5 }}>Select all below (Ctrl+A) and copy, then paste into GroceryDB.json in iCloud Drive — or tap Copy.</div>
+            <textarea readOnly value={exportJSON} style={{ ...S.input, height:100, fontSize:11, fontFamily:"monospace", resize:"none", marginBottom:8 }} onFocus={e => e.target.select()} />
+            <button style={{ ...S.btn, ...S.btnS, marginBottom:0 }} onClick={copyExport}>{copied ? "✓ Copied" : "📋 Copy to clipboard"}</button>
           </div>
         )}
 
         <div style={{ fontSize:12, color:C.muted, marginBottom:6, marginTop:4, lineHeight:1.5 }}>To import: open GroceryDB.json in iCloud Drive, copy all, paste below.</div>
         {importSuccess ? (
           <div style={{ background:C.primaryLight, borderRadius:10, padding:"12px 14px", marginBottom:8, textAlign:"center" }}>
-            <div style={{ fontWeight:700, color:C.primary }}>✅ {importSuccess.meals} meals · {importSuccess.items} items imported</div>
+            <div style={{ fontWeight:700, color:C.primary }}>✅ Imported your data</div>
+            <div style={{ fontSize:13, color:C.muted, marginTop:2 }}>
+              {importSuccess.meals} meals · {importSuccess.items} items{importSuccess.asOf ? ` · as of ${formatAsOf(importSuccess.asOf)}` : ""}
+            </div>
             <button style={{ background:"none", border:"none", color:C.primary, cursor:"pointer", fontSize:12, marginTop:4, textDecoration:"underline" }} onClick={() => setImportSuccess(null)}>Done</button>
           </div>
         ) : (
@@ -3822,7 +3882,8 @@ export default function App() {
   };
 
   const confirmSessionImport = () => {
-    persistDB(sessionPendingConfirm);
+    // Real external data replacing what's here — not the seed set.
+    persistDB({ ...sessionPendingConfirm, _isSeed: false });
     setSessionPendingConfirm(null);
     setSessionImport("");
     setShowOpenSession(false);
