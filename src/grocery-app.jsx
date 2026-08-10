@@ -591,22 +591,11 @@ const autoRetirePlans = db => {
 let storageHealth = "unknown"; // "ok" | "unavailable" | "unknown"
 const getStorageHealth = () => storageHealth;
 
-function withTimeout(promise, ms) {
-  return Promise.race([
-    promise,
-    new Promise((_, reject) => setTimeout(() => reject(new Error("timeout")), ms))
-  ]);
-}
-
 async function loadDB() {
   try {
-    if (!window.storage || typeof window.storage.get !== "function") {
-      storageHealth = "unavailable";
-      return DEFAULT_DB;
-    }
-    const r = await withTimeout(window.storage.get(DB_KEY), 3000);
-    if (r && r.value) {
-      const parsed = JSON.parse(r.value);
+    const raw = localStorage.getItem(DB_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw);
       storageHealth = "ok";
       console.log("[DB] Loaded:", parsed.meals?.length, "meals,", parsed.ingredients?.length, "items");
       return migrateDB(parsed);
@@ -622,15 +611,10 @@ async function loadDB() {
 
 async function saveDB(db) {
   try {
-    if (!window.storage || typeof window.storage.set !== "function") {
-      storageHealth = "unavailable";
-      return false;
-    }
     const payload = JSON.stringify(db);
-    await withTimeout(window.storage.set(DB_KEY, payload), 5000);
+    localStorage.setItem(DB_KEY, payload);
     // Verify the write actually stuck — this is what catches silent mobile drops.
-    const check = await withTimeout(window.storage.get(DB_KEY), 3000);
-    if (check && check.value === payload) {
+    if (localStorage.getItem(DB_KEY) === payload) {
       storageHealth = "ok";
       console.log("[DB] Saved + verified");
       return true;
@@ -650,19 +634,17 @@ async function saveDB(db) {
 // synchronous as the storage API allows, since it runs while the app is closing.
 function saveRecovery(db) {
   try {
-    if (!window.storage || typeof window.storage.set !== "function") return;
     const snap = { savedAt:new Date().toISOString(), db };
-    window.storage.set(RECOVERY_KEY, JSON.stringify(snap));
+    localStorage.setItem(RECOVERY_KEY, JSON.stringify(snap));
     console.log("[DB] Recovery snapshot written");
   } catch(e) { console.log("[DB] Recovery write skipped:", e.message); }
 }
 
 async function loadRecovery() {
   try {
-    if (!window.storage || typeof window.storage.get !== "function") return null;
-    const r = await withTimeout(window.storage.get(RECOVERY_KEY), 3000);
-    if (r && r.value) {
-      const snap = JSON.parse(r.value);
+    const raw = localStorage.getItem(RECOVERY_KEY);
+    if (raw) {
+      const snap = JSON.parse(raw);
       if (snap && snap.db && snap.db.meals && snap.db.ingredients) return snap;
     }
   } catch(e) { console.log("[DB] Recovery load skipped:", e.message); }
@@ -671,9 +653,7 @@ async function loadRecovery() {
 
 async function clearRecovery() {
   try {
-    if (window.storage && typeof window.storage.set === "function") {
-      await window.storage.set(RECOVERY_KEY, "");
-    }
+    localStorage.removeItem(RECOVERY_KEY);
   } catch(e) { /* non-fatal */ }
 }
 
