@@ -200,6 +200,20 @@ function getWeekFromDay(shoppingDay) {
   return { days, daysFull, effortMap };
 }
 
+// Add n days to an ISO YYYY-MM-DD date, returning ISO YYYY-MM-DD.
+function addDaysISO(iso, n) {
+  const d = new Date(iso + "T00:00:00");
+  d.setDate(d.getDate() + n);
+  return d.toISOString().split("T")[0];
+}
+
+// "Week of Aug 12" — the plan-picker/toggle label derived from weekStartDate.
+function weekLabel(iso) {
+  if (!iso) return "";
+  const d = new Date(iso + "T00:00:00");
+  return `Week of ${d.toLocaleDateString("en-US", { month:"short", day:"numeric" })}`;
+}
+
 // ── Seed data ──────────────────────────────────────────────────────────────────
 
 const SEED_TS = "2020-01-01T00:00:00.000Z";
@@ -1082,6 +1096,7 @@ function PrepTab({ db, persistDB }) {
         <div style={S.sectionLabel}>This week</div>
         <div style={S.h2}>Prep</div>
         <div style={S.sub}>Mark what you've already bought so it drops off the shopping list.</div>
+        {db.plans?.next && <div style={{ fontSize:12, color:C.muted, marginTop:6 }}>Always shows the current (shopping) week, even while next week's plan is being drafted.</div>}
       </div>
 
       <div style={S.card}>
@@ -1256,6 +1271,13 @@ function PlanTab({ db, persistDB }) {
     persistDB(writeActivePlan({ ...db, meals }, nextDraft));
   };
 
+  // Bootstrap the very FIRST plan. Only reachable from the blank Welcome screen
+  // ("Start planning", shown when there's no current plan at all yet — see
+  // PlanWelcome's !onResume branch) or the rare case of a plan record that
+  // exists but never advanced past step 0. Once a real current plan exists,
+  // startNextWeek (below) is how a new week begins — this never runs again
+  // after the first plan, so the archive-before-clear step below is a safety
+  // net for that edge case rather than the everyday path.
   const startFresh = () => {
     const freshAway = Object.fromEntries(days.map(d => [d, true]));
     const freshMeals  = Object.fromEntries(days.map(d => [d, []]));
@@ -1269,10 +1291,6 @@ function PlanTab({ db, persistDB }) {
     setStep(1);
     setMaxStep(1);
 
-    // Archive the outgoing week's meals before clearing, so the recommender can
-    // rotate variety across recent weeks. Source from the draft, falling back to
-    // the committed snapshot on the same (now-merged) plan object. Keep the last
-    // 6 weeks (covers the 2–3 week window).
     const outgoingMeals = Object.values(draft?.mealPlan || draft?.meals || {}).flat()
       .filter(n => n && n !== "Choose your own night" && n !== "Choose your own");
     const prevHistory = db.mealHistory || [];
@@ -1280,32 +1298,45 @@ function PlanTab({ db, persistDB }) {
       ? [...prevHistory, { archivedAt:new Date().toISOString(), meals:[...new Set(outgoingMeals)] }].slice(-6)
       : prevHistory;
 
-    // Clear the committed plan record but PRESERVE the Walmart cart — those are
-    // items pre-loaded mid-week for the new week (the capture flow). Everything
-    // else (meals, notes, list items) is per-week and gets wiped. Past meals are
-    // already archived to mealHistory above, so nothing is lost.
-    // NOTE: this is the pre-two-plan-model reset; layer 3/4 replace it with
-    // date-driven auto-retire + an explicit "start next week" that doesn't
-    // touch the current plan at all.
     const today = new Date().toISOString().split("T")[0];
     const freshPlan = {
       weekOf: today, weekStartDate: today, notes:"", meals:{}, items:[],
       cartItems: draft?.cartItems || [], cartIngredientIds: draft?.cartIngredientIds || [], dismissedShared: [],
       // Auto-populate day notes from this week's baked-in schedule so a new plan
-      // never starts blank (previously required remembering the reset button,
-      // which silently produced empty-note printouts). notesTouched tracks
-      // manual edits so a later refresh can tell "never edited" from
-      // "deliberately changed".
+      // never starts blank. notesTouched tracks manual edits so a later refresh
+      // can tell "never edited" from "deliberately changed".
       step:1, maxStep:1, awayHome:freshAway, mealPlan:freshMeals, checkedIds:[], dayNotes:{ ...defaultNotes }, dayPills:{}, notesTouched:false, _stepsVer:4, stapleFlags:{}, quantities:{}, weather:"hot", startedAt:new Date().toISOString(),
     };
 
     persistDB(writeActivePlan({ ...db, mealHistory }, freshPlan));
   };
 
+  // Create plans.next as a fresh, empty plan — the everyday "begin a new week"
+  // action once a current plan already exists. Never touches plans.current:
+  // the two are independent silos (no meal carry-over, no shared cart — the
+  // owner re-adds anything manually). weekStartDate defaults to 7 days after
+  // current's own anchor; the owner can edit it afterward (shopping day can
+  // shift). Guarded to only run when next is null — the UI hides the button
+  // otherwise. Auto-retire (on a later app load) is what promotes this to
+  // current once its date arrives; this function never does that itself.
+  const startNextWeek = () => {
+    if (db.plans?.next) return;
+    const freshAway  = Object.fromEntries(days.map(d => [d, true]));
+    const freshMeals = Object.fromEntries(days.map(d => [d, []]));
+    const anchor     = draft?.weekStartDate || new Date().toISOString().split("T")[0];
+    const nextStart  = addDaysISO(anchor, 7);
+    const freshPlan = {
+      weekOf: nextStart, weekStartDate: nextStart, notes:"", meals:{}, items:[],
+      cartItems:[], cartIngredientIds:[], dismissedShared:[],
+      step:1, maxStep:1, awayHome:freshAway, mealPlan:freshMeals, checkedIds:[], dayNotes:{ ...defaultNotes }, dayPills:{}, notesTouched:false, _stepsVer:4, stapleFlags:{}, quantities:{}, weather:"hot", startedAt:new Date().toISOString(),
+    };
+    persistDB({ ...db, plans: { ...db.plans, next: freshPlan }, activePlan: "next" });
+  };
+
   // Exit the planning flow WITHOUT destroying anything. The draft IS the living
   // plan — it persists so exports keep publishing the week's meals and you can
-  // resume to tweak. Clearing only happens at the START of a new week, via
-  // startFresh ("Start new week"). This just returns to the welcome screen.
+  // resume to tweak. Retirement is date-driven (autoRetirePlans, on a later app
+  // load), not triggered by finishing — this just returns to the welcome screen.
   const finishPlan = () => {
     // Return to Welcome. Don't read the raw draft's stored step here — after a
     // mode split/migration the raw value can be out of range; just reset cleanly.
@@ -1314,6 +1345,31 @@ function PlanTab({ db, persistDB }) {
   };
 
   const hasDraft = !!draft && (draft.maxStep ?? draft.step) > 0;
+
+  // Current/Next toggle. Only shown once both plans exist — before that,
+  // there's nothing to switch between, and "Start next week" (on Welcome) is
+  // the only way to create one. Switching persists db.activePlan; PlanTab is
+  // rendered with key={db.activePlan} (see the tab-switch site in App) so a
+  // switch fully remounts this component instead of leaving stale local
+  // editing state (step/mealPlan/etc.) pointed at the plan you switched away
+  // from — those hooks are only ever seeded once, at mount.
+  const PlanSilosToggle = () => {
+    if (!db.plans?.next) return null;
+    const activeKey = db.activePlan || "current";
+    return (
+      <div style={{ display:"flex", gap:6, padding:"10px 12px", background:C.primary }}>
+        {["current","next"].map(k => (
+          <button key={k} onClick={() => k !== activeKey && persistDB({ ...db, activePlan:k })}
+            style={{ flex:1, padding:"8px 10px", borderRadius:8, border:"none", fontWeight:700, fontSize:12, cursor:"pointer",
+              background: activeKey===k ? C.accent : "rgba(255,255,255,0.14)",
+              color: activeKey===k ? "#fff" : "#B8E8CA" }}>
+            <div>{k==="current" ? "Current week" : "Next week"}</div>
+            <div style={{ fontWeight:500, opacity:0.85, fontSize:11 }}>{weekLabel(db.plans[k]?.weekStartDate)}</div>
+          </button>
+        ))}
+      </div>
+    );
+  };
 
   // Tappable step navigation. Gates on maxStep (furthest reached), so any step
   // you've visited stays freely tappable — backward OR forward — even after you
@@ -1340,10 +1396,12 @@ function PlanTab({ db, persistDB }) {
   if (step === 0) {
     return (
       <div>
+        <PlanSilosToggle />
         {hasDraft && <StepNav />}
         <div style={S.body}>
           <PlanWelcome
             onStart={startFresh}
+            onStartNext={startNextWeek}
             onResume={hasDraft ? () => goToStep(initMaxStep) : null}
             draft={draft}
             persistDB={persistDB}
@@ -1356,6 +1414,7 @@ function PlanTab({ db, persistDB }) {
 
   return (
     <div>
+      <PlanSilosToggle />
       <StepNav />
       <div style={S.body}>
         {step === 1 && <PlanMeals   mealPlan={mealPlan} setMealPlan={setMealPlanP} commitMealToPlan={commitMealToPlan} awayHome={awayHome} setAwayHome={setAwayHomeP} meals={meals} onNext={() => goToStep(2)} days={days} daysFull={daysFull} effortMap={effortMap} dayNotes={dayNotes} setDayNotes={setDayNotesP} dayPills={dayPills} setDayPills={setDayPillsP} db={db} persistDB={persistDB} />}
@@ -1375,12 +1434,11 @@ function PlanTab({ db, persistDB }) {
   );
 }
 
-function PlanWelcome({ onStart, onResume, draft, persistDB, db }) {
+function PlanWelcome({ onStart, onStartNext, onResume, draft, persistDB, db }) {
   const [showImport, setShowImport]   = useState(false);
   const [importText, setImportText]   = useState("");
   const [importError, setImportError] = useState("");
   const [importSuccess, setImportSuccess] = useState(null);
-  const [confirmNew, setConfirmNew]   = useState(false);
 
   // Resolve the resume-step label from the draft's own version stamp — initMaxStep
   // lives in PlanTab, not here, so migrate locally. Mirrors PlanTab's migration.
@@ -1406,28 +1464,24 @@ function PlanWelcome({ onStart, onResume, draft, persistDB, db }) {
 
       {onResume && draft && (
         <div style={{ ...S.card, border:`2px solid ${C.accent}`, background:C.primaryLight }}>
-          <div style={S.sectionLabel}>Current plan</div>
+          <div style={S.sectionLabel}>{db.activePlan === "next" ? "Next week's plan" : "Current plan"}</div>
           <div style={{ fontWeight:700, fontSize:16, marginBottom:4 }}>Left off at: {draftStepName}</div>
-          <div style={{ fontSize:13, color:C.muted, marginBottom:12 }}>
+          <div style={{ fontSize:13, color:C.muted, marginBottom:8 }}>
             {draftStarted && <span>Started {draftStarted}</span>}
             {draftStarted && draftMealCount > 0 && <span> · </span>}
             {draftMealCount > 0 && <span>{draftMealCount} meal{draftMealCount!==1?"s":""} planned</span>}
           </div>
-          <button style={{ ...S.btn, ...S.btnP, marginBottom:8 }} onClick={onResume}>Open / edit plan</button>
-          {!confirmNew ? (
-            <button style={{ ...S.btn, ...S.btnS, marginBottom:0 }} onClick={() => setConfirmNew(true)}>
-              Start new week (clears plan)
+          <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:12, fontSize:12, color:C.muted }}>
+            <span style={{ fontWeight:700 }}>{weekLabel(draft.weekStartDate)}</span>
+            {/* Shopping day can shift week to week, so the anchor date is editable rather than fixed to the settings default. */}
+            <input type="date" value={draft.weekStartDate || ""} onChange={e => e.target.value && persistDB(writeActivePlan(db, { ...draft, weekStartDate:e.target.value }))}
+              style={{ fontSize:12, border:`1px solid ${C.border}`, borderRadius:6, padding:"3px 5px", color:C.muted }} />
+          </div>
+          <button style={{ ...S.btn, ...S.btnP, marginBottom:0 }} onClick={onResume}>Open / edit plan</button>
+          {!db.plans?.next && (
+            <button style={{ ...S.btn, ...S.btnS, marginTop:8, marginBottom:0 }} onClick={onStartNext}>
+              Start next week's plan →
             </button>
-          ) : (
-            <div style={{ border:`1px solid ${C.border}`, borderRadius:10, padding:12, background:"#fff" }}>
-              <div style={{ fontSize:13, color:C.muted, marginBottom:10, textAlign:"center" }}>
-                Start a new week? This clears meals, notes, and the list (your Walmart cart is kept).
-              </div>
-              <div style={{ display:"flex", gap:8 }}>
-                <button style={{ ...S.btn, ...S.btnP, flex:1, marginBottom:0 }} onClick={() => { setConfirmNew(false); onStart(); }}>Yes, start new week</button>
-                <button style={{ ...S.btn, ...S.btnS, flex:1, marginBottom:0 }} onClick={() => setConfirmNew(false)}>Cancel</button>
-              </div>
-            </div>
           )}
         </div>
       )}
@@ -3582,6 +3636,10 @@ function TonightTab({ db, persistDB }) {
         </div>
       )}
 
+      {db.plans?.next && (
+        <div style={{ fontSize:12, color:C.faint, textAlign:"center", marginTop:-4, marginBottom:8 }}>Always shows the current week, even while next week's plan is being drafted.</div>
+      )}
+
       <div style={S.card}>
         <div style={S.sectionLabel}>Send to</div>
         {[{name:"all",label:"Everyone (Family Dinner)"}, ...activeFamily].map((opt,i,arr) => (
@@ -3889,7 +3947,7 @@ export default function App() {
         )}
 
         {tab==="prep"    && <PrepTab    db={db} persistDB={persistDB} />}
-        {tab==="plan"    && <PlanTab    db={db} persistDB={persistDB} />}
+        {tab==="plan"    && <PlanTab    key={db.activePlan || "current"} db={db} persistDB={persistDB} />}
         {tab==="manage"  && <ManageTab  db={db} persistDB={persistDB} />}
         {tab==="tonight" && <TonightTab db={db} persistDB={persistDB} />}
       </div>
