@@ -146,7 +146,6 @@ const downloadBackup = (db, persistDB) => {
 // }
 const buildPublished = db => {
   const settings    = db.settings || DEFAULT_SETTINGS;
-  const { days, daysFull } = getWeekFromDay(settings.shoppingDay || "Wednesday");
 
   // Always the CURRENT plan (the week actually being shopped/lived), never
   // "next" — the family shouldn't be told about a week that isn't happening
@@ -154,6 +153,11 @@ const buildPublished = db => {
   // mealPlan (keyed by day abbr -> meal NAMES) is preferred over the last
   // committed meals snapshot, falling back to empty.
   const plan       = getCurrentPlan(db);
+  // Day-ordering follows the current plan's own date; shoppingDay is only the
+  // no-plan-yet fallback (see SPEC-date-drives-ordering.md).
+  const { days, daysFull } = plan?.weekStartDate
+    ? getWeekFromDate(plan.weekStartDate)
+    : getWeekFromDay(settings.shoppingDay || "Wednesday");
   const draftMeals = plan?.mealPlan;
   const planMeals  = (draftMeals && Object.values(draftMeals).some(a => (a||[]).length))
     ? draftMeals
@@ -218,10 +222,9 @@ const extractJSON = text => {
   return candidates.reduce((a, b) => a.length >= b.length ? a : b);
 };
 
-function getWeekFromDay(shoppingDay) {
-  const abbr    = { Sunday:"Sun", Monday:"Mon", Tuesday:"Tue", Wednesday:"Wed", Thursday:"Thu", Friday:"Fri", Saturday:"Sat" };
-  const startAbbr = abbr[shoppingDay] || "Wed";
-  const startIdx  = DAYS_ALL.indexOf(startAbbr);
+// Shared ordering builder: given the index (into DAYS_ALL/DAYS_FULL) of the
+// day the week starts on, produce the 7-day days/daysFull/effortMap triple.
+function buildWeekFromStartIndex(startIdx) {
   const days = [], daysFull = [], effortMap = {};
   for (let i = 0; i < 7; i++) {
     const idx = (startIdx + i) % 7;
@@ -230,6 +233,35 @@ function getWeekFromDay(shoppingDay) {
     effortMap[DAYS_ALL[idx]] = (i === 0 || DAYS_ALL[idx] === "Mon" || DAYS_ALL[idx] === "Tue") ? "easy" : "medium";
   }
   return { days, daysFull, effortMap };
+}
+
+// Fallback ordering source, used only when no active plan (and thus no
+// weekStartDate) exists yet — e.g. the very first load. See getWeekFromDate,
+// which is the real ordering source once a plan exists.
+function getWeekFromDay(shoppingDay) {
+  const abbr    = { Sunday:"Sun", Monday:"Mon", Tuesday:"Tue", Wednesday:"Wed", Thursday:"Thu", Friday:"Fri", Saturday:"Sat" };
+  const startAbbr = abbr[shoppingDay] || "Wed";
+  return buildWeekFromStartIndex(DAYS_ALL.indexOf(startAbbr));
+}
+
+// The real ordering source: a plan's weekStartDate already encodes its
+// weekday, so order the 7 days starting there. weekStartDate is an ISO
+// YYYY-MM-DD string; parsed with an explicit local-midnight time so the
+// weekday isn't shifted by UTC parsing.
+function getWeekFromDate(weekStartDate) {
+  const startIdx = new Date(weekStartDate + "T00:00:00").getDay();
+  return buildWeekFromStartIndex(startIdx);
+}
+
+// settings.shoppingDay's one remaining job (see SPEC-date-drives-ordering.md):
+// seed a brand-new plan's default weekStartDate — the next upcoming date
+// (today, if today already matches) that falls on that weekday.
+function nextDateForShoppingDay(shoppingDay) {
+  const abbr      = { Sunday:"Sun", Monday:"Mon", Tuesday:"Tue", Wednesday:"Wed", Thursday:"Thu", Friday:"Fri", Saturday:"Sat" };
+  const targetIdx = DAYS_ALL.indexOf(abbr[shoppingDay] || "Wed");
+  const today     = new Date().toISOString().split("T")[0];
+  const todayIdx  = new Date(today + "T00:00:00").getDay();
+  return addDaysISO(today, (targetIdx - todayIdx + 7) % 7);
 }
 
 // Add n days to an ISO YYYY-MM-DD date, returning ISO YYYY-MM-DD.
@@ -1197,12 +1229,18 @@ function PrepTab({ db, persistDB }) {
 // ── PLAN TAB ───────────────────────────────────────────────────────────────────
 
 function PlanTab({ db, persistDB }) {
-  const { days, daysFull, effortMap } = getWeekFromDay(db.settings?.shoppingDay || "Wednesday");
   // The plan the owner is currently EDITING — follows db.activePlan (current or
   // next), unlike Prep/Tonight which are pinned to current. This plan object
   // doubles as both the live-editing draft and the committed record (they were
   // merged by the two-plan-model migration).
   const draft = getActivePlan(db);
+  // Day-ordering follows THIS plan's own weekStartDate, recomputed every
+  // render so editing the date (see the date input in PlanWelcome) reorders
+  // the days live. Falls back to the shoppingDay default only when there's no
+  // active plan yet (very first load, before any plan exists).
+  const { days, daysFull, effortMap } = draft?.weekStartDate
+    ? getWeekFromDate(draft.weekStartDate)
+    : getWeekFromDay(db.settings?.shoppingDay || "Wednesday");
 
   // Step-flow migrations, applied in sequence so a draft from ANY prior version
   // lands correctly:
@@ -1326,9 +1364,12 @@ function PlanTab({ db, persistDB }) {
       ? [...prevHistory, { archivedAt:new Date().toISOString(), meals:[...new Set(outgoingMeals)] }].slice(-6)
       : prevHistory;
 
-    const today = new Date().toISOString().split("T")[0];
+    // Seed the new plan's start date from the "Default plan start day" setting
+    // — the next upcoming date on that weekday — not just today. The owner can
+    // override immediately via the date input on the resume card.
+    const seedDate = nextDateForShoppingDay(db.settings?.shoppingDay || "Wednesday");
     const freshPlan = {
-      weekOf: today, weekStartDate: today, notes:"", meals:{}, items:[],
+      weekOf: seedDate, weekStartDate: seedDate, notes:"", meals:{}, items:[],
       cartItems: draft?.cartItems || [], cartIngredientIds: draft?.cartIngredientIds || [], dismissedShared: [],
       // Auto-populate day notes from this week's baked-in schedule so a new plan
       // never starts blank. notesTouched tracks manual edits so a later refresh
@@ -1501,7 +1542,7 @@ function PlanWelcome({ onStart, onStartNext, onResume, draft, persistDB, db }) {
           </div>
           <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:12, fontSize:12, color:C.muted }}>
             <span style={{ fontWeight:700 }}>{weekLabel(draft.weekStartDate)}</span>
-            {/* Shopping day can shift week to week, so the anchor date is editable rather than fixed to the settings default. */}
+            {/* This date drives day-ordering for the whole plan (see getWeekFromDate), so it's editable rather than fixed to the settings default — shopping day shifts week to week. */}
             <input type="date" value={draft.weekStartDate || ""} onChange={e => e.target.value && persistDB(writeActivePlan(db, { ...draft, weekStartDate:e.target.value }))}
               style={{ fontSize:12, border:`1px solid ${C.border}`, borderRadius:6, padding:"3px 5px", color:C.muted }} />
           </div>
@@ -3543,10 +3584,11 @@ function ManageConfig({ db, persistDB }) {
     <div style={S.body}>
       <div style={S.card}>
         <div style={S.sectionLabel}>Shopping</div>
-        <FieldGroup label="Shopping day">
+        <FieldGroup label="Default plan start day">
           <select style={S.select} value={db.settings.shoppingDay} onChange={e => upd("shoppingDay",e.target.value)}>
             {["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"].map(d => <option key={d} value={d}>{d}</option>)}
           </select>
+          <div style={{ fontSize:12, color:C.faint, marginTop:4 }}>Seeds the start date for a brand-new plan. Each plan's own date (editable anytime) is what actually orders its days — not this setting.</div>
         </FieldGroup>
         <FieldGroup label="Pickup time">
           <input style={S.input} value={db.settings.pickupTime} onChange={e => upd("pickupTime",e.target.value)} />
@@ -3633,7 +3675,9 @@ function TonightTab({ db, persistDB }) {
   // being lived, never whichever plan is being drafted in the Plan tab.
   const currentPlan = getCurrentPlan(db);
   const planMeals   = currentPlan?.meals || {};
-  const { days, daysFull } = getWeekFromDay(db.settings?.shoppingDay || "Wednesday");
+  const { days, daysFull } = currentPlan?.weekStartDate
+    ? getWeekFromDate(currentPlan.weekStartDate)
+    : getWeekFromDay(db.settings?.shoppingDay || "Wednesday");
 
   const todayJsDay  = new Date().getDay();
   const todayAbbr   = DAYS_ALL[todayJsDay];
