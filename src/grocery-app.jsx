@@ -2954,7 +2954,7 @@ function ManageMeals({ db, persistDB }) {
                   {dislikes.length>0 && <span style={S.badge(C.danger,C.dangerLight)}>👎 {dislikes.join(", ")}</span>}
                   {likes.length>0    && <span style={S.badge(C.verified,"#E8F5EE")}>👍 {likes.join(", ")}</span>}
                 </div>
-                {meal.ingredients.length>0 && <div style={{ fontSize:11, color:C.faint, marginTop:2 }}>{meal.ingredients.length} ingredients</div>}
+                {meal.ingredients?.length>0 && <div style={{ fontSize:11, color:C.faint, marginTop:2 }}>{meal.ingredients.length} ingredients</div>}
               </div>
               <button style={{ background:"none", border:"none", cursor:"pointer", color:C.faint, fontSize:18, padding:"4px" }} onClick={() => setEditing(meal)}>›</button>
             </div>
