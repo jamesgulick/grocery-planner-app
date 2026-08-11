@@ -1823,18 +1823,6 @@ function PlanMeals({ mealPlan, setMealPlan, commitMealToPlan, awayHome, setAwayH
         </div>
         <button style={{ ...S.btn, ...S.btnS, marginBottom:0 }} onClick={regenerate} disabled={loading}>{loading?"Thinking...":"Regenerate empty days"}</button>
       </div>
-      {(() => {
-        // Notes are auto-populated at plan start; this is the mid-session fallback
-        // for refreshing them if the baked-in schedule was updated after you began.
-        const notesMatchBaked = days.every(d => (dayNotes[d]||"") === (defaultNotes[d]||""));
-        if (notesMatchBaked) return null;
-        return (
-          <button style={{ ...S.btn, ...S.btnS, fontSize:12, marginBottom:10 }}
-            onClick={() => setDayNotes(prev => { const next = { ...prev }; days.forEach(d => { next[d] = defaultNotes[d] || ""; }); return next; })}>
-            ↻ Refresh day notes from this week's schedule
-          </button>
-        );
-      })()}
       {totalMeals === 0 && <button style={{ ...S.btn, ...S.btnP }} onClick={regenerate}>Generate meal plan</button>}
       {days.map((day, i) => {
         const dayMeals      = mealPlan[day] || [];
