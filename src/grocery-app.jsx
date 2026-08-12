@@ -3794,10 +3794,10 @@ function TonightTab({ db, persistDB }) {
 // ── App shell ──────────────────────────────────────────────────────────────────
 
 const TABS = [
+  { id:"tonight", label:"Tonight" },
   { id:"prep",    label:"Prep" },
   { id:"plan",    label:"Plan" },
   { id:"manage",  label:"Manage" },
-  { id:"tonight", label:"Tonight" },
 ];
 
 class ErrorBoundary extends React.Component {
@@ -3856,7 +3856,7 @@ function computeDataStatus(db, storageOk) {
 
 export default function App() {
   const [db, setDB]               = useState(null);
-  const [tab, setTab]             = useState("prep");
+  const [tab, setTab]             = useState("tonight");
   const [loading, setLoading]     = useState(true);
   const [showOpenSession, setShowOpenSession]   = useState(false);
   const [sessionImport, setSessionImport]       = useState("");
