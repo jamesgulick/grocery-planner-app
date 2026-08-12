@@ -3747,6 +3747,21 @@ function TonightTab({ db, persistDB }) {
       )}
 
       <div style={S.card}>
+        <div style={S.sectionLabel}>This week</div>
+        {days.map((d,i) => {
+          const m       = (planMeals[d]||[]).join(", ");
+          const isToday = i===activeIdx;
+          return (
+            <div key={d} style={{ display:"flex", padding:"9px 0", borderBottom:`1px solid ${C.border}`, gap:10 }}>
+              <div style={{ fontSize:12, fontWeight:700, color:isToday?C.primary:C.faint, width:36 }}>{d}</div>
+              <div style={{ flex:1, fontSize:14, fontWeight:isToday?700:400, color:isToday?C.primary:C.text }}>{m||"—"}</div>
+              {isToday && <div style={{ fontSize:11, color:C.accent, fontWeight:700 }}>today</div>}
+            </div>
+          );
+        })}
+      </div>
+
+      <div style={S.card}>
         <div style={S.sectionLabel}>Send to</div>
         {[{name:"all",label:"Everyone (Family Dinner)"}, ...activeFamily].map((opt,i,arr) => (
           <div key={opt.name} style={{ display:"flex", alignItems:"center", gap:12, padding:"11px 0", borderBottom:i===arr.length-1?"none":`1px solid ${C.border}`, cursor:"pointer" }} onClick={() => setRecipient(opt.name)}>
@@ -3771,21 +3786,6 @@ function TonightTab({ db, persistDB }) {
             Outbox ready: {db.outbox.label} · {db.outbox.recipients.length} recipient{db.outbox.recipients.length!==1?"s":""}. Export to iCloud, then run your send Shortcut.
           </div>
         )}
-      </div>
-
-      <div style={S.card}>
-        <div style={S.sectionLabel}>This week</div>
-        {days.map((d,i) => {
-          const m       = (planMeals[d]||[]).join(", ");
-          const isToday = i===activeIdx;
-          return (
-            <div key={d} style={{ display:"flex", padding:"9px 0", borderBottom:`1px solid ${C.border}`, gap:10 }}>
-              <div style={{ fontSize:12, fontWeight:700, color:isToday?C.primary:C.faint, width:36 }}>{d}</div>
-              <div style={{ flex:1, fontSize:14, fontWeight:isToday?700:400, color:isToday?C.primary:C.text }}>{m||"—"}</div>
-              {isToday && <div style={{ fontSize:11, color:C.accent, fontWeight:700 }}>today</div>}
-            </div>
-          );
-        })}
       </div>
     </div>
   );
@@ -3837,7 +3837,7 @@ function computeDataStatus(db, storageOk) {
     return { severity:"urgent", calm, message:"⚠ Storage isn't saving — export now.", action:"export", actionLabel:"Export now" };
   }
   if (db._isSeed) {
-    return { severity:"caution", calm, message:"⚠ Example data — import your file to begin.", action:"import", actionLabel:"Import" };
+    return { severity:"caution", calm:null, message:"⚠ Example data — import your file to begin.", action:"import", actionLabel:"Import" };
   }
 
   const hasChangesSinceBackup = !!changed && (!exported || changed.getTime() > exported.getTime());
@@ -4004,7 +4004,7 @@ export default function App() {
 
           {dataStatus.severity === "caution" && (
             <div style={{ marginBottom:10 }}>
-              <div style={{ fontSize:11, color:C.accentMuted, marginBottom:4 }}>{dataStatus.calm}</div>
+              {dataStatus.calm && <div style={{ fontSize:11, color:C.accentMuted, marginBottom:4 }}>{dataStatus.calm}</div>}
               <div style={{ background:"rgba(240,176,80,0.22)", border:"1px solid rgba(240,176,80,0.5)", borderRadius:8, padding:"8px 10px", display:"flex", alignItems:"center", justifyContent:"space-between", gap:10 }}>
                 <span style={{ fontSize:12, fontWeight:700, color:"#F0B050" }}>{dataStatus.message}</span>
                 <button style={S.statusAction} onClick={runStatusAction}>{dataStatus.actionLabel}</button>
