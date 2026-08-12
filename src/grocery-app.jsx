@@ -1024,6 +1024,7 @@ const S = {
   headerTop:   { display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:10 },
   headerTitle: { fontSize:16, fontWeight:700 },
   statusAction: { background:"rgba(255,255,255,0.92)", border:"none", color:C.primary, fontSize:11, fontWeight:700, padding:"5px 10px", borderRadius:8, cursor:"pointer", whiteSpace:"nowrap" },
+  statusActionSubtle: { background:"transparent", border:"1px solid rgba(232,245,238,0.3)", color:C.accentMuted, fontSize:11, fontWeight:600, padding:"3px 9px", borderRadius:7, cursor:"pointer", whiteSpace:"nowrap" },
   tabs:        { display:"flex" },
   tab: a => ({ flex:1, padding:"9px 2px", textAlign:"center", fontSize:11, fontWeight:700, color:a?"#fff":C.accentMuted, borderBottom:a?"2px solid #fff":"2px solid transparent", cursor:"pointer", background:"none", border:"none" }),
   body:        { padding:"16px 16px 20px" },
@@ -3987,7 +3988,10 @@ export default function App() {
           <div style={S.headerTop}>
             <div style={S.headerTitle}>Grocery Planner</div>
             {dataStatus.severity === "calm" && (
-              <span style={{ fontSize:11, color:C.accentMuted }}>{dataStatus.calm}</span>
+              <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+                <span style={{ fontSize:11, color:C.accentMuted }}>{dataStatus.calm}</span>
+                <button style={S.statusActionSubtle} onClick={() => downloadBackup(db, persistDB)} title="Back up your data now">Save</button>
+              </div>
             )}
           </div>
 
