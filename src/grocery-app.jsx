@@ -2064,9 +2064,10 @@ function PlanInventory({ checkedIds, setCheckedIds, stapleFlags, setStapleFlags,
     );
   };
 
-  const StapleRow = ({ ing, accent, showUsedBy }) => {
+  const StapleRow = ({ ing, accent }) => {
     const flagged = inPrep.has(ing.id);
-    const usedBy  = showUsedBy ? (usedByMeal[ing.id] || []) : [];
+    // 1 meal -> name context line; 2+ meals -> the ×N badge above (never both)
+    const usedBy  = !multiMeal[ing.id] && (usedByMeal[ing.id] || []).length === 1 ? usedByMeal[ing.id] : [];
     return (
       <div key={ing.id} style={{ display:"flex", alignItems:"center", padding:"10px 0", borderBottom:`1px solid ${C.border}`, gap:8 }}>
         <div style={{ flex:1, minWidth:0 }}>
@@ -2102,6 +2103,7 @@ function PlanInventory({ checkedIds, setCheckedIds, stapleFlags, setStapleFlags,
                   <div key={ing.id} style={{ display:"flex", alignItems:"center", padding:"10px 0", borderBottom:`1px solid ${C.border}`, gap:8, opacity:skipped?0.5:1, transition:"opacity 0.2s" }}>
                     <div style={{ flex:1, minWidth:0 }}>
                       <div style={{ fontSize:14, fontWeight:500, textDecoration:skipped?"line-through":"none", color:skipped?C.muted:"inherit" }}>{ing.name}{multiMeal[ing.id] && <span style={{ marginLeft:6, fontSize:11, fontWeight:700, color:"#B45309", background:"#FEF3C7", borderRadius:5, padding:"1px 5px" }}>×{multiMeal[ing.id]} meals</span>}</div>
+                      {!multiMeal[ing.id] && (usedByMeal[ing.id]||[]).length === 1 && <div style={{ fontSize:11, color:C.accent, fontWeight:600 }}>for {usedByMeal[ing.id][0]}</div>}
                       {inPrep.has(ing.id) && <div style={{ fontSize:11, color:C.verified, fontWeight:600 }}>✓ In cart</div>}
                     </div>
                     {!skipped && <QtyEdit ing={ing} />}
@@ -2128,7 +2130,7 @@ function PlanInventory({ checkedIds, setCheckedIds, stapleFlags, setStapleFlags,
             <>
               <div style={{ fontSize:11, fontWeight:700, color:C.warning, padding:"14px 0 2px", textTransform:"uppercase", letterSpacing:"0.06em" }}>Slow staples needed this week — check closely</div>
               <div style={{ fontSize:11, color:C.faint, paddingBottom:4 }}>These last a while, but a meal this week uses them — make sure you have enough.</div>
-              {slowNeededHere.map(ing => <StapleRow key={ing.id} ing={ing} accent={C.warning} showUsedBy />)}
+              {slowNeededHere.map(ing => <StapleRow key={ing.id} ing={ing} accent={C.warning} />)}
             </>
           )}
           {slowHere.length > 0 && (
