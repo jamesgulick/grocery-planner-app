@@ -1229,7 +1229,7 @@ function PrepTab({ db, persistDB }) {
 
 // ── PLAN TAB ───────────────────────────────────────────────────────────────────
 
-function PlanTab({ db, persistDB }) {
+function PlanTab({ db, persistDB, onGoToImport }) {
   // The plan the owner is currently EDITING — follows db.activePlan (current or
   // next), unlike Prep/Tonight which are pinned to current. This plan object
   // doubles as both the live-editing draft and the committed record (they were
@@ -1476,6 +1476,7 @@ function PlanTab({ db, persistDB }) {
             draft={draft}
             persistDB={persistDB}
             db={db}
+            onGoToImport={onGoToImport}
           />
         </div>
       </div>
@@ -1504,12 +1505,7 @@ function PlanTab({ db, persistDB }) {
   );
 }
 
-function PlanWelcome({ onStart, onStartNext, onResume, draft, persistDB, db }) {
-  const [showImport, setShowImport]   = useState(false);
-  const [importText, setImportText]   = useState("");
-  const [importError, setImportError] = useState("");
-  const [importSuccess, setImportSuccess] = useState(null);
-
+function PlanWelcome({ onStart, onStartNext, onResume, draft, persistDB, db, onGoToImport }) {
   // Resolve the resume-step label from the draft's own version stamp — initMaxStep
   // lives in PlanTab, not here, so migrate locally. Mirrors PlanTab's migration.
   const _mV2 = s => [0,1,1,2,3,4,4,5][s] ?? 0;
@@ -1592,39 +1588,11 @@ function PlanWelcome({ onStart, onStartNext, onResume, draft, persistDB, db }) {
       })()}
 
 
-      {!showImport ? (
+      {onGoToImport && (
         <div style={{ textAlign:"center", marginBottom:8 }}>
-          <button style={{ background:"none", border:"none", color:C.accentMuted, fontSize:13, cursor:"pointer", textDecoration:"underline" }} onClick={() => setShowImport(true)}>
-            📥 Import from iCloud Drive
+          <button style={{ background:"none", border:"none", color:C.accentMuted, fontSize:13, cursor:"pointer", textDecoration:"underline" }} onClick={onGoToImport}>
+            📥 Import → Config
           </button>
-        </div>
-      ) : (
-        <div style={{ ...S.card, marginBottom:8 }}>
-          <div style={S.sectionLabel}>Import from iCloud Drive</div>
-          {importSuccess ? (
-            <div style={{ background:C.primaryLight, borderRadius:10, padding:"12px 14px", textAlign:"center" }}>
-              <div style={{ fontSize:18, marginBottom:4 }}>✅</div>
-              <div style={{ fontWeight:700, color:C.primary, fontSize:14 }}>{importSuccess.meals} meals · {importSuccess.items} items imported</div>
-              <button style={{ ...S.btn, ...S.btnP, marginTop:10, marginBottom:0 }} onClick={() => { setShowImport(false); setImportSuccess(null); }}>Done</button>
-            </div>
-          ) : (
-            <>
-              <textarea style={{ ...S.input, height:80, fontSize:11, fontFamily:"monospace", resize:"none", marginBottom:6 }} placeholder="Paste JSON here..." value={importText} onChange={e => { setImportText(e.target.value); setImportError(""); }} />
-              {importError && <div style={{ fontSize:12, color:C.danger, marginBottom:6 }}>{importError}</div>}
-              <div style={{ display:"flex", gap:8 }}>
-                <button style={{ ...S.btn, ...S.btnP, flex:1, marginBottom:0 }} disabled={!importText.trim()} onClick={() => {
-                  try {
-                    const parsed = JSON.parse(extractJSON(importText));
-                    if (!parsed.meals || !parsed.ingredients) throw new Error("Invalid format");
-                    persistDB(parsed);
-                    setImportText("");
-                    setImportSuccess({ meals:parsed.meals.length, items:parsed.ingredients.length });
-                  } catch(e) { setImportError("Could not parse: " + e.message); }
-                }}>Import</button>
-                <button style={{ ...S.btn, ...S.btnS, flex:1, marginBottom:0 }} onClick={() => { setShowImport(false); setImportText(""); setImportError(""); }}>Cancel</button>
-              </div>
-            </>
-          )}
         </div>
       )}
 
@@ -4073,7 +4041,7 @@ export default function App() {
         )}
 
         {tab==="prep"    && <PrepTab    db={db} persistDB={persistDB} />}
-        {tab==="plan"    && <PlanTab    key={db.activePlan || "current"} db={db} persistDB={persistDB} />}
+        {tab==="plan"    && <PlanTab    key={db.activePlan || "current"} db={db} persistDB={persistDB} onGoToImport={() => { setManageInitialSub("config"); setTab("manage"); }} />}
         {tab==="manage"  && <ManageTab  db={db} persistDB={persistDB} initialSub={manageInitialSub} />}
         {tab==="tonight" && <TonightTab db={db} persistDB={persistDB} />}
       </div>
