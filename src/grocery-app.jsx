@@ -3586,37 +3586,6 @@ function ManageConfig({ db, persistDB }) {
   return (
     <div style={S.body}>
       <div style={S.card}>
-        <div style={S.sectionLabel}>Shopping</div>
-        <FieldGroup label="Default plan start day">
-          <select style={S.select} value={db.settings.shoppingDay} onChange={e => upd("shoppingDay",e.target.value)}>
-            {["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"].map(d => <option key={d} value={d}>{d}</option>)}
-          </select>
-          <div style={{ fontSize:12, color:C.faint, marginTop:4 }}>Seeds the start date for a brand-new plan. Each plan's own date (editable anytime) is what actually orders its days — not this setting.</div>
-        </FieldGroup>
-        <FieldGroup label="Pickup time">
-          <input style={S.input} value={db.settings.pickupTime} onChange={e => upd("pickupTime",e.target.value)} />
-        </FieldGroup>
-        <FieldGroup label={`Budget limit: $${db.settings.budgetLimit}`}>
-          <input type="range" min={100} max={500} step={10} value={db.settings.budgetLimit} onChange={e => upd("budgetLimit",Number(e.target.value))} style={{ width:"100%" }} />
-          <div style={{ display:"flex", justifyContent:"space-between", fontSize:12, color:C.faint }}><span>$100</span><span style={{ fontWeight:700, color:C.primary }}>${db.settings.budgetLimit}</span><span>$500</span></div>
-        </FieldGroup>
-      </div>
-
-      <div style={S.card}>
-        <div style={S.sectionLabel}>Family</div>
-        <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"10px 0", borderBottom:`1px solid ${C.border}` }}>
-          <div><div style={{ fontWeight:600 }}>Kid 3 is home</div><div style={{ fontSize:12, color:C.faint }}>Toggle off when away (e.g. at college)</div></div>
-          <Toggle value={db.settings.awayMemberHome} onChange={v => upd("awayMemberHome",v)} />
-        </div>
-        {(db.settings.familyContacts||[]).map((f,i,arr) => (
-          <div key={f.name} style={{ ...S.row, padding:"10px 0", ...(i===arr.length-1?S.rowLast:{}) }}>
-            <div style={{ flex:1 }}><div style={{ fontWeight:600 }}>{f.name}</div><div style={{ fontSize:12, color:C.faint }}>{f.phone||"No number set"}</div></div>
-            {f.name==="C" && !db.settings.awayMemberHome && <span style={S.badge(C.muted,"#F3F4F6")}>away</span>}
-          </div>
-        ))}
-      </div>
-
-      <div style={S.card}>
         <div style={S.sectionLabel}>Cross-device sync — iCloud Drive</div>
         <div style={{ fontSize:13, color:C.muted, marginBottom:6 }}>{db.meals.length} meals · {db.ingredients.length} items · {planCount(db.plans)} plans</div>
         <div style={{ fontSize:12, color:C.faint, marginBottom:12 }}>Save to GroceryDB.json in iCloud Drive via shortcut or manual copy</div>
@@ -3660,6 +3629,37 @@ function ManageConfig({ db, persistDB }) {
         <input ref={fileRef} type="file" accept=".json,.txt,application/json,text/plain,text/*" style={{ display:"none" }} onChange={e => e.target.files[0] && importDB(e.target.files[0])} />
         <button style={{ ...S.btn, ...S.btnS, marginBottom:8 }} onClick={() => fileRef.current.click()}>📥 Import from file</button>
         <button style={{ ...S.btn, ...S.btnD }} onClick={() => { if(window.confirm("Reset to defaults?")) persistDB(DEFAULT_DB); }}>Reset to defaults</button>
+      </div>
+
+      <div style={S.card}>
+        <div style={S.sectionLabel}>Shopping</div>
+        <FieldGroup label="Default plan start day">
+          <select style={S.select} value={db.settings.shoppingDay} onChange={e => upd("shoppingDay",e.target.value)}>
+            {["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"].map(d => <option key={d} value={d}>{d}</option>)}
+          </select>
+          <div style={{ fontSize:12, color:C.faint, marginTop:4 }}>Seeds the start date for a brand-new plan. Each plan's own date (editable anytime) is what actually orders its days — not this setting.</div>
+        </FieldGroup>
+        <FieldGroup label="Pickup time">
+          <input style={S.input} value={db.settings.pickupTime} onChange={e => upd("pickupTime",e.target.value)} />
+        </FieldGroup>
+        <FieldGroup label={`Budget limit: $${db.settings.budgetLimit}`}>
+          <input type="range" min={100} max={500} step={10} value={db.settings.budgetLimit} onChange={e => upd("budgetLimit",Number(e.target.value))} style={{ width:"100%" }} />
+          <div style={{ display:"flex", justifyContent:"space-between", fontSize:12, color:C.faint }}><span>$100</span><span style={{ fontWeight:700, color:C.primary }}>${db.settings.budgetLimit}</span><span>$500</span></div>
+        </FieldGroup>
+      </div>
+
+      <div style={S.card}>
+        <div style={S.sectionLabel}>Family</div>
+        <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"10px 0", borderBottom:`1px solid ${C.border}` }}>
+          <div><div style={{ fontWeight:600 }}>Kid 3 is home</div><div style={{ fontSize:12, color:C.faint }}>Toggle off when away (e.g. at college)</div></div>
+          <Toggle value={db.settings.awayMemberHome} onChange={v => upd("awayMemberHome",v)} />
+        </div>
+        {(db.settings.familyContacts||[]).map((f,i,arr) => (
+          <div key={f.name} style={{ ...S.row, padding:"10px 0", ...(i===arr.length-1?S.rowLast:{}) }}>
+            <div style={{ flex:1 }}><div style={{ fontWeight:600 }}>{f.name}</div><div style={{ fontSize:12, color:C.faint }}>{f.phone||"No number set"}</div></div>
+            {f.name==="C" && !db.settings.awayMemberHome && <span style={S.badge(C.muted,"#F3F4F6")}>away</span>}
+          </div>
+        ))}
       </div>
     </div>
   );
