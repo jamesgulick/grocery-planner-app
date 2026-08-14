@@ -2656,18 +2656,15 @@ const HELP_SECTIONS = [
     "**Inventory step**: checking an item marks it in-stock and drops it from the list. This is the reliable way.",
     "**Prep \"already in cart\" box**: matches your text to a real ingredient. If it matches, the item leaves your list. If not, it's kept as a note only — read the confirmation to see which happened.",
   ]},
-  { t:"Reconcile", body:[
-    "Reads your placed order with AI, then matches to your list **locally** by word overlap.",
-    "Flags: items missing from the order, quantities over 1, and optional items over $5.",
-    "Local matching can occasionally miss a real match, showing a false \"missing\" flag. A quick glance is cheaper than the whole check failing.",
-  ]},
   { t:"Weekly refresh", body:[
-    "Calendar notes and the forecast are baked in per week. The reminder turns amber once the week passes — that's the cue to ask Claude to refresh.",
-    "Day notes auto-fill when a new plan starts, so a plan never begins blank.",
+    "The forecast is fetched **live** (Open-Meteo) for the current shopping week — nothing to refresh by hand.",
+    "Day notes auto-fill from defaults when a plan starts, so a plan never begins blank.",
+    "Calendar events come in by importing an updated DB export — edit the exported JSON, then import it back.",
   ]},
   { t:"Family messages & data", body:[
     "All comms buttons **copy** the message — iOS blocks app-launching links from in here. Paste into Messages yourself.",
-    "**Start new week** archives meals to history (which powers the recency down-weight), clears the plan, and keeps the Walmart cart.",
+    "**Start next week's plan** creates a separate next plan — it doesn't touch the current one. A plan auto-retires (its meals archived to history for the recency down-weight) once its week's start date passes, and the next plan then becomes current.",
+    "Each plan's cart is independent — starting a next plan doesn't carry the cart over.",
     "Import accepts .json or .txt — it validates on content, not the file extension.",
   ]},
 ];
@@ -2696,13 +2693,13 @@ function ManageHelp() {
           const isOpen = open === i;
           return (
             <div key={s.t} style={{ borderTop: i ? `1px solid ${C.border}` : "none" }}>
-              <button style={{ width:"100%", background:"none", border:"none", padding:"12px 2px", textAlign:"left", cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"space-between", fontSize:14, fontWeight:600, color:C.text }}
+              <button style={{ width:"100%", background:"none", border:"none", padding:"12px 16px", textAlign:"left", cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"space-between", fontSize:14, fontWeight:600, color:C.text }}
                 onClick={() => setOpen(isOpen ? null : i)}>
                 <span>{s.t}</span>
                 <span style={{ color:C.faint, fontSize:16 }}>{isOpen ? "−" : "+"}</span>
               </button>
               {isOpen && (
-                <div style={{ paddingBottom:12 }}>
+                <div style={{ padding:"0 16px 12px" }}>
                   {s.body.map((line, j) => (
                     <div key={j} style={{ fontSize:13, color:C.muted, lineHeight:1.55, marginBottom:8, paddingLeft:10, borderLeft:`2px solid ${C.border}` }}>
                       <HelpText>{line}</HelpText>
