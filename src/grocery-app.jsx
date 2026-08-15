@@ -3527,7 +3527,11 @@ function ManageConfig({ db, persistDB }) {
   const applyImport = imp => {
     if (!imp.meals || !imp.ingredients) throw new Error("Invalid format");
     const asOf = imp._meta?.dataChangedAt || null;
-    const parsed = { ...stripExportNodes(imp), _isSeed: false };
+    const parsed = {
+      ...stripExportNodes(imp),
+      settings: { ...DEFAULT_SETTINGS, ...(imp.settings || {}) },
+      _isSeed: false,
+    };
     persistDB(parsed);
     setImportSuccess({ meals: parsed.meals.length, items: parsed.ingredients.length, asOf });
   };
