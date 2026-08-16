@@ -3699,7 +3699,7 @@ function buildFridgeReportHTML(db) {
   const ix = fridgeReportMealIndex(db.meals);
 
   const currentPlan = db.plans?.current || null;
-  const mp    = currentPlan?.meals || currentPlan?.mealPlan || {};
+  const mp    = currentPlan?.mealPlan || currentPlan?.meals || {};
   const notes = currentPlan?.dayNotes || {};
   const { days: order } = currentPlan?.weekStartDate
     ? getWeekFromDate(currentPlan.weekStartDate)
@@ -3716,7 +3716,7 @@ function buildFridgeReportHTML(db) {
   const nextPlan = db.plans?.next || null;
   let teaserHTML = "";
   if (nextPlan) {
-    const npMp = nextPlan.meals || nextPlan.mealPlan || {};
+    const npMp = nextPlan.mealPlan || nextPlan.meals || {};
     const { days: nextOrder } = nextPlan.weekStartDate
       ? getWeekFromDate(nextPlan.weekStartDate)
       : getWeekFromDay(db.settings?.shoppingDay || "Wednesday");
