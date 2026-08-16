@@ -737,11 +737,6 @@ async function clearRecovery() {
 // ── Meal suggestions ───────────────────────────────────────────────────────────
 
 
-// ── Weekly baked-in data (Level-1 manual refresh) ───────────────────────────────// These three are updated together each week by asking Claude to refresh the
-// calendar + weather. BAKED_WEEK is the Monday the current data covers; the
-// in-app reminder self-dates off it and emphasizes when today is past the week.
-const BAKED_WEEK = "2026-08-04";   // Shopping day (Tue) of the week the baked-in data covers
-
 // Budget trimming: receipt lines above this price whose matched ingredient is
 // flagged OPTIONAL get surfaced in Reconcile as drop candidates. Config knob.
 const HIGH_PRICE = 5;
@@ -753,17 +748,6 @@ const HIGH_PRICE = 5;
 // it — lower it and chunk instead of raising further.
 const EXTRACT_TOKENS = 2500;
 
-// Is the baked-in weekly data stale? (today is past the Sunday of BAKED_WEEK)
-const isBakedDataStale = () => {
-  const start = new Date(BAKED_WEEK + "T00:00:00");
-  const end   = new Date(start); end.setDate(start.getDate() + 6); end.setHours(23,59,59,999);
-  return new Date() > end;
-};
-// "7/6" style label for display.
-const bakedWeekLabel = () => {
-  const d = new Date(BAKED_WEEK + "T00:00:00");
-  return `${d.getMonth()+1}/${d.getDate()}`;
-};
 // ── Live weather ────────────────────────────────────────────────────────────────
 // Replaces the old hand-baked WEEK_FORECAST with a live fetch from Open-Meteo
 // (free, no API key, CORS-enabled — works from a plain browser fetch when the app
@@ -840,23 +824,32 @@ async function fetchLiveForecast() {
 // new-week setup can read it.
 const defaultNotes = { Tue:"Grocery pickup", Wed:"", Thu:"", Fri:"", Sat:"", Sun:"", Mon:"" };
 
-// Self-dating reminder that the calendar/weather are baked in for a specific
-// week. Quiet (muted) while current; emphasized (warning) once past the week,
-// nudging a "ask Claude to refresh" edit. Text-only, no mechanism.
-function RefreshReminder({ compact }) {
-  const stale = isBakedDataStale();
+// True if dayNotes still looks like a fresh, never-updated plan: either it
+// still matches the seeded defaultNotes, or it's all empty (e.g. cleared).
+// Either way the calendar update hasn't been run for this plan yet.
+function notesLookUnupdated(dayNotes) {
+  const notes = dayNotes || {};
+  const keys = Object.keys(defaultNotes);
+  const matchesDefault = keys.every(k => (notes[k] || "") === (defaultNotes[k] || ""));
+  const allEmpty = keys.every(k => !(notes[k] || "").trim());
+  return matchesDefault || allEmpty;
+}
+
+// Nudges the owner to run the calendar update when the active plan's day
+// notes still look untouched. Hidden once the notes have been customized or
+// imported. Text-only, no mechanism.
+function RefreshReminder({ compact, dayNotes }) {
+  if (!notesLookUnupdated(dayNotes)) return null;
   return (
     <div style={{
       fontSize:12, lineHeight:1.4, borderRadius:8, padding:compact?"7px 10px":"9px 12px",
       marginBottom:10,
-      background: stale ? C.warningLight : "#F3F4F6",
-      color:      stale ? C.warning : C.faint,
-      border:     stale ? `1px solid ${C.warning}` : `1px solid ${C.border}`,
-      fontWeight: stale ? 600 : 400,
+      background: C.warningLight,
+      color:      C.warning,
+      border:     `1px solid ${C.warning}`,
+      fontWeight: 600,
     }}>
-      {stale
-        ? `⚠️ Calendar & weather are baked in for week of ${bakedWeekLabel()} — looks like a newer week. Ask Claude to refresh the app.`
-        : `Calendar & weather baked in for week of ${bakedWeekLabel()}. Ask Claude to refresh if it's a new week.`}
+      Notes match default: consider refreshing calendar data.
     </div>
   );
 }
@@ -1526,7 +1519,7 @@ function PlanWelcome({ onStart, onStartNext, onResume, draft, persistDB, db, onG
         <div style={{ fontSize:14, opacity:0.8, lineHeight:1.5 }}>Middletown DE</div>
       </div>
 
-      <RefreshReminder />
+      <RefreshReminder dayNotes={draft?.dayNotes} />
 
       {onResume && draft && (
         <div style={{ ...S.card, border:`2px solid ${C.accent}`, background:C.primaryLight }}>
