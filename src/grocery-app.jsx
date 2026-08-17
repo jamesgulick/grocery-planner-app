@@ -5,10 +5,10 @@ import React, { useState, useEffect, useRef } from "react";
 const DAYS_ALL   = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
 const DAYS_FULL  = ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
 const FAMILY     = [
-  { name:"D", phone:"" },
-  { name:"H",   phone:"" },
-  { name:"N",   phone:"" },
-  { name:"C",   phone:"" },
+  { name:"Partner", phone:"" },
+  { name:"Kid 1",   phone:"" },
+  { name:"Kid 2",   phone:"" },
+  { name:"Kid 3",   phone:"" },
 ];
 const STORAGE_LOCATIONS = ["Unassigned","Pantry","Fridge","Freezer","Garage","Cabinet","Seasonings","Medicine Cabinet","Other"];
 // Locations walked during the plan-flow inventory step (everything real, i.e.
@@ -45,7 +45,7 @@ const LEFTOVER_OPTIONS = ["none","yes"];
 // gate on bad-grill weather). See the meal-suggestion weighting.
 const TEMP_AFFINITY_OPTIONS = ["comfort","neutral","light"];
 const MEAL_TYPES       = ["dinner","side","remix","batch","takeout"];
-const FAMILY_NAMES     = ["D","H","N","C","J"];
+const FAMILY_NAMES     = ["Partner","Kid 1","Kid 2","Kid 3","Me"];
 const DB_KEY           = "grocery_db";
 const RECOVERY_KEY     = "grocery_recovery";
 const SHORTCUT_GET     = "shortcuts://run-shortcut?name=Get%20My%20Grocery%20Data";
@@ -454,41 +454,41 @@ const SEED_INGREDIENTS = [
 ];
 
 const SEED_MEALS = [
-  { id:"m001", createdAt:SEED_TS, name:"Tuna casserole", effort:"easy", type:"dinner", weather:"any", tempAffinity:"neutral", grillable:false, leftovers:"yes", preferences:[{"person":"H","pref":"likes"},{"person":"N","pref":"likes"}], notes:"Made on shopping day", ingredients:["i001","i003","i022","i1781781802965","i1781781814061","i1781781828141"] },
-  { id:"m002", createdAt:SEED_TS, name:"Pizza night", effort:"easy", type:"takeout", weather:"any", tempAffinity:"neutral", grillable:false, leftovers:"yes", preferences:[{"person":"D","pref":"likes"}], notes:"Takeout", ingredients:["i1782162217949","i1782162229018"] },
-  { id:"m003", createdAt:SEED_TS, name:"Mexican nite", effort:"medium", type:"dinner", weather:"any", tempAffinity:"neutral", grillable:false, leftovers:"yes", preferences:[{"person":"D","pref":"likes"},{"person":"N","pref":"likes"},{"person":"H","pref":"likes"}], notes:"", ingredients:["i006","i007","i008","i009","i010","i004","i1781958630730me6","i1781961209509xys","i1781958630730qfr","i1781959860532y9t","i1781958630730rlq","i015","i178196156080816o","i1782165334504","i1781961560808zai","i1782165394556","i1781959860532rtb"] },
-  { id:"m004", createdAt:SEED_TS, name:"Lasagna", effort:"involved", type:"dinner", weather:"any", tempAffinity:"neutral", grillable:false, leftovers:"yes", preferences:[{"person":"D","pref":"likes"},{"person":"H","pref":"likes"},{"person":"N","pref":"likes"},{"person":"C","pref":"likes"}], notes:"375° / Sauce, noodles, ricotta, meat", ingredients:["i012","i013","i014","i011","i015"] },
-  { id:"m005", createdAt:SEED_TS, name:"Chicken tenders and tater tots", effort:"easy", type:"dinner", weather:"any", tempAffinity:"neutral", grillable:false, leftovers:"none", preferences:[{"person":"N","pref":"likes"}], notes:"", ingredients:["i005","i016"] },
-  { id:"m006", createdAt:SEED_TS, name:"Grilled burgers", effort:"medium", type:"dinner", weather:"grill", tempAffinity:"light", grillable:true, leftovers:"none", preferences:[{"person":"D","pref":"likes"}], notes:"", ingredients:["i1782166436549","i1781959860532skr","i1782061148399","i1781958630730z93","i1781961209508njt","i1781959860532unb","i178195986053219m","i1781961560808yg7","i1781961387873bkt","i17819613878726an","i016","i17819613878724hb"] },
-  { id:"m007", createdAt:SEED_TS, name:"Chili", effort:"medium", type:"dinner", weather:"cold", tempAffinity:"comfort", grillable:false, leftovers:"yes", preferences:[{"person":"D","pref":"likes"},{"person":"H","pref":"likes"}], notes:"Cold days only", ingredients:["i015","i1781961209508cra","i17819612095083sd","i17819612095087l0","i1783190994435","i1781959860532jk1"] },
-  { id:"m008", createdAt:SEED_TS, name:"Breakfast for dinner", effort:"involved", type:"dinner", weather:"any", tempAffinity:"neutral", grillable:false, leftovers:"yes", preferences:[{"person":"H","pref":"likes"},{"person":"N","pref":"likes"},{"person":"C","pref":"likes"},{"person":"D","pref":"likes"}], notes:"", ingredients:["i018","i024","i1781961815068mh3","i1781961815068cbm","i1781961815068u7g","i17819613878726an","i1783191135052","i1783191142005","i1783191153571","i1781961698486fc4","i1783191183588"] },
-  { id:"m009", createdAt:SEED_TS, name:"Pasta salad", effort:"easy", type:"batch", weather:"hot", tempAffinity:"light", grillable:false, leftovers:"yes", preferences:[{"person":"D","pref":"likes"},{"person":"C","pref":"likes"}], notes:"Summer batch", ingredients:["i1781962070435ei0","i1781961560808734","i1781962070435vo0","i1783191284449","i1781958630730g1o","i1783191311022","i1781958630730r1b"] },
-  { id:"m010", createdAt:SEED_TS, name:"Sloppy Joes", effort:"easy", type:"dinner", weather:"any", tempAffinity:"light", grillable:false, leftovers:"yes", preferences:[{"person":"H","pref":"likes"}], notes:"", ingredients:["i015","i1781959860532skr","i1782061148399","i1781958630730me6","i1781961209509hy1","i17819612095086b9","i021","i1781961209509xys","i1781958630730z93"] },
-  { id:"m1782060781421", createdAt:SEED_TS, name:"Pasta", effort:"medium", type:"dinner", weather:"any", tempAffinity:"neutral", grillable:false, leftovers:"yes", preferences:[{"person":"D","pref":"likes"},{"person":"N","pref":"dislikes"}], notes:"Tortellini optional", ingredients:["i1781959942399mj0","i1781958630730dzj","i011","i1781958630730jkl","i17819598605320w7","i1781959942399e61","i1782060907056","i1781959860532ica","i1781959942399ro1","i021","i1781959860532g0a","i1782060995346","i014","i1781958630730dxh"] },
-  { id:"m1782061514605", createdAt:SEED_TS, name:"Grilled cheese", effort:"easy", type:"dinner", weather:"cold", tempAffinity:"neutral", grillable:false, leftovers:"none", preferences:[{"person":"N","pref":"likes"},{"person":"H","pref":"likes"},{"person":"D","pref":"likes"}], notes:"Sometimes need fancier ingredients especially if panini style ", ingredients:["i020","i1781958630730phc","i17819616984862wb","i1781961560808mzm","i1781958630730z93","i1781959860532vm6","i021","i17819613878722iz","i1781961560808yg7","i1781961387873bkt","i1781961209509ss8","i1782061680835","i17819599423992nq","i1781959860532y09"] },
-  { id:"m17821640325107i2", createdAt:SEED_TS, name:"Mac and cheese", effort:"medium", type:"side", weather:"any", tempAffinity:"comfort", grillable:false, leftovers:"yes", preferences:[{"person":"D","pref":"likes"},{"person":"H","pref":"likes"}], notes:"", ingredients:["i1781961209508ml9","i004","i1781959860532y09","i021","i1782164260781"] },
-  { id:"m1782166086124", createdAt:SEED_TS, name:"Salsa chicken", effort:"medium", type:"batch", weather:"any", tempAffinity:"neutral", grillable:false, leftovers:"yes", preferences:[{"person":"D","pref":"likes"},{"person":"J","pref":"likes"}], notes:"Used for Mexican nite and lunches ", ingredients:["i023","i008"] },
+  { id:"m001", createdAt:SEED_TS, name:"Tuna casserole", effort:"easy", type:"dinner", weather:"any", tempAffinity:"neutral", grillable:false, leftovers:"yes", preferences:[{"person":"Kid 1","pref":"likes"},{"person":"Kid 2","pref":"likes"}], notes:"Made on shopping day", ingredients:["i001","i003","i022","i1781781802965","i1781781814061","i1781781828141"] },
+  { id:"m002", createdAt:SEED_TS, name:"Pizza night", effort:"easy", type:"takeout", weather:"any", tempAffinity:"neutral", grillable:false, leftovers:"yes", preferences:[{"person":"Partner","pref":"likes"}], notes:"Takeout", ingredients:["i1782162217949","i1782162229018"] },
+  { id:"m003", createdAt:SEED_TS, name:"Mexican nite", effort:"medium", type:"dinner", weather:"any", tempAffinity:"neutral", grillable:false, leftovers:"yes", preferences:[{"person":"Partner","pref":"likes"},{"person":"Kid 2","pref":"likes"},{"person":"Kid 1","pref":"likes"}], notes:"", ingredients:["i006","i007","i008","i009","i010","i004","i1781958630730me6","i1781961209509xys","i1781958630730qfr","i1781959860532y9t","i1781958630730rlq","i015","i178196156080816o","i1782165334504","i1781961560808zai","i1782165394556","i1781959860532rtb"] },
+  { id:"m004", createdAt:SEED_TS, name:"Lasagna", effort:"involved", type:"dinner", weather:"any", tempAffinity:"neutral", grillable:false, leftovers:"yes", preferences:[{"person":"Partner","pref":"likes"},{"person":"Kid 1","pref":"likes"},{"person":"Kid 2","pref":"likes"},{"person":"Kid 3","pref":"likes"}], notes:"375° / Sauce, noodles, ricotta, meat", ingredients:["i012","i013","i014","i011","i015"] },
+  { id:"m005", createdAt:SEED_TS, name:"Chicken tenders and tater tots", effort:"easy", type:"dinner", weather:"any", tempAffinity:"neutral", grillable:false, leftovers:"none", preferences:[{"person":"Kid 2","pref":"likes"}], notes:"", ingredients:["i005","i016"] },
+  { id:"m006", createdAt:SEED_TS, name:"Grilled burgers", effort:"medium", type:"dinner", weather:"grill", tempAffinity:"light", grillable:true, leftovers:"none", preferences:[{"person":"Partner","pref":"likes"}], notes:"", ingredients:["i1782166436549","i1781959860532skr","i1782061148399","i1781958630730z93","i1781961209508njt","i1781959860532unb","i178195986053219m","i1781961560808yg7","i1781961387873bkt","i17819613878726an","i016","i17819613878724hb"] },
+  { id:"m007", createdAt:SEED_TS, name:"Chili", effort:"medium", type:"dinner", weather:"cold", tempAffinity:"comfort", grillable:false, leftovers:"yes", preferences:[{"person":"Partner","pref":"likes"},{"person":"Kid 1","pref":"likes"}], notes:"Cold days only", ingredients:["i015","i1781961209508cra","i17819612095083sd","i17819612095087l0","i1783190994435","i1781959860532jk1"] },
+  { id:"m008", createdAt:SEED_TS, name:"Breakfast for dinner", effort:"involved", type:"dinner", weather:"any", tempAffinity:"neutral", grillable:false, leftovers:"yes", preferences:[{"person":"Kid 1","pref":"likes"},{"person":"Kid 2","pref":"likes"},{"person":"Kid 3","pref":"likes"},{"person":"Partner","pref":"likes"}], notes:"", ingredients:["i018","i024","i1781961815068mh3","i1781961815068cbm","i1781961815068u7g","i17819613878726an","i1783191135052","i1783191142005","i1783191153571","i1781961698486fc4","i1783191183588"] },
+  { id:"m009", createdAt:SEED_TS, name:"Pasta salad", effort:"easy", type:"batch", weather:"hot", tempAffinity:"light", grillable:false, leftovers:"yes", preferences:[{"person":"Partner","pref":"likes"},{"person":"Kid 3","pref":"likes"}], notes:"Summer batch", ingredients:["i1781962070435ei0","i1781961560808734","i1781962070435vo0","i1783191284449","i1781958630730g1o","i1783191311022","i1781958630730r1b"] },
+  { id:"m010", createdAt:SEED_TS, name:"Sloppy Joes", effort:"easy", type:"dinner", weather:"any", tempAffinity:"light", grillable:false, leftovers:"yes", preferences:[{"person":"Kid 1","pref":"likes"}], notes:"", ingredients:["i015","i1781959860532skr","i1782061148399","i1781958630730me6","i1781961209509hy1","i17819612095086b9","i021","i1781961209509xys","i1781958630730z93"] },
+  { id:"m1782060781421", createdAt:SEED_TS, name:"Pasta", effort:"medium", type:"dinner", weather:"any", tempAffinity:"neutral", grillable:false, leftovers:"yes", preferences:[{"person":"Partner","pref":"likes"},{"person":"Kid 2","pref":"dislikes"}], notes:"Tortellini optional", ingredients:["i1781959942399mj0","i1781958630730dzj","i011","i1781958630730jkl","i17819598605320w7","i1781959942399e61","i1782060907056","i1781959860532ica","i1781959942399ro1","i021","i1781959860532g0a","i1782060995346","i014","i1781958630730dxh"] },
+  { id:"m1782061514605", createdAt:SEED_TS, name:"Grilled cheese", effort:"easy", type:"dinner", weather:"cold", tempAffinity:"neutral", grillable:false, leftovers:"none", preferences:[{"person":"Kid 2","pref":"likes"},{"person":"Kid 1","pref":"likes"},{"person":"Partner","pref":"likes"}], notes:"Sometimes need fancier ingredients especially if panini style ", ingredients:["i020","i1781958630730phc","i17819616984862wb","i1781961560808mzm","i1781958630730z93","i1781959860532vm6","i021","i17819613878722iz","i1781961560808yg7","i1781961387873bkt","i1781961209509ss8","i1782061680835","i17819599423992nq","i1781959860532y09"] },
+  { id:"m17821640325107i2", createdAt:SEED_TS, name:"Mac and cheese", effort:"medium", type:"side", weather:"any", tempAffinity:"comfort", grillable:false, leftovers:"yes", preferences:[{"person":"Partner","pref":"likes"},{"person":"Kid 1","pref":"likes"}], notes:"", ingredients:["i1781961209508ml9","i004","i1781959860532y09","i021","i1782164260781"] },
+  { id:"m1782166086124", createdAt:SEED_TS, name:"Salsa chicken", effort:"medium", type:"batch", weather:"any", tempAffinity:"neutral", grillable:false, leftovers:"yes", preferences:[{"person":"Partner","pref":"likes"},{"person":"Me","pref":"likes"}], notes:"Used for Mexican nite and lunches ", ingredients:["i023","i008"] },
   { id:"m17827675827371hn", createdAt:SEED_TS, name:"Clam sauce", effort:"medium", type:"side", weather:"any", tempAffinity:"neutral", grillable:false, leftovers:"none", preferences:[], notes:"Grandpa's favorite", ingredients:["i1782784082892","i1782165334504","i021","i17819586307302gn","i1781961209509xys"] },
   { id:"m1782767830082rim", createdAt:SEED_TS, name:"Takeout", effort:"easy", type:"dinner", weather:"any", tempAffinity:"neutral", grillable:false, leftovers:"yes", preferences:[], notes:"", ingredients:[] },
   { id:"m1782767886262ohe", createdAt:SEED_TS, name:"Leftovers", effort:"easy", type:"dinner", weather:"any", tempAffinity:"neutral", grillable:false, leftovers:"yes", preferences:[], notes:"", ingredients:[] },
-  { id:"m1782768093424gry", createdAt:SEED_TS, name:"Egg salad sandwiches", effort:"medium", type:"dinner", weather:"any", tempAffinity:"light", grillable:false, leftovers:"yes", preferences:[{"person":"D","pref":"likes"}], notes:"", ingredients:["i1781959860532skr","i1782061148399","i018","i1781961387873bkt","i1781961209509ss8","i1781958630730rlq","i006"] },
-  { id:"m1782784615682zw7", createdAt:SEED_TS, name:"Pulled pork, amish", effort:"easy", type:"dinner", weather:"any", tempAffinity:"light", grillable:false, leftovers:"yes", preferences:[{"person":"D","pref":"likes"},{"person":"H","pref":"likes"},{"person":"J","pref":"likes"}], notes:"", ingredients:["i1782784666802","i1781959860532skr","i1782061148399","i17819616984860zu","i1781961387873xsp","i016"] },
-  { id:"m1783171508765", createdAt:SEED_TS, name:"Homemade hamburger helper", effort:"medium", type:"dinner", weather:"any", tempAffinity:"neutral", grillable:false, leftovers:"yes", preferences:[{"person":"H","pref":"likes"},{"person":"N","pref":"likes"}], notes:"", ingredients:["i1781959860532j6m","i015","i178196156080816o","i1781959860532jk1","i17819586307301i1","i1783171604267","i1781961560808fn6","i1781959860532y09","i1783171637797"] },
-  { id:"m1783172587000", createdAt:SEED_TS, name:"Meatloaf", effort:"medium", type:"dinner", weather:"any", tempAffinity:"neutral", grillable:false, leftovers:"yes", preferences:[{"person":"H","pref":"likes"},{"person":"D","pref":"dislikes"},{"person":"N","pref":"dislikes"}], notes:"", ingredients:["i015","i1781781828141","i17819613878726an","i1783171604267","i018","i1781961209509xys"] },
+  { id:"m1782768093424gry", createdAt:SEED_TS, name:"Egg salad sandwiches", effort:"medium", type:"dinner", weather:"any", tempAffinity:"light", grillable:false, leftovers:"yes", preferences:[{"person":"Partner","pref":"likes"}], notes:"", ingredients:["i1781959860532skr","i1782061148399","i018","i1781961387873bkt","i1781961209509ss8","i1781958630730rlq","i006"] },
+  { id:"m1782784615682zw7", createdAt:SEED_TS, name:"Pulled pork, amish", effort:"easy", type:"dinner", weather:"any", tempAffinity:"light", grillable:false, leftovers:"yes", preferences:[{"person":"Partner","pref":"likes"},{"person":"Kid 1","pref":"likes"},{"person":"Me","pref":"likes"}], notes:"", ingredients:["i1782784666802","i1781959860532skr","i1782061148399","i17819616984860zu","i1781961387873xsp","i016"] },
+  { id:"m1783171508765", createdAt:SEED_TS, name:"Homemade hamburger helper", effort:"medium", type:"dinner", weather:"any", tempAffinity:"neutral", grillable:false, leftovers:"yes", preferences:[{"person":"Kid 1","pref":"likes"},{"person":"Kid 2","pref":"likes"}], notes:"", ingredients:["i1781959860532j6m","i015","i178196156080816o","i1781959860532jk1","i17819586307301i1","i1783171604267","i1781961560808fn6","i1781959860532y09","i1783171637797"] },
+  { id:"m1783172587000", createdAt:SEED_TS, name:"Meatloaf", effort:"medium", type:"dinner", weather:"any", tempAffinity:"neutral", grillable:false, leftovers:"yes", preferences:[{"person":"Kid 1","pref":"likes"},{"person":"Partner","pref":"dislikes"},{"person":"Kid 2","pref":"dislikes"}], notes:"", ingredients:["i015","i1781781828141","i17819613878726an","i1783171604267","i018","i1781961209509xys"] },
   { id:"m1783172726173", createdAt:SEED_TS, name:"Oven chicken risotto", effort:"involved", type:"dinner", weather:"any", tempAffinity:"neutral", grillable:false, leftovers:"yes", preferences:[], notes:"", ingredients:["i023","i1781961209509xys","i021","i1781961209508d8i","i1783172830425"] },
-  { id:"m1783173277303", createdAt:SEED_TS, name:"Potato leek soup", effort:"involved", type:"dinner", weather:"cold", tempAffinity:"comfort", grillable:false, leftovers:"yes", preferences:[{"person":"D","pref":"likes"},{"person":"H","pref":"likes"}], notes:"", ingredients:["i1783173306833","i1781961209509xys","i1781750536287","i1783173338967","i1783173349016","i1783173377588","i1783173398508"] },
-  { id:"m1783173486136", createdAt:SEED_TS, name:"Southwest chicken and rice casserole", effort:"involved", type:"dinner", weather:"any", tempAffinity:"neutral", grillable:false, leftovers:"yes", preferences:[{"person":"D","pref":"likes"},{"person":"H","pref":"likes"}], notes:"", ingredients:["i1781750536287","i021","i1781961387873bkt","i023","i010","i1783173614327"] },
-  { id:"m1783173815992", createdAt:SEED_TS, name:"Pork loin", effort:"medium", type:"dinner", weather:"any", tempAffinity:"neutral", grillable:true, leftovers:"yes", preferences:[{"person":"H","pref":"likes"},{"person":"N","pref":"likes"}], notes:"Leftovers can be used in fried rice", ingredients:["i1783173854535"] },
-  { id:"m1783173876441", createdAt:SEED_TS, name:"Ziti casserole", effort:"easy", type:"dinner", weather:"any", tempAffinity:"neutral", grillable:false, leftovers:"yes", preferences:[{"person":"D","pref":"likes"},{"person":"N","pref":"likes"}], notes:"", ingredients:["i1783173910229","i011","i013","i1782061680835","i1781962070435hji","i014"] },
-  { id:"m1783174023437", createdAt:SEED_TS, name:"Spinach artichoke casserole", effort:"involved", type:"dinner", weather:"any", tempAffinity:"neutral", grillable:false, leftovers:"yes", preferences:[{"person":"C","pref":"likes"},{"person":"D","pref":"likes"}], notes:"Can vary the pasta and/or omit the artichokes ", ingredients:["i1783174079685","i1781959942399e61","i17819615608086lr","i1781961560808fw1","i17819598605320w7","i1781958630730jkl","i014"] },
+  { id:"m1783173277303", createdAt:SEED_TS, name:"Potato leek soup", effort:"involved", type:"dinner", weather:"cold", tempAffinity:"comfort", grillable:false, leftovers:"yes", preferences:[{"person":"Partner","pref":"likes"},{"person":"Kid 1","pref":"likes"}], notes:"", ingredients:["i1783173306833","i1781961209509xys","i1781750536287","i1783173338967","i1783173349016","i1783173377588","i1783173398508"] },
+  { id:"m1783173486136", createdAt:SEED_TS, name:"Southwest chicken and rice casserole", effort:"involved", type:"dinner", weather:"any", tempAffinity:"neutral", grillable:false, leftovers:"yes", preferences:[{"person":"Partner","pref":"likes"},{"person":"Kid 1","pref":"likes"}], notes:"", ingredients:["i1781750536287","i021","i1781961387873bkt","i023","i010","i1783173614327"] },
+  { id:"m1783173815992", createdAt:SEED_TS, name:"Pork loin", effort:"medium", type:"dinner", weather:"any", tempAffinity:"neutral", grillable:true, leftovers:"yes", preferences:[{"person":"Kid 1","pref":"likes"},{"person":"Kid 2","pref":"likes"}], notes:"Leftovers can be used in fried rice", ingredients:["i1783173854535"] },
+  { id:"m1783173876441", createdAt:SEED_TS, name:"Ziti casserole", effort:"easy", type:"dinner", weather:"any", tempAffinity:"neutral", grillable:false, leftovers:"yes", preferences:[{"person":"Partner","pref":"likes"},{"person":"Kid 2","pref":"likes"}], notes:"", ingredients:["i1783173910229","i011","i013","i1782061680835","i1781962070435hji","i014"] },
+  { id:"m1783174023437", createdAt:SEED_TS, name:"Spinach artichoke casserole", effort:"involved", type:"dinner", weather:"any", tempAffinity:"neutral", grillable:false, leftovers:"yes", preferences:[{"person":"Kid 3","pref":"likes"},{"person":"Partner","pref":"likes"}], notes:"Can vary the pasta and/or omit the artichokes ", ingredients:["i1783174079685","i1781959942399e61","i17819615608086lr","i1781961560808fw1","i17819598605320w7","i1781958630730jkl","i014"] },
   { id:"m1783182426614", createdAt:SEED_TS, name:"Pulled pork hotpockets / triangles", effort:"easy", type:"dinner", weather:"any", tempAffinity:"light", grillable:false, leftovers:"yes", preferences:[], notes:"Prereq: pulled pork ", ingredients:["i004","i022","i1782061680835","i1781961387873xsp","i021"] },
-  { id:"m1783182562557", createdAt:SEED_TS, name:"Quiche", effort:"medium", type:"dinner", weather:"any", tempAffinity:"light", grillable:false, leftovers:"yes", preferences:[{"person":"H","pref":"likes"}], notes:"Can vary ingredients ", ingredients:["i018","i1781961698486eq2","i1781959860532y09","i004","i1783182654608","i178195863073057h","i1781961209509xys"] },
-  { id:"m1783183935796", createdAt:SEED_TS, name:"Beef stew", effort:"involved", type:"dinner", weather:"hot", tempAffinity:"comfort", grillable:false, leftovers:"yes", preferences:[{"person":"H","pref":"likes"},{"person":"N","pref":"likes"}], notes:"", ingredients:["i1781958630730nms","i1782164260781","i17819586307301i1","i1783183985376","i1781750536287","i1781961209509xys","i1781959860532m96","i1783184043704"] },
-  { id:"m1783184065720", createdAt:SEED_TS, name:"French onion soup", effort:"involved", type:"dinner", weather:"cold", tempAffinity:"comfort", grillable:false, leftovers:"yes", preferences:[{"person":"D","pref":"likes"},{"person":"H","pref":"likes"}], notes:"", ingredients:["i1781961209509xys","i1783183985376","i1783173338967","i014","i1782060907056"] },
-  { id:"m1783190601467", createdAt:SEED_TS, name:"Chicken curry", effort:"medium", type:"dinner", weather:"any", tempAffinity:"neutral", grillable:false, leftovers:"yes", preferences:[{"person":"H","pref":"likes"},{"person":"N","pref":"likes"},{"person":"C","pref":"likes"}], notes:"", ingredients:["i023","i010","i1781961209508dyr","i1781959860532rtb","i1781961209508d8i","i1781961209509xys","i1781750536287","i021","i1781961209508w15","i1781961209508xs5","i1781748937379","i1783190765964"] },
-  { id:"m1783256404221", createdAt:SEED_TS, name:"Breakfast meats", effort:"medium", type:"side", weather:"any", tempAffinity:"neutral", grillable:false, leftovers:"none", preferences:[{"person":"H","pref":"likes"}], notes:"Good with other meals like quiche", ingredients:["i1781961815068cbm","i1781961815068u7g","i1781961209508njt"] },
-  { id:"m17839066302436gz", createdAt:SEED_TS, name:"Pork ribs", effort:"medium", type:"dinner", weather:"any", tempAffinity:"neutral", grillable:true, leftovers:"yes", preferences:[{"person":"H","pref":"likes"},{"person":"N","pref":"likes"},{"person":"J","pref":"likes"}], notes:"", ingredients:["i1781961387873xsp","i1783940138871","i1783259544927rbt"] },
-  { id:"m1783937479786u25", createdAt:SEED_TS, name:"Stuffing", effort:"easy", type:"side", weather:"any", tempAffinity:"comfort", grillable:false, leftovers:"yes", preferences:[{"person":"D","pref":"likes"},{"person":"H","pref":"likes"},{"person":"N","pref":"likes"}], notes:"", ingredients:["i1783940079640","i021"] },
+  { id:"m1783182562557", createdAt:SEED_TS, name:"Quiche", effort:"medium", type:"dinner", weather:"any", tempAffinity:"light", grillable:false, leftovers:"yes", preferences:[{"person":"Kid 1","pref":"likes"}], notes:"Can vary ingredients ", ingredients:["i018","i1781961698486eq2","i1781959860532y09","i004","i1783182654608","i178195863073057h","i1781961209509xys"] },
+  { id:"m1783183935796", createdAt:SEED_TS, name:"Beef stew", effort:"involved", type:"dinner", weather:"hot", tempAffinity:"comfort", grillable:false, leftovers:"yes", preferences:[{"person":"Kid 1","pref":"likes"},{"person":"Kid 2","pref":"likes"}], notes:"", ingredients:["i1781958630730nms","i1782164260781","i17819586307301i1","i1783183985376","i1781750536287","i1781961209509xys","i1781959860532m96","i1783184043704"] },
+  { id:"m1783184065720", createdAt:SEED_TS, name:"French onion soup", effort:"involved", type:"dinner", weather:"cold", tempAffinity:"comfort", grillable:false, leftovers:"yes", preferences:[{"person":"Partner","pref":"likes"},{"person":"Kid 1","pref":"likes"}], notes:"", ingredients:["i1781961209509xys","i1783183985376","i1783173338967","i014","i1782060907056"] },
+  { id:"m1783190601467", createdAt:SEED_TS, name:"Chicken curry", effort:"medium", type:"dinner", weather:"any", tempAffinity:"neutral", grillable:false, leftovers:"yes", preferences:[{"person":"Kid 1","pref":"likes"},{"person":"Kid 2","pref":"likes"},{"person":"Kid 3","pref":"likes"}], notes:"", ingredients:["i023","i010","i1781961209508dyr","i1781959860532rtb","i1781961209508d8i","i1781961209509xys","i1781750536287","i021","i1781961209508w15","i1781961209508xs5","i1781748937379","i1783190765964"] },
+  { id:"m1783256404221", createdAt:SEED_TS, name:"Breakfast meats", effort:"medium", type:"side", weather:"any", tempAffinity:"neutral", grillable:false, leftovers:"none", preferences:[{"person":"Kid 1","pref":"likes"}], notes:"Good with other meals like quiche", ingredients:["i1781961815068cbm","i1781961815068u7g","i1781961209508njt"] },
+  { id:"m17839066302436gz", createdAt:SEED_TS, name:"Pork ribs", effort:"medium", type:"dinner", weather:"any", tempAffinity:"neutral", grillable:true, leftovers:"yes", preferences:[{"person":"Kid 1","pref":"likes"},{"person":"Kid 2","pref":"likes"},{"person":"Me","pref":"likes"}], notes:"", ingredients:["i1781961387873xsp","i1783940138871","i1783259544927rbt"] },
+  { id:"m1783937479786u25", createdAt:SEED_TS, name:"Stuffing", effort:"easy", type:"side", weather:"any", tempAffinity:"comfort", grillable:false, leftovers:"yes", preferences:[{"person":"Partner","pref":"likes"},{"person":"Kid 1","pref":"likes"},{"person":"Kid 2","pref":"likes"}], notes:"", ingredients:["i1783940079640","i021"] },
 ];
 
 const DEFAULT_SETTINGS = {
@@ -905,7 +905,7 @@ function multiMealCounts(mealPlan, meals) {
 function getMealSuggestions(awayHome, meals, days, effortMap, alreadyPlanned = [], recentMeals = [], seenThisSession = [], dayPills = {}, forecast = {}) {
   const pool = meals.map(m => ({
     ...m,
-    memberOk: !(m.preferences||[]).some(p => p.person === "D" && p.pref === "dislikes"),
+    memberOk: !(m.preferences||[]).some(p => p.person === "Partner" && p.pref === "dislikes"),
   }));
   const recent = new Set(recentMeals);   // archived recent weeks → soft weight
   const seen   = new Set(seenThisSession); // this session's rerolls → skip if possible
@@ -914,13 +914,13 @@ function getMealSuggestions(awayHome, meals, days, effortMap, alreadyPlanned = [
 
   // Favorite weight from existing preferences: likes minus dislikes across the
   // family (household consensus). the user's own like adds a small extra tiebreaker,
-  // since his preference is the deliberate thumb on the scale.
+  // since it's the deliberate thumb on the scale.
   const favScore = m => {
     const prefs = m.preferences || [];
     const likes    = prefs.filter(p => p.pref === "likes").length;
     const dislikes = prefs.filter(p => p.pref === "dislikes").length;
-    const jamesLike = prefs.some(p => p.person === "J" && p.pref === "likes") ? 0.5 : 0;
-    return (likes - dislikes) + jamesLike;
+    const selfLike = prefs.some(p => p.person === "Me" && p.pref === "likes") ? 0.5 : 0;
+    return (likes - dislikes) + selfLike;
   };
 
   for (const day of days.filter(d => !plan[d])) {
@@ -1799,7 +1799,7 @@ function PlanMeals({ mealPlan, setMealPlan, commitMealToPlan, awayHome, setAwayH
               {m.type === "remix"   && <span style={S.tag("#7C3AED", "#EDE9FE")}>remix</span>}
               {m.type === "batch"   && <span style={S.tag(C.muted,   "#F3F4F6")}>batch</span>}
               {m.type === "takeout" && <span style={S.tag(C.muted,   "#F3F4F6")}>takeout</span>}
-              {(m.preferences||[]).some(p => p.person==="D"&&p.pref==="dislikes") && <span style={S.tag(C.danger, C.dangerLight)}>not Partner</span>}
+              {(m.preferences||[]).some(p => p.person==="Partner"&&p.pref==="dislikes") && <span style={S.tag(C.danger, C.dangerLight)}>not Partner</span>}
             </span>
           </div>
         ))}
@@ -2681,8 +2681,14 @@ function ManageHelp() {
 
 // ── Meal editor ────────────────────────────────────────────────────────────────
 
-function MealEditor({ meal, ingredients, onSave, onCancel, onDelete, onAddIngredient, initialName }) {
+function MealEditor({ meal, ingredients, onSave, onCancel, onDelete, onAddIngredient, initialName, familyContacts }) {
   const [form, setForm] = useState(meal || { id:"m"+Date.now(), createdAt:new Date().toISOString(), name:toSentenceCase(initialName||""), effort:"medium", type:"dinner", weather:"any", tempAffinity:"neutral", grillable:false, leftovers:"none", preferences:[], notes:"", ingredients:[] });
+  // Real family names live in settings; fall back to the generic constant when
+  // settings hasn't been customized. Self ("Me") isn't a contact, so it's always
+  // appended — matching the trailing entry FAMILY_NAMES already reserves for it.
+  const familyMembers = familyContacts && familyContacts.length
+    ? [...familyContacts.map(f => f.name), FAMILY_NAMES[FAMILY_NAMES.length - 1]]
+    : FAMILY_NAMES;
   const [ingSearch, setIngSearch]   = useState("");
   const [quickAdd, setQuickAdd]     = useState(false);
   const [quickName, setQuickName]   = useState("");
@@ -2739,7 +2745,7 @@ function MealEditor({ meal, ingredients, onSave, onCancel, onDelete, onAddIngred
       </div>
       <div style={S.card}>
         <div style={S.sectionLabel}>Family preferences</div>
-        {FAMILY_NAMES.map(person => (
+        {familyMembers.map(person => (
           <div key={person} style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"8px 0", borderBottom:`1px solid ${C.border}` }}>
             <div style={{ fontWeight:600, fontSize:14 }}>{person}</div>
             <div style={{ display:"flex", gap:6 }}>
@@ -2830,7 +2836,7 @@ function ManageMeals({ db, persistDB }) {
           </div>
         </div>
       )}
-      <MealEditor meal={editing==="new"?null:editing} initialName={editing==="new"?newMealName:""} ingredients={db.ingredients} onSave={saveMeal} onCancel={() => { setEditing(null); setConfirmDelete(null); setNewMealName(""); }} onDelete={deleteMeal} onAddIngredient={addIngredient} />
+      <MealEditor meal={editing==="new"?null:editing} initialName={editing==="new"?newMealName:""} ingredients={db.ingredients} familyContacts={db.settings?.familyContacts} onSave={saveMeal} onCancel={() => { setEditing(null); setConfirmDelete(null); setNewMealName(""); }} onDelete={deleteMeal} onAddIngredient={addIngredient} />
     </div>
   );
 
@@ -3619,7 +3625,7 @@ function ManageConfig({ db, persistDB }) {
         {(db.settings.familyContacts||[]).map((f,i,arr) => (
           <div key={f.name} style={{ ...S.row, padding:"10px 0", ...(i===arr.length-1?S.rowLast:{}) }}>
             <div style={{ flex:1 }}><div style={{ fontWeight:600 }}>{f.name}</div><div style={{ fontSize:12, color:C.faint }}>{f.phone||"No number set"}</div></div>
-            {f.name==="C" && !db.settings.awayMemberHome && <span style={S.badge(C.muted,"#F3F4F6")}>away</span>}
+            {f.name==="Kid 3" && !db.settings.awayMemberHome && <span style={S.badge(C.muted,"#F3F4F6")}>away</span>}
           </div>
         ))}
       </div>
@@ -3830,7 +3836,7 @@ function buildFridgeReportHTML(db) {
 function TonightTab({ db, persistDB }) {
   const awayMemberHome    = db.settings?.awayMemberHome !== false;
   const contacts     = db.settings?.familyContacts || DEFAULT_SETTINGS.familyContacts;
-  const activeFamily = contacts.filter(f => f.name !== "C" || awayMemberHome);
+  const activeFamily = contacts.filter(f => f.name !== "Kid 3" || awayMemberHome);
   const [recipient, setRecipient] = useState("all");
   const [queued, setQueued] = useState(false);
 
