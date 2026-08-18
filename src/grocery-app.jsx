@@ -4,11 +4,16 @@ import React, { useState, useEffect, useRef } from "react";
 
 const DAYS_ALL   = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
 const DAYS_FULL  = ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
+// Semantic role flags (SPEC-family-roles.md) — resolved by name, never by
+// position/initials, at every call site. isPartner: per-day presence via the
+// home/away pill. canBeAway: persistent presence via the config toggle.
+// isSelf: the app's own user; a small tiebreaker bonus when present.
 const FAMILY     = [
-  { name:"Partner", phone:"" },
+  { name:"Partner", phone:"", isPartner:true },
   { name:"Kid 1",   phone:"" },
   { name:"Kid 2",   phone:"" },
-  { name:"Kid 3",   phone:"" },
+  { name:"Kid 3",   phone:"", canBeAway:true },
+  { name:"Me",      phone:"", isSelf:true },
 ];
 const STORAGE_LOCATIONS = ["Unassigned","Pantry","Fridge","Freezer","Garage","Cabinet","Seasonings","Medicine Cabinet","Other"];
 // Locations walked during the plan-flow inventory step (everything real, i.e.
@@ -622,6 +627,27 @@ const migrateDB = db => {
   if (out.dataChangedAt === undefined) out = { ...out, dataChangedAt: out.savedAt || null };
   if (out.lastExportedAt === undefined) out = { ...out, lastExportedAt: null };
 
+  // Family-roles migration (SPEC-family-roles.md): backfill semantic role
+  // flags (isPartner/canBeAway/isSelf) onto familyContacts BY POSITION,
+  // matching what the old hardcoded index-0/index-3 behavior always meant.
+  // Only runs when no member carries any role flag yet, so it never
+  // clobbers real per-member data. Self-heals old exports/localStorage.
+  if (out.settings && Array.isArray(out.settings.familyContacts) && out.settings.familyContacts.length) {
+    const contacts = out.settings.familyContacts;
+    const hasRoles = contacts.some(f => f.isPartner || f.canBeAway || f.isSelf);
+    if (!hasRoles) {
+      let migrated = contacts.map((f, i) => ({
+        ...f,
+        ...(i === 0 ? { isPartner: true } : {}),
+        ...(i === 3 ? { canBeAway: true } : {}),
+      }));
+      if (!migrated.some(f => f.isSelf)) {
+        migrated = [...migrated, { name: "Me", phone: "", isSelf: true }];
+      }
+      out = { ...out, settings: { ...out.settings, familyContacts: migrated } };
+    }
+  }
+
   return out;
 };
 
@@ -902,30 +928,44 @@ function multiMealCounts(mealPlan, meals) {
   return multi;
 }
 
-function getMealSuggestions(awayHome, meals, days, effortMap, alreadyPlanned = [], recentMeals = [], seenThisSession = [], dayPills = {}, forecast = {}) {
-  const pool = meals.map(m => ({
-    ...m,
-    memberOk: !(m.preferences||[]).some(p => p.person === "Partner" && p.pref === "dislikes"),
-  }));
+function getMealSuggestions(awayHome, meals, days, effortMap, alreadyPlanned = [], recentMeals = [], seenThisSession = [], dayPills = {}, forecast = {}, contacts = [], awayMemberHome = true) {
+  const pool = meals;
   const recent = new Set(recentMeals);   // archived recent weeks → soft weight
   const seen   = new Set(seenThisSession); // this session's rerolls → skip if possible
   const plan = {};
   const used = new Set(alreadyPlanned);
 
-  // Favorite weight from existing preferences: likes minus dislikes across the
-  // family (household consensus). the user's own like adds a small extra tiebreaker,
-  // since it's the deliberate thumb on the scale.
-  const favScore = m => {
-    const prefs = m.preferences || [];
-    const likes    = prefs.filter(p => p.pref === "likes").length;
-    const dislikes = prefs.filter(p => p.pref === "dislikes").length;
-    const selfLike = prefs.some(p => p.person === "Me" && p.pref === "likes") ? 0.5 : 0;
-    return (likes - dislikes) + selfLike;
-  };
+  // Resolve semantic roles once, by name — never by position/initials.
+  // Fallbacks (seed/public safety): a missing role simply has no effect below.
+  const partner    = contacts.find(f => f.isPartner);
+  const awayMember = contacts.find(f => f.canBeAway);
+  const selfMember = contacts.find(f => f.isSelf);
 
   for (const day of days.filter(d => !plan[d])) {
     const effort        = (effortMap && effortMap[day]) || "medium";
-    const memberPresent = awayHome[day] !== false;
+    // Presence-aware scoring (SPEC-family-roles.md): a member is absent for
+    // this day only if they're the Partner and today's pill marks them away,
+    // or they're the away-able member and the persistent toggle is off.
+    // Everyone else is always present. No hard gates — absence just drops a
+    // member's likes/dislikes out of the score for this day.
+    const partnerAway      = !!partner && awayHome[day] === false;
+    const awayMemberAbsent = !!awayMember && !awayMemberHome;
+    const isPresent = person => {
+      if (partner && person === partner.name && partnerAway) return false;
+      if (awayMember && person === awayMember.name && awayMemberAbsent) return false;
+      return true;
+    };
+    // Favorite weight from existing preferences: likes minus dislikes across
+    // the family members present today (household consensus). The self
+    // member's own like adds a small extra tiebreaker when present, since
+    // it's the deliberate thumb on the scale. All soft — nothing excludes.
+    const favScore = m => {
+      const prefs    = (m.preferences || []).filter(p => isPresent(p.person));
+      const likes    = prefs.filter(p => p.pref === "likes").length;
+      const dislikes = prefs.filter(p => p.pref === "dislikes").length;
+      const selfLike = selfMember && prefs.some(p => p.person === selfMember.name && p.pref === "likes") ? 0.5 : 0;
+      return (likes - dislikes) + selfLike;
+    };
     // Per-day conditions (replaces the old week-level weather value): each day's
     // own forecast drives the temperature nudge, and its own grill pill decides
     // whether grillable meals are allowed.
@@ -940,7 +980,6 @@ function getMealSuggestions(awayHome, meals, days, effortMap, alreadyPlanned = [
       // Only main dinners are auto-suggested. Sides, batch, and takeout are
       // excluded — they're chosen manually, not proposed as a night's meal.
       if ((m.type || "dinner") !== "dinner") return false;
-      if (memberPresent && !m.memberOk) return false;
       if (easyPill && m.effort === "involved") return false;
       // GRILLABLE = conditional HARD gate, now PER DAY: grillable meals only
       // appear on days flagged as grill days (warm + dry, auto-derived from the
@@ -1640,6 +1679,9 @@ function PlanMeals({ mealPlan, setMealPlan, commitMealToPlan, awayHome, setAwayH
   const [search,  setSearch]  = useState("");
   const [loading, setLoading] = useState(false);
   const allMeals   = meals.length > 0 ? meals : SEED_MEALS;
+  // Resolved by role flag, never by hardcoded name — see SPEC-family-roles.md.
+  const partner     = (db.settings?.familyContacts || []).find(f => f.isPartner);
+  const partnerName = partner?.name || "Partner";
 
   // When browsing (empty search box), order intentionally to aid discovery:
   //   sides (A–Z) → mains/dinners (least-recently-used first) → remix/batch/takeout.
@@ -1734,7 +1776,7 @@ function PlanMeals({ mealPlan, setMealPlan, commitMealToPlan, awayHome, setAwayH
     const eligibleCount = allMeals.filter(m => !alreadyPlanned.includes(m.name)).length;
     let seen = seenSuggestions;
     if (seen.length >= eligibleCount) seen = [];   // exhausted the pool → reset
-    const suggestions = getMealSuggestions(awayHome, allMeals, days, effortMap, alreadyPlanned, recentMeals, seen, dayPills, forecast);
+    const suggestions = getMealSuggestions(awayHome, allMeals, days, effortMap, alreadyPlanned, recentMeals, seen, dayPills, forecast, db.settings?.familyContacts || [], db.settings?.awayMemberHome !== false);
     const freshlySuggested = days.map(d => suggestions[d]).filter(Boolean);
     setSeenSuggestions([...new Set([...seen, ...freshlySuggested])]);
     setMealPlan(prev => {
@@ -1799,7 +1841,7 @@ function PlanMeals({ mealPlan, setMealPlan, commitMealToPlan, awayHome, setAwayH
               {m.type === "remix"   && <span style={S.tag("#7C3AED", "#EDE9FE")}>remix</span>}
               {m.type === "batch"   && <span style={S.tag(C.muted,   "#F3F4F6")}>batch</span>}
               {m.type === "takeout" && <span style={S.tag(C.muted,   "#F3F4F6")}>takeout</span>}
-              {(m.preferences||[]).some(p => p.person==="Partner"&&p.pref==="dislikes") && <span style={S.tag(C.danger, C.dangerLight)}>not Partner</span>}
+              {partner && (m.preferences||[]).some(p => p.person===partner.name && p.pref==="dislikes") && <span style={S.tag(C.danger, C.dangerLight)}>{partnerName} dislikes</span>}
             </span>
           </div>
         ))}
@@ -1841,7 +1883,7 @@ function PlanMeals({ mealPlan, setMealPlan, commitMealToPlan, awayHome, setAwayH
               {forecast[day] && <span style={{ marginLeft:8, fontWeight:600, color:C.muted, textTransform:"none", letterSpacing:0 }}>{forecast[day].icon} {forecast[day].hi}° · {forecast[day].pop}% rain</span>}
               <span onClick={() => setAwayHome(prev => ({ ...prev, [day]: !(prev[day] !== false) }))}
                 style={{ marginLeft:8, cursor:"pointer", ...S.tag(memberAway ? C.warning : C.faint, memberAway ? C.warningLight : "#F1F1F1") }}>
-                {memberAway ? "Partner away" : "Partner home"}
+                {memberAway ? `${partnerName} away` : `${partnerName} home`}
               </span>
             </div>
             <div style={{ display:"flex", flexWrap:"wrap", gap:4, alignItems:"center", marginBottom:6 }}>
@@ -2683,11 +2725,11 @@ function ManageHelp() {
 
 function MealEditor({ meal, ingredients, onSave, onCancel, onDelete, onAddIngredient, initialName, familyContacts }) {
   const [form, setForm] = useState(meal || { id:"m"+Date.now(), createdAt:new Date().toISOString(), name:toSentenceCase(initialName||""), effort:"medium", type:"dinner", weather:"any", tempAffinity:"neutral", grillable:false, leftovers:"none", preferences:[], notes:"", ingredients:[] });
-  // Real family names live in settings; fall back to the generic constant when
-  // settings hasn't been customized. Self ("Me") isn't a contact, so it's always
-  // appended — matching the trailing entry FAMILY_NAMES already reserves for it.
+  // Real family names live in settings (self included, via role-flag
+  // migration — see SPEC-family-roles.md); fall back to the generic constant
+  // only when settings hasn't been customized at all.
   const familyMembers = familyContacts && familyContacts.length
-    ? [...familyContacts.map(f => f.name), FAMILY_NAMES[FAMILY_NAMES.length - 1]]
+    ? familyContacts.map(f => f.name)
     : FAMILY_NAMES;
   const [ingSearch, setIngSearch]   = useState("");
   const [quickAdd, setQuickAdd]     = useState(false);
@@ -3619,13 +3661,13 @@ function ManageConfig({ db, persistDB }) {
       <div style={S.card}>
         <div style={S.sectionLabel}>Family</div>
         <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"10px 0", borderBottom:`1px solid ${C.border}` }}>
-          <div><div style={{ fontWeight:600 }}>Kid 3 is home</div><div style={{ fontSize:12, color:C.faint }}>Toggle off when away (e.g. at college)</div></div>
+          <div><div style={{ fontWeight:600 }}>{(db.settings.familyContacts||[]).find(f=>f.canBeAway)?.name || "Away member"} is home</div><div style={{ fontSize:12, color:C.faint }}>Toggle off when away (e.g. at college)</div></div>
           <Toggle value={db.settings.awayMemberHome} onChange={v => upd("awayMemberHome",v)} />
         </div>
         {(db.settings.familyContacts||[]).map((f,i,arr) => (
           <div key={f.name} style={{ ...S.row, padding:"10px 0", ...(i===arr.length-1?S.rowLast:{}) }}>
             <div style={{ flex:1 }}><div style={{ fontWeight:600 }}>{f.name}</div><div style={{ fontSize:12, color:C.faint }}>{f.phone||"No number set"}</div></div>
-            {f.name==="Kid 3" && !db.settings.awayMemberHome && <span style={S.badge(C.muted,"#F3F4F6")}>away</span>}
+            {f.canBeAway && !db.settings.awayMemberHome && <span style={S.badge(C.muted,"#F3F4F6")}>away</span>}
           </div>
         ))}
       </div>
@@ -3836,7 +3878,7 @@ function buildFridgeReportHTML(db) {
 function TonightTab({ db, persistDB }) {
   const awayMemberHome    = db.settings?.awayMemberHome !== false;
   const contacts     = db.settings?.familyContacts || DEFAULT_SETTINGS.familyContacts;
-  const activeFamily = contacts.filter(f => f.name !== "Kid 3" || awayMemberHome);
+  const activeFamily = contacts.filter(f => !f.canBeAway || awayMemberHome);
   const [recipient, setRecipient] = useState("all");
   const [queued, setQueued] = useState(false);
 
