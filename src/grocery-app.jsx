@@ -290,6 +290,16 @@ function dateLabel(iso) {
   return `${d.toLocaleDateString("en-US", { weekday:"long" })} ${d.getMonth()+1}/${d.getDate()}`;
 }
 
+// Today's LOCAL calendar date as YYYY-MM-DD. NOT new Date().toISOString() —
+// that reads the UTC date, which has already rolled to tomorrow once local
+// time crosses midnight UTC (e.g. after 8pm EDT). Anything resolving "what
+// day is today" for date-anchored UI (Tonight/Tomorrow, past-dated checks)
+// must use this, or it shows tomorrow's data in the evening.
+function todayLocalISO() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
+}
+
 // ── Seed data ──────────────────────────────────────────────────────────────────
 
 const SEED_TS = "2020-01-01T00:00:00.000Z";
@@ -1162,7 +1172,7 @@ function WeekSelector({ db, persistDB }) {
   if (!db.plans?.next) return null;
   const activeKey  = db.activePlan || "current";
   const activePlan = db.plans[activeKey];
-  const today      = new Date().toISOString().split("T")[0];
+  const today      = todayLocalISO();
   const pastDated  = activePlan?.weekStartDate && activePlan.weekStartDate < today;
   return (
     <div>
@@ -3953,7 +3963,7 @@ function TonightTab({ db, persistDB }) {
   // that date — normally current, but resolved rather than assumed so this
   // still works right at the current/next boundary. Ignores the WeekSelector
   // below entirely; toggling it must never change these two cards.
-  const todayISO    = new Date().toISOString().split("T")[0];
+  const todayISO    = todayLocalISO();
   const tomorrowISO = addDaysISO(todayISO, 1);
   const tonightPlan  = resolvePlanForDate(db, todayISO);
   const tomorrowPlan = resolvePlanForDate(db, tomorrowISO);
