@@ -283,6 +283,13 @@ function weekLabel(iso) {
   return `Week of ${d.toLocaleDateString("en-US", { month:"short", day:"numeric" })}`;
 }
 
+// "Wednesday 8/19" — full weekday + numeric M/D, for a single REAL day (the
+// date-anchored Tonight/Tomorrow cards). Unlike weekLabel, which names a week.
+function dateLabel(iso) {
+  const d = new Date(iso + "T00:00:00");
+  return `${d.toLocaleDateString("en-US", { weekday:"long" })} ${d.getMonth()+1}/${d.getDate()}`;
+}
+
 // ── Seed data ──────────────────────────────────────────────────────────────────
 
 const SEED_TS = "2020-01-01T00:00:00.000Z";
@@ -523,32 +530,54 @@ const DEFAULT_DB = { settings:DEFAULT_SETTINGS, meals:SEED_MEALS, ingredients:SE
 
 // ── Active-plan accessors ────────────────────────────────────────────────────
 // db.plans is a two-slot object: { current, next }. db.activePlan ("current" |
-// "next") remembers which plan the owner was last EDITING in the Plan tab —
-// getActivePlan follows that toggle and is what the Plan-tab flow (Meals,
-// Inventory, Confirm, Sparky) reads and writes.
+// "next") is the owner's explicit, STICKY choice of which week the app shows
+// — it persists across tabs and sessions until they change it. getActivePlan
+// follows that choice.
 //
-// Prep ("mark what's already bought") and Tonight, plus the family Shortcut
-// export (buildPublished), are about the week actually being SHOPPED AND LIVED
-// — not whichever plan the owner happens to be drafting — so they always read
-// getCurrentPlan regardless of db.activePlan. Never route those through
-// getActivePlan; they must stay pinned to "current" even mid-edit on "next".
+// SPEC-active-plan-app-wide.md (this reverses an earlier rule — read it if
+// you're wondering why): every week-scoped surface (Plan, Prep, the Tonight
+// tab's "MEAL SCHEDULE" card, the fridge report) now follows getActivePlan,
+// not just the Plan tab. The two-plan model achieves safety not by PINNING
+// execution surfaces to "current" but by LABELING — a persistent <WeekSelector>
+// band rendered at the top of each of those surfaces always shows which week
+// is on screen, so stickiness never silently misleads.
+//
+// Two exceptions stay pinned to getCurrentPlan, because they're about the
+// week actually being SHOPPED AND LIVED, never whichever plan is being
+// drafted: receipt reconcile (always reconciles what was actually ordered)
+// and the family Shortcut export (buildPublished — never tell the family
+// about a week that isn't happening yet). The Tonight tab's TONIGHT/TOMORROW
+// cards are a third, different case — see resolvePlanForDate below: they're
+// DATE-anchored, resolved by which plan's week contains today/tomorrow,
+// deliberately ignoring both getActivePlan and getCurrentPlan.
 const getActivePlan = db => {
   const key = db.activePlan || "current";
   return db.plans?.[key] || null;
 };
 const getCurrentPlan = db => db.plans?.current || null;
 
-// Overwrite the plan at the active slot. Plan-tab flow only — Prep/Tonight/the
-// family export never write plans.
+// Overwrite the plan at the active slot. Used by both the Plan-tab flow and
+// Prep (marking what's in-cart is a write against whichever week the owner
+// has selected — see SPEC-active-plan-app-wide.md bug #1). Reconcile and the
+// family export never write plans; they only read getCurrentPlan.
 const writeActivePlan = (db, plan) => {
   const key = db.activePlan || "current";
   return { ...db, plans: { ...(db.plans || { current:null, next:null }), [key]: plan } };
 };
 
-// Overwrite plans.current directly, independent of db.activePlan. Prep is the
-// one place besides the migration/lifecycle code that writes a plan, and it
-// always means "the plan being shopped," not whichever plan is being drafted.
-const writeCurrentPlan = (db, plan) => ({ ...db, plans: { ...(db.plans || { current:null, next:null }), current: plan } });
+// Resolves whichever plan (current or next) actually CONTAINS the given
+// date's week, independent of db.activePlan. The Tonight tab's TONIGHT/
+// TOMORROW cards are date-anchored (SPEC-active-plan-app-wide.md) — they must
+// show the real today/tomorrow regardless of which week the WeekSelector is
+// on, including the rare case where today and tomorrow straddle the
+// current/next boundary. Falls back to current (home base) if neither plan's
+// week contains the date, e.g. no plan exists yet.
+const resolvePlanForDate = (db, dateISO) => {
+  const inWeek = plan => !!plan?.weekStartDate && dateISO >= plan.weekStartDate && dateISO <= addDaysISO(plan.weekStartDate, 6);
+  if (inWeek(db.plans?.current)) return db.plans.current;
+  if (inWeek(db.plans?.next)) return db.plans.next;
+  return db.plans?.current || null;
+};
 
 // Plan count that tolerates both the legacy array shape (pre-migration db, e.g.
 // an old recovery snapshot or pasted import awaiting confirmation) and the
@@ -1121,22 +1150,60 @@ function PillSelect({ options, value, onChange }) {
   );
 }
 
+// ── WEEK SELECTOR ────────────────────────────────────────────────────────────
+// Reusable "Week of XX/XX" label + current/next switcher (SPEC-active-plan-
+// app-wide.md). This band IS the safety mechanism for db.activePlan's
+// stickiness: since the active week persists across tabs/sessions until the
+// owner changes it, this label is what keeps that stickiness from silently
+// misleading. Render it at the top of every week-scoped surface (Plan, Prep,
+// Tonight's MEAL SCHEDULE) so which week is on screen is always visible.
+// Only renders once both plans exist — nothing to switch between otherwise.
+function WeekSelector({ db, persistDB }) {
+  if (!db.plans?.next) return null;
+  const activeKey  = db.activePlan || "current";
+  const activePlan = db.plans[activeKey];
+  const today      = new Date().toISOString().split("T")[0];
+  const pastDated  = activePlan?.weekStartDate && activePlan.weekStartDate < today;
+  return (
+    <div>
+      <div style={{ display:"flex", gap:6, padding:"10px 12px", background:C.primary }}>
+        {["current","next"].map(k => (
+          <button key={k} onClick={() => k !== activeKey && persistDB({ ...db, activePlan:k })}
+            style={{ flex:1, padding:"8px 10px", borderRadius:8, border:"none", fontWeight:700, fontSize:12, cursor:"pointer",
+              background: activeKey===k ? C.accent : "rgba(255,255,255,0.14)",
+              color: activeKey===k ? "#fff" : "#B8E8CA" }}>
+            <div>{k==="current" ? "Current week" : "Next week"}</div>
+            <div style={{ fontWeight:500, opacity:0.85, fontSize:11 }}>{weekLabel(db.plans[k]?.weekStartDate)}</div>
+          </button>
+        ))}
+      </div>
+      {pastDated && (
+        <div style={{ padding:"6px 12px", background:C.warningLight, fontSize:11.5, color:C.warning, textAlign:"center" }}>
+          ⚠ This week's start date has passed — it may roll forward on reload.
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── PREP TAB ───────────────────────────────────────────────────────────────────
 
 function PrepTab({ db, persistDB }) {
-  // Always plans.current — the week actually being shopped — regardless of
-  // which plan is active in the Plan tab. See getCurrentPlan's doc comment.
-  const currentPlan       = getCurrentPlan(db);
-  const cartItems         = currentPlan?.cartItems || [];
-  const cartIngredientIds = currentPlan?.cartIngredientIds || [];
+  // Follows db.activePlan (SPEC-active-plan-app-wide.md), same as Plan — the
+  // <WeekSelector> below shows which week. This also fixes backlog bug #1
+  // (cart across current/next): the cart now matches whichever week is
+  // selected, instead of always writing to current regardless.
+  const activePlan        = getActivePlan(db);
+  const cartItems         = activePlan?.cartItems || [];
+  const cartIngredientIds = activePlan?.cartIngredientIds || [];
   const [newItem, setNewItem]         = useState("");
   const [cartSearch, setCartSearch]   = useState("");
 
   const freshPlanBase = () => ({ weekOf:new Date().toISOString().split("T")[0], weekStartDate:new Date().toISOString().split("T")[0], notes:"", meals:{}, items:[], cartItems:[], cartIngredientIds:[] });
 
   const updatePlan = updates => {
-    const base = currentPlan || freshPlanBase();
-    persistDB(writeCurrentPlan(db, { ...base, ...updates }));
+    const base = activePlan || freshPlanBase();
+    persistDB(writeActivePlan(db, { ...base, ...updates }));
   };
 
   // Quick-add a brand-new ingredient from Prep search and mark it in-cart in one
@@ -1147,9 +1214,9 @@ function PrepTab({ db, persistDB }) {
     const name = rawName.trim();
     if (!name) return;
     const newIng = { id:"i"+Date.now()+Math.random().toString(36).slice(2,5), createdAt:new Date().toISOString(), name:name.charAt(0).toUpperCase()+name.slice(1), storageLocation:"Unassigned", tier:"specialty", optional:false, defaultQuantity:"" };
-    const base = currentPlan || freshPlanBase();
+    const base = activePlan || freshPlanBase();
     const updatedPlan = { ...base, cartIngredientIds:[...new Set([...(base.cartIngredientIds||[]), newIng.id])] };
-    persistDB(writeCurrentPlan({ ...db, ingredients:[...db.ingredients, newIng] }, updatedPlan));
+    persistDB(writeActivePlan({ ...db, ingredients:[...db.ingredients, newIng] }, updatedPlan));
     setCartSearch("");
   };
 
@@ -1182,12 +1249,12 @@ function PrepTab({ db, persistDB }) {
   };
 
   return (
-    <div style={S.body}>
+    <div>
+      <WeekSelector db={db} persistDB={persistDB} />
+      <div style={S.body}>
       <div style={S.card}>
-        <div style={S.sectionLabel}>This week</div>
         <div style={S.h2}>Prep</div>
         <div style={S.sub}>Mark what you've already bought so it drops off the shopping list.</div>
-        {db.plans?.next && <div style={{ fontSize:12, color:C.muted, marginTop:6 }}>Always shows the current (shopping) week, even while next week's plan is being drafted.</div>}
       </div>
 
       <div style={S.card}>
@@ -1254,6 +1321,7 @@ function PrepTab({ db, persistDB }) {
           <button style={{ ...S.btn, ...S.btnP, width:"auto", padding:"11px 16px", marginBottom:0 }} onClick={addItem}>Add</button>
         </div>
         {addNote && <div style={{ fontSize:12, marginTop:6, color: addNote.ok ? C.verified : C.warning }}>{addNote.text}</div>}
+      </div>
       </div>
     </div>
   );
@@ -1418,9 +1486,12 @@ function PlanTab({ db, persistDB, onGoToImport }) {
   // the two are independent silos (no meal carry-over, no shared cart — the
   // owner re-adds anything manually). weekStartDate defaults to 7 days after
   // current's own anchor; the owner can edit it afterward (shopping day can
-  // shift). Guarded to only run when next is null — the UI hides the button
-  // otherwise. Auto-retire (on a later app load) is what promotes this to
+  // shift). Auto-retire (on a later app load) is what promotes this to
   // current once its date arrives; this function never does that itself.
+  // Guarded against next already existing — the caller (PlanWelcome) swaps in
+  // a "switch to it?" offer instead of calling this when that's the case
+  // (SPEC-active-plan-app-wide.md edge-case warnings), but this stays as a
+  // defensive backstop rather than silently overwriting.
   const startNextWeek = () => {
     if (db.plans?.next) return;
     const freshAway  = Object.fromEntries(days.map(d => [d, true]));
@@ -1448,30 +1519,11 @@ function PlanTab({ db, persistDB, onGoToImport }) {
 
   const hasDraft = !!draft && (draft.maxStep ?? draft.step) > 0;
 
-  // Current/Next toggle. Only shown once both plans exist — before that,
-  // there's nothing to switch between, and "Start next week" (on Welcome) is
-  // the only way to create one. Switching persists db.activePlan; PlanTab is
-  // rendered with key={db.activePlan} (see the tab-switch site in App) so a
-  // switch fully remounts this component instead of leaving stale local
-  // editing state (step/mealPlan/etc.) pointed at the plan you switched away
-  // from — those hooks are only ever seeded once, at mount.
-  const PlanSilosToggle = () => {
-    if (!db.plans?.next) return null;
-    const activeKey = db.activePlan || "current";
-    return (
-      <div style={{ display:"flex", gap:6, padding:"10px 12px", background:C.primary }}>
-        {["current","next"].map(k => (
-          <button key={k} onClick={() => k !== activeKey && persistDB({ ...db, activePlan:k })}
-            style={{ flex:1, padding:"8px 10px", borderRadius:8, border:"none", fontWeight:700, fontSize:12, cursor:"pointer",
-              background: activeKey===k ? C.accent : "rgba(255,255,255,0.14)",
-              color: activeKey===k ? "#fff" : "#B8E8CA" }}>
-            <div>{k==="current" ? "Current week" : "Next week"}</div>
-            <div style={{ fontWeight:500, opacity:0.85, fontSize:11 }}>{weekLabel(db.plans[k]?.weekStartDate)}</div>
-          </button>
-        ))}
-      </div>
-    );
-  };
+  // Switching activePlan (via <WeekSelector>, below) persists db.activePlan;
+  // PlanTab is rendered with key={db.activePlan} (see the tab-switch site in
+  // App) so a switch fully remounts this component instead of leaving stale
+  // local editing state (step/mealPlan/etc.) pointed at the plan you switched
+  // away from — those hooks are only ever seeded once, at mount.
 
   // Tappable step navigation. Gates on maxStep (furthest reached), so any step
   // you've visited stays freely tappable — backward OR forward — even after you
@@ -1498,7 +1550,7 @@ function PlanTab({ db, persistDB, onGoToImport }) {
   if (step === 0) {
     return (
       <div>
-        <PlanSilosToggle />
+        <WeekSelector db={db} persistDB={persistDB} />
         {hasDraft && <StepNav />}
         <div style={S.body}>
           <PlanWelcome
@@ -1517,7 +1569,7 @@ function PlanTab({ db, persistDB, onGoToImport }) {
 
   return (
     <div>
-      <PlanSilosToggle />
+      <WeekSelector db={db} persistDB={persistDB} />
       <StepNav />
       <div style={S.body}>
         {step === 1 && <PlanMeals   mealPlan={mealPlan} setMealPlan={setMealPlanP} commitMealToPlan={commitMealToPlan} awayHome={awayHome} setAwayHome={setAwayHomeP} meals={meals} onNext={() => goToStep(2)} days={days} daysFull={daysFull} effortMap={effortMap} dayNotes={dayNotes} setDayNotes={setDayNotesP} dayPills={dayPills} setDayPills={setDayPillsP} db={db} persistDB={persistDB} />}
@@ -1579,6 +1631,15 @@ function PlanWelcome({ onStart, onStartNext, onResume, draft, persistDB, db, onG
           {!db.plans?.next && (
             <button style={{ ...S.btn, ...S.btnS, marginTop:8, marginBottom:0 }} onClick={onStartNext}>
               Start next week's plan →
+            </button>
+          )}
+          {/* Edge case (SPEC-active-plan-app-wide.md): next already exists but
+              this card is showing current — instead of a silent no-op, offer
+              to switch to it. Not shown when db.activePlan is already "next"
+              (this card would then BE next's own draft). */}
+          {db.plans?.next && db.activePlan !== "next" && (
+            <button style={{ ...S.btn, ...S.btnS, marginTop:8, marginBottom:0 }} onClick={() => persistDB({ ...db, activePlan:"next" })}>
+              Next week already exists — switch to it? →
             </button>
           )}
         </div>
@@ -3736,14 +3797,16 @@ function fridgeReportBuildDay(dow, names, dayNote, ix) {
     '</section>';
 }
 
+// Prints whichever week the WeekSelector shows (SPEC-active-plan-app-wide.md)
+// — the printable form of the Tonight tab's MEAL SCHEDULE card.
 function buildFridgeReportHTML(db) {
   const ix = fridgeReportMealIndex(db.meals);
 
-  const currentPlan = db.plans?.current || null;
-  const mp    = currentPlan?.mealPlan || currentPlan?.meals || {};
-  const notes = currentPlan?.dayNotes || {};
-  const { days: order } = currentPlan?.weekStartDate
-    ? getWeekFromDate(currentPlan.weekStartDate)
+  const printedPlan = getActivePlan(db);
+  const mp    = printedPlan?.mealPlan || printedPlan?.meals || {};
+  const notes = printedPlan?.dayNotes || {};
+  const { days: order } = printedPlan?.weekStartDate
+    ? getWeekFromDate(printedPlan.weekStartDate)
     : getWeekFromDay(db.settings?.shoppingDay || "Wednesday");
 
   const daysHTML = order.map(d => {
@@ -3751,10 +3814,13 @@ function buildFridgeReportHTML(db) {
     return fridgeReportBuildDay(d, names, (notes[d] || "").trim(), ix);
   }).join("");
 
-  const weekOf = currentPlan?.weekOf || currentPlan?.weekStartDate || "";
+  const weekOf = printedPlan?.weekOf || printedPlan?.weekStartDate || "";
   const weekOfHTML = weekOf ? "Week of " + fridgeReportFmtDate(weekOf) : "";
 
-  const nextPlan = db.plans?.next || null;
+  // Only tease "next week" when the printed plan IS current and a next plan
+  // exists beyond it — if the printed plan is already next, there's nothing
+  // further ahead to tease.
+  const nextPlan = (printedPlan === db.plans?.current) ? (db.plans?.next || null) : null;
   let teaserHTML = "";
   if (nextPlan) {
     const npMp = nextPlan.mealPlan || nextPlan.meals || {};
@@ -3882,23 +3948,36 @@ function TonightTab({ db, persistDB }) {
   const [recipient, setRecipient] = useState("all");
   const [queued, setQueued] = useState(false);
 
-  // Always the current plan — tonight's dinner is about the week actually
-  // being lived, never whichever plan is being drafted in the Plan tab.
-  const currentPlan = getCurrentPlan(db);
-  const planMeals   = currentPlan?.meals || {};
-  const { days, daysFull } = currentPlan?.weekStartDate
-    ? getWeekFromDate(currentPlan.weekStartDate)
+  // TONIGHT/TOMORROW are DATE-anchored (SPEC-active-plan-app-wide.md): always
+  // the real today/tomorrow, resolved by which plan's week actually contains
+  // that date — normally current, but resolved rather than assumed so this
+  // still works right at the current/next boundary. Ignores the WeekSelector
+  // below entirely; toggling it must never change these two cards.
+  const todayISO    = new Date().toISOString().split("T")[0];
+  const tomorrowISO = addDaysISO(todayISO, 1);
+  const tonightPlan  = resolvePlanForDate(db, todayISO);
+  const tomorrowPlan = resolvePlanForDate(db, tomorrowISO);
+  const mealOnDate = (plan, dateISO) => {
+    const abbr = DAYS_ALL[new Date(dateISO + "T00:00:00").getDay()];
+    return (plan?.meals?.[abbr] || []).join(", ") || null;
+  };
+  const todayMeal    = mealOnDate(tonightPlan, todayISO);
+  const tomorrowMeal = mealOnDate(tomorrowPlan, tomorrowISO);
+
+  // The MEAL SCHEDULE card (below) is the OTHER anchor — it follows
+  // db.activePlan via the WeekSelector, a deliberately different anchor than
+  // Tonight/Tomorrow above. When today is in current but the selector is on
+  // next, these two sections correctly show different weeks at once; the
+  // date labels make that self-explaining.
+  const activePlan  = getActivePlan(db);
+  const planMeals   = activePlan?.meals || {};
+  const { days, daysFull } = activePlan?.weekStartDate
+    ? getWeekFromDate(activePlan.weekStartDate)
     : getWeekFromDay(db.settings?.shoppingDay || "Wednesday");
+  const todayAbbr      = DAYS_ALL[new Date().getDay()];
+  const scheduleTodayIdx = days.indexOf(todayAbbr);
 
-  const todayJsDay  = new Date().getDay();
-  const todayAbbr   = DAYS_ALL[todayJsDay];
-  const todayIdx    = days.indexOf(todayAbbr);
-  const activeIdx   = todayIdx >= 0 ? todayIdx : 0;
-  const todayMeal   = (planMeals[days[activeIdx]]||[]).join(", ") || null;
-  const tomorrowIdx = (activeIdx + 1) % 7;
-  const tomorrowMeal = (planMeals[days[tomorrowIdx]]||[]).join(", ") || null;
-
-  const buildMessage = () => `Tonight's dinner (${daysFull[activeIdx]}): ${todayMeal||"Not planned yet"}`;
+  const buildMessage = () => `Tonight's dinner (${dateLabel(todayISO)}): ${todayMeal||"Not planned yet"}`;
 
   const [tonightCopied, setTonightCopied] = useState(null);
   const sendTonight = () => {
@@ -3937,35 +4016,36 @@ function TonightTab({ db, persistDB }) {
   };
 
   return (
-    <div style={S.body}>
-      <div style={{ ...S.card, background:C.primary, color:"#E8F5EE" }}>
-        <div style={{ fontSize:11, fontWeight:700, opacity:0.7, marginBottom:4, letterSpacing:"0.06em", textTransform:"uppercase" }}>Tonight</div>
-        <div style={{ fontSize:28, fontWeight:700, marginBottom:4 }}>{daysFull[activeIdx]}</div>
-        <div style={{ fontSize:22, fontWeight:600 }}>{todayMeal || "Not planned yet"}</div>
+    <div>
+      <div style={S.body}>
+        <div style={{ ...S.card, background:C.primary, color:"#E8F5EE" }}>
+          <div style={{ fontSize:11, fontWeight:700, opacity:0.7, marginBottom:4, letterSpacing:"0.06em", textTransform:"uppercase" }}>Tonight · {dateLabel(todayISO)}</div>
+          <div style={{ fontSize:22, fontWeight:600 }}>{todayMeal || "Not planned yet"}</div>
+        </div>
+
+        <div style={S.card}>
+          <div style={S.sectionLabel}>Tomorrow · {dateLabel(tomorrowISO)}</div>
+          <div style={{ fontSize:18, fontWeight:600, color:C.muted }}>{tomorrowMeal || "Not planned yet"}</div>
+        </div>
+
+        {!tonightPlan && (
+          <div style={{ ...S.card, background:C.warningLight, border:`1px solid #F0D080` }}>
+            <div style={{ fontSize:13, color:C.warning }}>No meal plan yet for today. Complete the Plan flow to set up your week.</div>
+          </div>
+        )}
       </div>
 
-      {tomorrowMeal && (
-        <div style={S.card}>
-          <div style={S.sectionLabel}>Tomorrow — {daysFull[tomorrowIdx]}</div>
-          <div style={{ fontSize:18, fontWeight:600, color:C.muted }}>{tomorrowMeal}</div>
-        </div>
-      )}
+      {/* Semantic divider (SPEC-active-plan-app-wide.md Layer 3): everything
+          above is real/now (date-anchored); everything below follows
+          whichever week the selector shows. */}
+      <WeekSelector db={db} persistDB={persistDB} />
 
-      {!currentPlan && (
-        <div style={{ ...S.card, background:C.warningLight, border:`1px solid #F0D080` }}>
-          <div style={{ fontSize:13, color:C.warning }}>No meal plan yet this week. Complete the Plan flow to set up your week.</div>
-        </div>
-      )}
-
-      {db.plans?.next && (
-        <div style={{ fontSize:12, color:C.faint, textAlign:"center", marginTop:-4, marginBottom:8 }}>Always shows the current week, even while next week's plan is being drafted.</div>
-      )}
-
+      <div style={S.body}>
       <div style={S.card}>
-        <div style={S.sectionLabel}>This week</div>
+        <div style={S.sectionLabel}>Meal schedule</div>
         {days.map((d,i) => {
           const m       = (planMeals[d]||[]).join(", ");
-          const isToday = i===activeIdx;
+          const isToday = i===scheduleTodayIdx;
           return (
             <div key={d} style={{ display:"flex", padding:"9px 0", borderBottom:`1px solid ${C.border}`, gap:10 }}>
               <div style={{ fontSize:12, fontWeight:700, color:isToday?C.primary:C.faint, width:36 }}>{d}</div>
@@ -4007,6 +4087,7 @@ function TonightTab({ db, persistDB }) {
             Outbox ready: {db.outbox.label} · {db.outbox.recipients.length} recipient{db.outbox.recipients.length!==1?"s":""}. Export to iCloud, then run your send Shortcut.
           </div>
         )}
+      </div>
       </div>
     </div>
   );
