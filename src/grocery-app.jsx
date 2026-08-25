@@ -704,7 +704,7 @@ const migrateDB = db => {
 const autoRetirePlans = db => {
   const next = db.plans?.next;
   if (!next || !next.weekStartDate) return db;
-  const today = new Date().toISOString().split("T")[0];
+  const today = todayLocalISO();
   if (next.weekStartDate > today) return db;
 
   const outgoing = db.plans?.current;
@@ -715,10 +715,22 @@ const autoRetirePlans = db => {
     ? [...prevHistory, { archivedAt:new Date().toISOString(), meals:[...new Set(outgoingMeals)] }].slice(-6)
     : prevHistory;
 
+  // Promoting a finished future-week plan into "the week you're now in" means
+  // its meal plan — not its shopping progress — is what the owner needs to
+  // see, so the step pointers reset to Meals (matching how a fresh plan is
+  // seeded, see startFresh/startNextWeek) while every other field, including
+  // the plan's own weekStartDate, carries over untouched.
+  const promoted = {
+    ...next,
+    step: 1,
+    maxStep: 1,
+    weekStartDate: next.weekStartDate || today,
+  };
+
   return {
     ...db,
     mealHistory,
-    plans: { current: next, next: null },
+    plans: { current: promoted, next: null },
     activePlan: db.activePlan === "next" ? "current" : (db.activePlan || "current"),
   };
 };
@@ -1168,19 +1180,24 @@ function PillSelect({ options, value, onChange }) {
 // owner changes it, this label is what keeps that stickiness from silently
 // misleading. Render it at the top of every week-scoped surface (Plan, Prep,
 // Tonight's MEAL SCHEDULE) so which week is on screen is always visible.
-// Only renders once both plans exist — nothing to switch between otherwise.
+// Renders whenever a current plan exists, even with no next plan to switch
+// to — the "Week of XX/XX" label is a load-bearing orientation cue (most
+// needed right after a rollover, when next has just gone null) and must stay
+// visible on its own, not only when there's a second week to pick between.
 function WeekSelector({ db, persistDB }) {
-  if (!db.plans?.next) return null;
-  const activeKey  = db.activePlan || "current";
+  if (!db.plans?.current && !db.plans?.next) return null;
+  const hasNext    = !!db.plans?.next;
+  const activeKey  = hasNext ? (db.activePlan || "current") : "current";
   const activePlan = db.plans[activeKey];
   const today      = todayLocalISO();
   const pastDated  = activePlan?.weekStartDate && activePlan.weekStartDate < today;
+  const keys       = hasNext ? ["current","next"] : ["current"];
   return (
     <div>
       <div style={{ display:"flex", gap:6, padding:"10px 12px", background:C.primary }}>
-        {["current","next"].map(k => (
-          <button key={k} onClick={() => k !== activeKey && persistDB({ ...db, activePlan:k })}
-            style={{ flex:1, padding:"8px 10px", borderRadius:8, border:"none", fontWeight:700, fontSize:12, cursor:"pointer",
+        {keys.map(k => (
+          <button key={k} onClick={() => hasNext && k !== activeKey && persistDB({ ...db, activePlan:k })}
+            style={{ flex:1, padding:"8px 10px", borderRadius:8, border:"none", fontWeight:700, fontSize:12, cursor: hasNext ? "pointer" : "default",
               background: activeKey===k ? C.accent : "rgba(255,255,255,0.14)",
               color: activeKey===k ? "#fff" : "#B8E8CA" }}>
             <div>{k==="current" ? "Current week" : "Next week"}</div>
