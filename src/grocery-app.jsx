@@ -532,11 +532,13 @@ const DEFAULT_DB = { settings:DEFAULT_SETTINGS, meals:SEED_MEALS, ingredients:SE
 // { step, maxStep, awayHome, mealPlan, checkedIds, dayNotes, dayPills,
 //   notesTouched, stapleFlags, quantities, weather, startedAt, _stepsVer,
 //   meals, items, cartItems, cartIngredientIds, dismissedShared, notes,
-//   weekOf, weekStartDate }
+//   weekStartDate }
 // mealPlan is the live-editing meal grid (day abbr -> meal NAMES); meals is the
 // last-committed snapshot of the same shape, written by savePlan. weekStartDate
-// (ISO YYYY-MM-DD) drives auto-retire and is distinct from weekOf (legacy,
-// "date this plan record was last touched").
+// (ISO YYYY-MM-DD) is the single canonical week-start; it drives auto-retire,
+// resolvePlanForDate, ordering, and labels. (A legacy `weekOf` field used to
+// shadow this and could drift from it when only weekStartDate was edited —
+// removed; weekStartDate is now the only date field.)
 
 // ── Active-plan accessors ────────────────────────────────────────────────────
 // db.plans is a two-slot object: { current, next }. db.activePlan ("current" |
@@ -635,7 +637,7 @@ const migrateDB = db => {
         stapleFlags: draft?.stapleFlags || {},
         quantities: draft?.quantities || {},
         weather: draft?.weather || "hot",
-        startedAt: draft?.startedAt || committed?.weekOf || new Date().toISOString(),
+        startedAt: draft?.startedAt || new Date().toISOString(),
         _stepsVer: draft?._stepsVer ?? 4,
         meals: committed?.meals || draft?.mealPlan || {},
         items: committed?.items || [],
@@ -643,10 +645,10 @@ const migrateDB = db => {
         cartIngredientIds: committed?.cartIngredientIds || [],
         dismissedShared: committed?.dismissedShared || [],
         notes: committed?.notes || "",
-        weekOf: committed?.weekOf || new Date().toISOString().split("T")[0],
-        // Infer from the existing shopping-day anchor: the committed record's
-        // weekOf if present, else the draft's start date, else today.
-        weekStartDate: committed?.weekOf || (draft?.startedAt ? draft.startedAt.split("T")[0] : new Date().toISOString().split("T")[0]),
+        // Use the committed record's own weekStartDate directly if it has one;
+        // otherwise today (local, not UTC) — never infer from the legacy
+        // weekOf field.
+        weekStartDate: committed?.weekStartDate || todayLocalISO(),
       };
     }
 
@@ -1227,7 +1229,7 @@ function PrepTab({ db, persistDB }) {
   const [newItem, setNewItem]         = useState("");
   const [cartSearch, setCartSearch]   = useState("");
 
-  const freshPlanBase = () => ({ weekOf:new Date().toISOString().split("T")[0], weekStartDate:new Date().toISOString().split("T")[0], notes:"", meals:{}, items:[], cartItems:[], cartIngredientIds:[] });
+  const freshPlanBase = () => ({ weekStartDate:new Date().toISOString().split("T")[0], notes:"", meals:{}, items:[], cartItems:[], cartIngredientIds:[] });
 
   const updatePlan = updates => {
     const base = activePlan || freshPlanBase();
@@ -1414,7 +1416,7 @@ function PlanTab({ db, persistDB, onGoToImport }) {
 
   // Persist the current editing state into the active plan slot. Spreads the
   // existing plan first so committed fields (meals, items, cart*,
-  // dismissedShared, weekOf, weekStartDate) survive — only draft-editing fields
+  // dismissedShared, weekStartDate) survive — only draft-editing fields
   // are updated here. Accepts a patch so callers can save the new value
   // synchronously (React state updates are async). opts forwards to persistDB
   // (e.g. { background: true } for the weather-driven pill auto-derive, which
@@ -1456,7 +1458,7 @@ function PlanTab({ db, persistDB, onGoToImport }) {
   // it creates a stub meal record. Meals + mealPlan + draft are written in ONE
   // persistDB so the two mutations can't clobber each other's stale-closure db.
   // Spreads ...draft first so committed fields (cart*, items, dismissedShared,
-  // weekOf, weekStartDate) and dayPills survive — only the listed fields change.
+  // weekStartDate) and dayPills survive — only the listed fields change.
   const commitMealToPlan = (newMealPlan, maybeNewName) => {
     setMealPlan(newMealPlan);
     let meals = db.meals || [];
@@ -1501,7 +1503,7 @@ function PlanTab({ db, persistDB, onGoToImport }) {
     // override immediately via the date input on the resume card.
     const seedDate = nextDateForShoppingDay(db.settings?.shoppingDay || "Wednesday");
     const freshPlan = {
-      weekOf: seedDate, weekStartDate: seedDate, notes:"", meals:{}, items:[],
+      weekStartDate: seedDate, notes:"", meals:{}, items:[],
       cartItems: draft?.cartItems || [], cartIngredientIds: draft?.cartIngredientIds || [], dismissedShared: [],
       // Auto-populate day notes from this week's baked-in schedule so a new plan
       // never starts blank. notesTouched tracks manual edits so a later refresh
@@ -1530,7 +1532,7 @@ function PlanTab({ db, persistDB, onGoToImport }) {
     const anchor     = draft?.weekStartDate || new Date().toISOString().split("T")[0];
     const nextStart  = addDaysISO(anchor, 7);
     const freshPlan = {
-      weekOf: nextStart, weekStartDate: nextStart, notes:"", meals:{}, items:[],
+      weekStartDate: nextStart, notes:"", meals:{}, items:[],
       cartItems:[], cartIngredientIds:[], dismissedShared:[],
       step:1, maxStep:1, awayHome:freshAway, mealPlan:freshMeals, checkedIds:[], removedIds:[], dayNotes:{ ...defaultNotes }, dayPills:{}, notesTouched:false, _stepsVer:4, stapleFlags:{}, quantities:{}, weather:"hot", startedAt:new Date().toISOString(),
     };
@@ -2425,7 +2427,7 @@ function PlanConfirm({ mode = "confirm", checkedIds, removedIds, setRemovedIds, 
     const today     = new Date().toISOString().split("T")[0];
     const updated   = activePlan
       ? { ...activePlan, meals:mealPlan, items:listItems }
-      : { weekOf:today, weekStartDate:today, notes:"", cartItems:[], cartIngredientIds:[], dismissedShared:[], meals:mealPlan, items:listItems };
+      : { weekStartDate:today, notes:"", cartItems:[], cartIngredientIds:[], dismissedShared:[], meals:mealPlan, items:listItems };
     persistDB(writeActivePlan(db, updated));
   };
 
@@ -3844,7 +3846,7 @@ function buildFridgeReportHTML(db) {
     return fridgeReportBuildDay(d, names, (notes[d] || "").trim(), ix);
   }).join("");
 
-  const weekOf = printedPlan?.weekOf || printedPlan?.weekStartDate || "";
+  const weekOf = printedPlan?.weekStartDate || "";
   const weekOfHTML = weekOf ? "Week of " + fridgeReportFmtDate(weekOf) : "";
 
   // Only tease "next week" when the printed plan IS current and a next plan
