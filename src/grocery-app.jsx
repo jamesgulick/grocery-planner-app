@@ -586,8 +586,12 @@ const writeActivePlan = (db, plan) => {
 // week contains the date, e.g. no plan exists yet.
 const resolvePlanForDate = (db, dateISO) => {
   const inWeek = plan => !!plan?.weekStartDate && dateISO >= plan.weekStartDate && dateISO <= addDaysISO(plan.weekStartDate, 6);
-  if (inWeek(db.plans?.current)) return db.plans.current;
+  // A week runs from its own weekStartDate until the NEXT week's start date —
+  // that start date is a hard boundary, not a rigid 7-day tile. So when a date
+  // falls in both windows (overlap from a shifted shopping day), the plan with
+  // the LATER weekStartDate wins: check next before current.
   if (inWeek(db.plans?.next)) return db.plans.next;
+  if (inWeek(db.plans?.current)) return db.plans.current;
   return db.plans?.current || null;
 };
 
