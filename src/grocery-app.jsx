@@ -3995,7 +3995,8 @@ function TonightTab({ db, persistDB }) {
   const tomorrowPlan = resolvePlanForDate(db, tomorrowISO);
   const mealOnDate = (plan, dateISO) => {
     const abbr = DAYS_ALL[new Date(dateISO + "T00:00:00").getDay()];
-    return (plan?.meals?.[abbr] || []).join(", ") || null;
+    const mp = plan?.mealPlan || plan?.meals || {};
+    return (mp[abbr] || []).join(", ") || null;
   };
   const todayMeal    = mealOnDate(tonightPlan, todayISO);
   const tomorrowMeal = mealOnDate(tomorrowPlan, tomorrowISO);
@@ -4006,7 +4007,7 @@ function TonightTab({ db, persistDB }) {
   // next, these two sections correctly show different weeks at once; the
   // date labels make that self-explaining.
   const activePlan  = getActivePlan(db);
-  const planMeals   = activePlan?.meals || {};
+  const planMeals   = activePlan?.mealPlan || activePlan?.meals || {};
   const { days, daysFull } = activePlan?.weekStartDate
     ? getWeekFromDate(activePlan.weekStartDate)
     : getWeekFromDay(db.settings?.shoppingDay || "Wednesday");
