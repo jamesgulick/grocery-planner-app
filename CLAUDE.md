@@ -45,9 +45,7 @@ in one file: **`src/grocery-app.jsx`**. `src/main.jsx` only mounts it.
 
 - **"The user makes the decisions; the app does the cross-checking."** The app
   nudges but never gates the user's judgment.
-- **Most signals are soft leans; a few are hard gates.** In the meal suggester,
-  weights change how *likely* a meal is; only a small set of rules make a meal
-  ineligible. Preserve this distinction when editing suggestion logic.
+- **Most signals are soft leans; a few are hard gates.** In the meal suggester, weights change how likely a meal is; only a small set of rules make a meal ineligible. Preserve this distinction when editing suggestion logic. Preferences (likes/dislikes) are SOFT — they feed the favorite weight (likes minus dislikes), so a disliked meal ranks lower but is never made ineligible. The dislike hard gate was deliberately removed (see SPEC-family-roles). The remaining hard gates are structural only: non-dinner type, involved-on-easy-day, grillable-off-grill-day. Do not reintroduce preference gating.
 - **Flag bugs, don't silently fix them.** If you notice an unrelated bug, surface it
   rather than quietly changing behavior.
 - **Interrogate before building.** For a new feature: name the real need, check
@@ -98,21 +96,15 @@ Welcome → Meals → Inventory → Confirm → Sparky → Reconcile
 - **Reconcile** — upload a placed order; local matching flags missing items,
   quantities over one, and optional items over a price threshold.
 
-### Draft & step migration
+### Plan model, draft & step migration
 
-Plan progress is stored in `db.planDraft` with a `step` index and a `_stepsVer`
-stamp. The step flow has been renumbered across versions, so there is **migration
-logic** that remaps old step indices on load. If you change `PLAN_STEPS`, you must
-update the migration mapping and bump the version stamp, or in-progress drafts will
-land on the wrong screen. This has caused real bugs — treat step renumbering with
-care.
+**Plan state is a two-slot model:** db.plans = { current, next }, with db.activePlan ("current" | "next") naming which slot every week-scoped surface shows. Each plan carries its own meals, dayNotes, mealPlan, and a step index. db.activePlan is the source of truth for which week is displayed; the date only sets the default. The canonical week boundary is weekStartDate — a week runs from its weekStartDate until the next week's start date (weeks can be shorter or longer than 7 days; the later-starting week wins an overlap day). The old weekOf field was eliminated as a redundant shadow of weekStartDate — do not reintroduce it.
+
+Pre-migration DBs carry two older single-slot concepts (db.planDraft live-editing + a baked current week); migration on load remaps them into plans.current / plans.next and is stamped by _planModelVer. The step flow has also been renumbered across versions, so there is separate step-migration logic. If you change PLAN_STEPS, update the step-migration mapping and bump the version stamp together, or in-progress plans land on the wrong screen. This has caused real bugs — treat both the plan model and step renumbering with care.
 
 ## Key subsystems (all in `grocery-app.jsx`)
 
-- **`getMealSuggestions(...)`** — the weighted suggester. Hard gates: only `dinner`
-  type; not disliked by an at-home member; not "involved" on an `easy` day; grillable
-  only on `grill` days. Soft weights: recency down-weight, temperature affinity,
-  grill boost, favorite score. Takes a `forecast` argument (see below).
+- **getMealSuggestions(...)** — the weighted suggester. Hard gates (structural only): only dinner type; not "involved" on an easy day; grillable only on grill days. Soft weights: recency down-weight, temperature affinity, grill boost, and favorite score. The favorite score is presence-aware: it sums likes-minus-dislikes across present members only — an away partner (per-day pill) or away member (persistent toggle) has their preferences dropped from the score for that day. Dislikes are soft, not a gate — a disliked meal ranks lower but can still surface. Signature carries contacts and awayMemberHome; takes a forecast argument (see below).
 - **`derivePills(days, effortMap, forecast)`** — auto-derives day pills ONCE at plan
   start (easy from the effort map, grill from the forecast). After that the user's
   edits win; never re-derive over them.
@@ -163,6 +155,7 @@ care.
   harmless and can stay.
 - **Some identifiers carry historical names** (e.g. `awayHome`, `memberOk`) from a
   refactor that genericized personal data. They're just variable names.
+  **Ephemeral component-local state dies across a re-rendered-instance transition, and the bundler does NOT catch it.** PlanConfirm is rendered as TWO instances — mode="confirm" (step 3) and mode="sparky" (step 4). Any state held in a local useState inside that component is discarded when the flow moves between the two instances, because they're different mounts. This has bitten the project at least twice: the removed set (confirm-step removals) and then the added set both vanished on the Confirm→Sparky transition. Any state that must survive that transition has to be lifted to the persisted plan object (as removedIds / added-items were), not kept component-local. When adding state to PlanConfirm, ask: does this need to survive the confirm↔sparky switch? If yes, lift it.
 
 ## Privacy / sanitization (important)
 
