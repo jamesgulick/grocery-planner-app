@@ -721,6 +721,21 @@ const autoRetirePlans = db => {
     ? [...prevHistory, { archivedAt:new Date().toISOString(), meals:[...new Set(outgoingMeals)] }].slice(-6)
     : prevHistory;
 
+  // Day-level tail, parallel to mealHistory above but preserving day-of-week
+  // positioning and served dates (needed later for leftover carry-back across
+  // the week boundary). See SPEC-retain-plan-tail.md.
+  const outgoingTail = outgoing && (outgoing.mealPlan || outgoing.meals)
+    ? {
+        archivedAt: new Date().toISOString(),
+        weekStartDate: outgoing.weekStartDate || null,
+        mealPlan: outgoing.mealPlan || outgoing.meals || {},
+      }
+    : null;
+  const prevTails = db.planTail || [];
+  const planTail = outgoingTail
+    ? [...prevTails, outgoingTail].slice(-6)
+    : prevTails;
+
   // Promoting a finished future-week plan into "the week you're now in" means
   // its meal plan — not its shopping progress — is what the owner needs to
   // see, so the step pointers reset to Meals (matching how a fresh plan is
@@ -736,6 +751,7 @@ const autoRetirePlans = db => {
   return {
     ...db,
     mealHistory,
+    planTail,
     plans: { current: promoted, next: null },
     activePlan: db.activePlan === "next" ? "current" : (db.activePlan || "current"),
   };
