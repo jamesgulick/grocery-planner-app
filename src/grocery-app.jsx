@@ -2412,8 +2412,8 @@ function PlanConfirm({ mode = "confirm", checkedIds, removedIds, setRemovedIds, 
   // character limit, so repeating this on every batch is too verbose). Paste
   // this first, then paste each numbered batch after.
   const introText = batches.length > 1
-    ? `I'm going to paste my grocery list in ${batches.length} numbered parts. For each part: add every numbered item to my cart, treat each line as a separate item, and do not skip, merge, or substitute. If you can't find an exact match, add the closest option and tell me — don't silently leave anything out. After the last part, list everything you added across all parts and name any you could not.`
-    : `I'm going to paste my grocery list below. Add every numbered item to my cart, treat each line as a separate item, and do not skip, merge, or substitute. If you can't find an exact match, add the closest option and tell me — don't silently leave anything out. After adding, list back what you added and name any you could not.`;
+    ? `I'm going to paste my grocery list in ${batches.length} numbered parts. For each part: add every numbered item to my cart, treat each line as a separate item, and do not skip, merge, or substitute. If you can't find an exact match, add the closest option and tell me — don't silently leave anything out. When there's a choice of brand or size for an item, prefer my usual pick where you can tell from my order history. After the last part, list everything you added across all parts and name any you could not.`
+    : `I'm going to paste my grocery list below. Add every numbered item to my cart, treat each line as a separate item, and do not skip, merge, or substitute. If you can't find an exact match, add the closest option and tell me — don't silently leave anything out. When there's a choice of brand or size for an item, prefer my usual pick where you can tell from my order history. After adding, list back what you added and name any you could not.`;
 
   // Each batch: items are ALWAYS numbered (framed or not). When framed, a short
   // one-line preamble identifies the part; the verbose rules live in introText.
