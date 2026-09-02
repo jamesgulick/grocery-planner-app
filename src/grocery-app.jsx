@@ -635,6 +635,7 @@ const migrateDB = db => {
         mealPlan: draft?.mealPlan || committed?.meals || {},
         checkedIds: draft?.checkedIds || [],
         removedIds: draft?.removedIds || [],
+        addedItems: draft?.addedItems || [],
         dayNotes: draft?.dayNotes || {},
         dayPills: draft?.dayPills || {},
         notesTouched: draft?.notesTouched || false,
@@ -1425,6 +1426,7 @@ function PlanTab({ db, persistDB, onGoToImport }) {
   const [mealPlan, setMealPlan]       = useState(draft?.mealPlan || Object.fromEntries(days.map(d => [d, []])));
   const [checkedIds, setCheckedIds]   = useState(draft?.checkedIds || []);
   const [removedIds, setRemovedIds]   = useState(draft?.removedIds || []);
+  const [addedItems, setAddedItems]   = useState(draft?.addedItems || []);
   const [dayNotes, setDayNotes]       = useState(draft?.dayNotes || {});
   const [dayPills, setDayPills]       = useState(draft?.dayPills || {});
   const [stapleFlags, setStapleFlags] = useState(draft?.stapleFlags || {});
@@ -1444,7 +1446,7 @@ function PlanTab({ db, persistDB, onGoToImport }) {
   const saveDraft = (patch = {}, opts = {}) => {
     const next = {
       ...draft,
-      step, maxStep, awayHome, mealPlan, checkedIds, removedIds, dayNotes, dayPills, stapleFlags, quantities, weather,
+      step, maxStep, awayHome, mealPlan, checkedIds, removedIds, addedItems, dayNotes, dayPills, stapleFlags, quantities, weather,
       _stepsVer: 4,
       startedAt: draft?.startedAt || new Date().toISOString(),
       ...patch,
@@ -1468,6 +1470,7 @@ function PlanTab({ db, persistDB, onGoToImport }) {
   const setMealPlanP    = v => { const nv = typeof v === "function" ? v(mealPlan)    : v; setMealPlan(nv);    saveDraft({ mealPlan: nv }); };
   const setCheckedIdsP  = v => { const nv = typeof v === "function" ? v(checkedIds)  : v; setCheckedIds(nv);  saveDraft({ checkedIds: nv }); };
   const setRemovedIdsP  = v => { const nv = typeof v === "function" ? v(removedIds)  : v; setRemovedIds(nv);  saveDraft({ removedIds: nv }); };
+  const setAddedItemsP  = v => { const nv = typeof v === "function" ? v(addedItems)  : v; setAddedItems(nv);  saveDraft({ addedItems: nv }); };
   const setDayNotesP    = v => { const nv = typeof v === "function" ? v(dayNotes)    : v; setDayNotes(nv);    saveDraft({ dayNotes: nv }); };
   const setDayPillsP    = (v, opts) => { const nv = typeof v === "function" ? v(dayPills)    : v; setDayPills(nv);    saveDraft({ dayPills: nv }, opts); };
   const setStapleFlagsP = v => { const nv = typeof v === "function" ? v(stapleFlags) : v; setStapleFlags(nv); saveDraft({ stapleFlags: nv }); };
@@ -1486,7 +1489,7 @@ function PlanTab({ db, persistDB, onGoToImport }) {
     if (nm && !meals.some(m => m.name.toLowerCase() === nm.toLowerCase())) {
       meals = [...meals, { id:"m"+Date.now()+Math.random().toString(36).slice(2,5), createdAt:new Date().toISOString(), name:nm, effort:"medium", type:"dinner", weather:"any", tempAffinity:"neutral", grillable:false, leftovers:"none", preferences:[], notes:"", ingredients:[] }];
     }
-    const nextDraft = { ...draft, step, maxStep, awayHome, mealPlan:newMealPlan, checkedIds, removedIds, dayNotes, stapleFlags, quantities, weather, startedAt: draft?.startedAt || new Date().toISOString() };
+    const nextDraft = { ...draft, step, maxStep, awayHome, mealPlan:newMealPlan, checkedIds, removedIds, addedItems, dayNotes, stapleFlags, quantities, weather, startedAt: draft?.startedAt || new Date().toISOString() };
     persistDB(writeActivePlan({ ...db, meals }, nextDraft));
   };
 
@@ -1528,7 +1531,7 @@ function PlanTab({ db, persistDB, onGoToImport }) {
       // Auto-populate day notes from this week's baked-in schedule so a new plan
       // never starts blank. notesTouched tracks manual edits so a later refresh
       // can tell "never edited" from "deliberately changed".
-      step:1, maxStep:1, awayHome:freshAway, mealPlan:freshMeals, checkedIds:[], removedIds:[], dayNotes:{ ...defaultNotes }, dayPills:{}, notesTouched:false, _stepsVer:4, stapleFlags:{}, quantities:{}, weather:"hot", startedAt:new Date().toISOString(),
+      step:1, maxStep:1, awayHome:freshAway, mealPlan:freshMeals, checkedIds:[], removedIds:[], addedItems:[], dayNotes:{ ...defaultNotes }, dayPills:{}, notesTouched:false, _stepsVer:4, stapleFlags:{}, quantities:{}, weather:"hot", startedAt:new Date().toISOString(),
     };
 
     persistDB(writeActivePlan({ ...db, mealHistory }, freshPlan));
@@ -1554,7 +1557,7 @@ function PlanTab({ db, persistDB, onGoToImport }) {
     const freshPlan = {
       weekStartDate: nextStart, notes:"", meals:{}, items:[],
       cartItems:[], cartIngredientIds:[], dismissedShared:[],
-      step:1, maxStep:1, awayHome:freshAway, mealPlan:freshMeals, checkedIds:[], removedIds:[], dayNotes:{ ...defaultNotes }, dayPills:{}, notesTouched:false, _stepsVer:4, stapleFlags:{}, quantities:{}, weather:"hot", startedAt:new Date().toISOString(),
+      step:1, maxStep:1, awayHome:freshAway, mealPlan:freshMeals, checkedIds:[], removedIds:[], addedItems:[], dayNotes:{ ...defaultNotes }, dayPills:{}, notesTouched:false, _stepsVer:4, stapleFlags:{}, quantities:{}, weather:"hot", startedAt:new Date().toISOString(),
     };
     persistDB({ ...db, plans: { ...db.plans, next: freshPlan }, activePlan: "next" });
   };
@@ -1627,8 +1630,8 @@ function PlanTab({ db, persistDB, onGoToImport }) {
       <div style={S.body}>
         {step === 1 && <PlanMeals   mealPlan={mealPlan} setMealPlan={setMealPlanP} commitMealToPlan={commitMealToPlan} awayHome={awayHome} setAwayHome={setAwayHomeP} meals={meals} onNext={() => goToStep(2)} days={days} daysFull={daysFull} effortMap={effortMap} dayNotes={dayNotes} setDayNotes={setDayNotesP} dayPills={dayPills} setDayPills={setDayPillsP} db={db} persistDB={persistDB} />}
         {step === 2 && <PlanInventory checkedIds={checkedIds} setCheckedIds={setCheckedIdsP} stapleFlags={stapleFlags} setStapleFlags={setStapleFlagsP} quantities={quantities} setQuantities={setQuantitiesP} mealPlan={mealPlan} meals={meals} ingredients={ingredients} onNext={() => goToStep(3)} days={days} cartIngredientIds={draft?.cartIngredientIds || []} onChangeItemTier={(id, tier, subtype) => persistDB({ ...db, ingredients: db.ingredients.map(i => i.id === id ? { ...i, tier, stapleType: subtype || undefined } : i) })} />}
-        {step === 3 && <PlanConfirm mode="confirm" checkedIds={checkedIds} removedIds={removedIds} setRemovedIds={setRemovedIdsP} stapleFlags={stapleFlags} quantities={quantities} setQuantities={setQuantitiesP} mealPlan={mealPlan} meals={meals} ingredients={ingredients} onNext={() => goToStep(4)} db={db} persistDB={persistDB} days={days} daysFull={daysFull} />}
-        {step === 4 && <PlanConfirm mode="sparky" checkedIds={checkedIds} removedIds={removedIds} setRemovedIds={setRemovedIdsP} stapleFlags={stapleFlags} quantities={quantities} setQuantities={setQuantitiesP} mealPlan={mealPlan} meals={meals} ingredients={ingredients} onFinish={finishPlan} db={db} persistDB={persistDB} days={days} daysFull={daysFull} />}
+        {step === 3 && <PlanConfirm mode="confirm" checkedIds={checkedIds} removedIds={removedIds} setRemovedIds={setRemovedIdsP} addedItems={addedItems} setAddedItems={setAddedItemsP} stapleFlags={stapleFlags} quantities={quantities} setQuantities={setQuantitiesP} mealPlan={mealPlan} meals={meals} ingredients={ingredients} onNext={() => goToStep(4)} db={db} persistDB={persistDB} days={days} daysFull={daysFull} />}
+        {step === 4 && <PlanConfirm mode="sparky" checkedIds={checkedIds} removedIds={removedIds} setRemovedIds={setRemovedIdsP} addedItems={addedItems} setAddedItems={setAddedItemsP} stapleFlags={stapleFlags} quantities={quantities} setQuantities={setQuantitiesP} mealPlan={mealPlan} meals={meals} ingredients={ingredients} onFinish={finishPlan} db={db} persistDB={persistDB} days={days} daysFull={daysFull} />}
         {step > 1 && (
           <button style={{ background:"none", border:`1px solid ${C.border}`, borderRadius:10, padding:"10px 16px", fontSize:14, color:C.muted, cursor:"pointer", width:"100%", marginTop:4 }} onClick={() => goToStep(step - 1)}>
             ← Back
@@ -2301,8 +2304,7 @@ function PlanInventory({ checkedIds, setCheckedIds, stapleFlags, setStapleFlags,
   );
 }
 
-function PlanConfirm({ mode = "confirm", checkedIds, removedIds, setRemovedIds, stapleFlags, quantities = {}, setQuantities, mealPlan, meals, ingredients, onNext, onFinish, db, persistDB, days, daysFull }) {
-  const [added, setAdded]       = useState([]);
+function PlanConfirm({ mode = "confirm", checkedIds, removedIds, setRemovedIds, addedItems, setAddedItems, stapleFlags, quantities = {}, setQuantities, mealPlan, meals, ingredients, onNext, onFinish, db, persistDB, days, daysFull }) {
   const [newItem, setNewItem]   = useState("");
   const [total, setTotal]       = useState("");
   const [view, setView]         = useState("meal");
@@ -2345,7 +2347,7 @@ function PlanConfirm({ mode = "confirm", checkedIds, removedIds, setRemovedIds, 
   // toggled "have enough" is absent here, so it won't show under a meal that
   // uses it — the inventory judgment wins.
   const orderingIds   = new Set(allNeeded.map(i => i.id));
-  const activeCount   = allNeeded.filter(i => !removedIds.includes(i.id) && !cartIngredientIds.includes(i.id)).length + added.length;
+  const activeCount   = allNeeded.filter(i => !removedIds.includes(i.id) && !cartIngredientIds.includes(i.id)).length + addedItems.length;
 
   // Shared ingredients = EVERY multi-meal item this week, regardless of status.
   // This deliberately INCLUDES in-stock and in-cart items — those are the dangerous
@@ -2388,7 +2390,7 @@ function PlanConfirm({ mode = "confirm", checkedIds, removedIds, setRemovedIds, 
       const q = quantities[i.id] !== undefined ? quantities[i.id] : (i.defaultQuantity || "");
       lines.push(q ? `${i.name} — ${q}` : i.name);
     });
-    added.forEach(i => lines.push(i));
+    addedItems.forEach(i => lines.push(i));
     return lines;
   })();
   const batches = [];
@@ -2574,6 +2576,19 @@ function PlanConfirm({ mode = "confirm", checkedIds, removedIds, setRemovedIds, 
               </div>
             );
           })}
+          {addedItems.length > 0 && (
+            <div style={{ marginBottom:12 }}>
+              <div style={{ background:C.primary, color:"#E8F5EE", padding:"8px 14px", borderRadius:10, fontSize:13, fontWeight:700, marginBottom:4 }}>Added items</div>
+              <div style={{ ...S.card, padding:"0 16px" }}>
+                {addedItems.map((item, idx) => (
+                  <div key={idx} style={{ display:"flex", alignItems:"center", gap:10, padding:"11px 0", borderBottom:`1px solid ${C.border}` }}>
+                    <div style={{ ...S.checkBox(false), border:`2px solid ${C.border}`, color:"#888" }} />
+                    <div style={{ flex:1, fontSize:14 }}>{item}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </>
       ) : (
         <div style={{ ...S.card, padding:"0 16px" }}>
@@ -2598,21 +2613,21 @@ function PlanConfirm({ mode = "confirm", checkedIds, removedIds, setRemovedIds, 
               </div>
             );
           })}
-          {added.map((item, idx) => (
+          {addedItems.map((item, idx) => (
             <div key={idx} style={{ display:"flex", alignItems:"center", gap:10, padding:"11px 0", borderBottom:`1px solid ${C.border}` }}>
               <div style={{ ...S.checkBox(false), border:`2px solid ${C.border}`, color:"#888" }} />
               <div style={{ flex:1, fontSize:14 }}>{item} <span style={{ fontSize:11, color:C.faint }}>(added)</span></div>
             </div>
           ))}
-          {allNeeded.length===0 && added.length===0 && <div style={{ textAlign:"center", color:C.faint, padding:24 }}>No items — add ingredients to meals in Manage tab</div>}
+          {allNeeded.length===0 && addedItems.length===0 && <div style={{ textAlign:"center", color:C.faint, padding:24 }}>No items — add ingredients to meals in Manage tab</div>}
         </div>
       )}
 
       <div style={S.card}>
         <div style={S.sectionLabel}>Add item</div>
         <div style={{ display:"flex", gap:8 }}>
-          <input style={{ ...S.input, flex:1 }} placeholder="Type item name..." value={newItem} onChange={e => setNewItem(e.target.value)} onKeyDown={e => { if(e.key==="Enter"&&newItem.trim()){ setAdded(prev=>[...prev,newItem.trim()]); setNewItem(""); } }} />
-          <button style={{ ...S.btn, ...S.btnP, width:"auto", padding:"11px 16px", marginBottom:0 }} onClick={() => { if(newItem.trim()){ setAdded(prev=>[...prev,newItem.trim()]); setNewItem(""); } }}>Add</button>
+          <input style={{ ...S.input, flex:1 }} placeholder="Type item name..." value={newItem} onChange={e => setNewItem(e.target.value)} onKeyDown={e => { if(e.key==="Enter"&&newItem.trim()){ setAddedItems(prev=>[...prev,newItem.trim()]); setNewItem(""); } }} />
+          <button style={{ ...S.btn, ...S.btnP, width:"auto", padding:"11px 16px", marginBottom:0 }} onClick={() => { if(newItem.trim()){ setAddedItems(prev=>[...prev,newItem.trim()]); setNewItem(""); } }}>Add</button>
         </div>
       </div>
 
