@@ -1247,7 +1247,7 @@ function PrepTab({ db, persistDB }) {
   const activePlan        = getActivePlan(db);
   const cartItems         = activePlan?.cartItems || [];
   const cartIngredientIds = activePlan?.cartIngredientIds || [];
-  const [newItem, setNewItem]         = useState("");
+  const [bulkText, setBulkText]       = useState("");
   const [cartSearch, setCartSearch]   = useState("");
 
   const freshPlanBase = () => ({ weekStartDate:new Date().toISOString().split("T")[0], notes:"", meals:{}, items:[], cartItems:[], cartIngredientIds:[] });
@@ -1271,32 +1271,44 @@ function PrepTab({ db, persistDB }) {
     setCartSearch("");
   };
 
-  const [addNote, setAddNote] = useState(null);
-  const addItem = () => {
-    const q = newItem.trim();
-    if (!q) return;
-    // Try to match the typed text to a real ingredient, so it populates
-    // cartIngredientIds (which the Inventory + List steps actually honor) rather
-    // than free-text cartItems (which nothing reads). Match: exact name, then
-    // substring either direction, preferring the shortest (closest) name.
+  // Match a typed/pasted line to a real ingredient, so it populates
+  // cartIngredientIds (which the Inventory + List steps actually honor) rather
+  // than free-text cartItems (which nothing reads). Match: exact name, then
+  // substring either direction, preferring the shortest (closest) name.
+  const matchIngredient = q => {
     const ql = q.toLowerCase();
     const matches = db.ingredients.filter(i => {
       const n = i.name.toLowerCase();
       return n === ql || n.includes(ql) || ql.includes(n);
     }).sort((a, b) => a.name.length - b.name.length);
-    const hit = matches.find(i => !cartIngredientIds.includes(i.id));
-    if (hit) {
-      updatePlan({ cartIngredientIds: [...new Set([...cartIngredientIds, hit.id])] });
-      setAddNote({ ok:true, text:`✓ "${hit.name}" marked in cart — it'll drop off your list` });
-    } else if (matches.length && matches.every(i => cartIngredientIds.includes(i.id))) {
-      setAddNote({ ok:true, text:`"${matches[0].name}" is already in the cart` });
-    } else {
-      // No ingredient matches — keep as a free-text note, but say so honestly.
-      updatePlan({ cartItems: [...cartItems, q] });
-      setAddNote({ ok:false, text:`Added "${q}" as a note only — no matching item, so it won't change your list` });
-    }
-    setNewItem("");
-    setTimeout(() => setAddNote(null), 4000);
+    return matches[0] || null;
+  };
+
+  // Strip leading numbering (1. / 1)), bullets (- * •), and whitespace from a
+  // pasted line.
+  const stripListFormatting = line => line.trim().replace(/^[-*•]\s*/, "").replace(/^\d+[.)]\s*/, "").trim();
+
+  const [bulkSummary, setBulkSummary] = useState(null);
+  const markPastedItems = () => {
+    const lines = bulkText.split("\n").map(stripListFormatting).filter(Boolean);
+    if (!lines.length) return;
+    const nextIds = new Set(cartIngredientIds);
+    let marked = 0, already = 0;
+    const unmatched = [];
+    lines.forEach(line => {
+      const hit = matchIngredient(line);
+      if (!hit) { unmatched.push(line); return; }
+      if (nextIds.has(hit.id)) { already++; return; }
+      nextIds.add(hit.id);
+      marked++;
+    });
+    if (marked > 0) updatePlan({ cartIngredientIds: [...nextIds] });
+    const parts = [`Marked ${marked}`];
+    if (already) parts.push(`${already} already in cart`);
+    if (unmatched.length) parts.push(`Couldn't match ${unmatched.length}: ${unmatched.map(u => `"${u}"`).join(", ")}`);
+    setBulkSummary(parts.join(" · "));
+    setBulkText("");
+    setTimeout(() => setBulkSummary(null), 8000);
   };
 
   return (
@@ -1367,11 +1379,11 @@ function PrepTab({ db, persistDB }) {
           </div>
         )}
 
-        <div style={{ display:"flex", gap:8, marginTop:10 }}>
-          <input style={{ ...S.input, flex:1 }} placeholder="Type an item to mark it in cart..." value={newItem} onChange={e => setNewItem(e.target.value)} onKeyDown={e => { if(e.key === "Enter") addItem(); }} />
-          <button style={{ ...S.btn, ...S.btnP, width:"auto", padding:"11px 16px", marginBottom:0 }} onClick={addItem}>Add</button>
+        <div style={{ marginTop:10 }}>
+          <textarea style={{ ...S.input, height:80, resize:"vertical", marginBottom:8 }} placeholder="Paste a list — one item per line — to mark them in cart" value={bulkText} onChange={e => setBulkText(e.target.value)} />
+          <button style={{ ...S.btn, ...S.btnP, marginBottom:0 }} onClick={markPastedItems}>Mark items</button>
         </div>
-        {addNote && <div style={{ fontSize:12, marginTop:6, color: addNote.ok ? C.verified : C.warning }}>{addNote.text}</div>}
+        {bulkSummary && <div style={{ fontSize:12, marginTop:6, color:C.verified }}>{bulkSummary}</div>}
       </div>
       </div>
     </div>
