@@ -1,7 +1,10 @@
 import React, { useState, useEffect, useRef } from "react";
 // Engine input assembly (REFACTOR B3). The time-level and presence rules live there so
 // the app's UI and the engine's inputs can never disagree about them.
-import { TIME_LEVELS, seedTimeLevel, presentOn } from "./engine/assembleInputs.js";
+import { TIME_LEVELS, seedTimeLevel, presentOn, abbrOfISO, assembleComposeInputs, runComposeWeek } from "./engine/assembleInputs.js";
+// The validated week-composition engine (REFACTOR S1). Shipped unchanged; called only
+// through runComposeWeek, which assembles and guards its inputs.
+import { composeWeek, CONSTANTS as ENGINE } from "./engine/composeWeek.js";
 
 // ── Globals ────────────────────────────────────────────────────────────────────
 
@@ -551,12 +554,11 @@ const DEFAULT_DB = { settings:DEFAULT_SETTINGS, meals:SEED_MEALS, ingredients:SE
 
 // plan shape (db.plans.current / db.plans.next — see SPEC-two-plan-model.md):
 // { step, maxStep, timeLevels, presence, mealPlan, checkedIds, dayNotes, dayPills,
-//   pillsDerived, notesTouched, stapleFlags, quantities, weather, startedAt, _stepsVer,
+//   notesTouched, stapleFlags, quantities, weather, startedAt, _stepsVer,
 //   meals, items, cartItems, cartIngredientIds, dismissedShared, notes,
 //   weekStartDate }
 // timeLevels: { dayAbbr: "none"|"some"|"much" } (B1). presence: per-night
 // overrides only, { dayAbbr: { name: bool } } (B2) — see presentOn.
-// pillsDerived: the one-shot weather pill derivation has run for this plan.
 // mealPlan is the live-editing meal grid (day abbr -> meal NAMES); meals is the
 // last-committed snapshot of the same shape, written by savePlan. weekStartDate
 // (ISO YYYY-MM-DD) is the single canonical week-start; it drives auto-retire,
@@ -748,11 +750,7 @@ const migrateDB = db => {
         if (home === false) presence[d] = { ...(presence[d] || {}), [partner.name]: false };
       });
       const { awayHome, ...rest } = p;
-      return {
-        ...rest, timeLevels, dayPills, presence,
-        // Any pills at all (easy included) means the one-shot derive already ran.
-        pillsDerived: p.pillsDerived ?? Object.values(pills).some(ps => (ps || []).length > 0),
-      };
+      return { ...rest, timeLevels, dayPills, presence };
     };
     // Keyed off the version stamp, not "awayRanges missing": an import merges
     // DEFAULT_SETTINGS (awayRanges: []) in before this runs.
@@ -1047,34 +1045,21 @@ function RefreshReminder({ compact, dayNotes }) {
 
 // ── Day pills ─────────────────────────────────────────────────────────────────
 // A pill is an attribute on a day: { label, source: "auto"|"manual" }.
-// Only BUILT-IN labels carry generation effects; custom labels are visual only.
-//   grill   → allow + boost grillable meals (otherwise they're gated out)
-//   special → visual label only; no generation effect (a plain label to guide
-//             manual selection, same as a custom pill)
-// Time to cook is no longer a pill — see TIME_LEVELS (per-day timeLevels).
-// Auto-derivation runs ONCE per plan (plan.pillsDerived); after that the user's
-// edits always win and regeneration never clobbers them.
-const BUILTIN_PILLS = ["grill","special"];
+// Built-in labels are visual only now; custom labels likewise.
+//   special → a plain label to guide manual selection (no generation effect)
+// Grill is NOT a pill you set any more (INTEGRATION RULING 4): the engine decides
+// grillability itself from the day's forecast AND the grill-season toggle. The day
+// card shows that derived state read-only, using the engine's own thresholds.
+// Time to cook is not a pill either — see TIME_LEVELS (per-day timeLevels).
+const BUILTIN_PILLS = ["special"];
 const PILL_STYLE = {
   grill:   { c:"#9A3412",      bg:"#FFEDD5" },
   special: { c:"#7C3AED",      bg:"#EDE9FE" },
 };
 
-// Is a day grill-suitable? Warm enough and dry enough, from the baked forecast.
-const isGrillWeather = fc => !!fc && fc.hi >= 70 && fc.pop <= 35;
-
-// Propose pills for each day from this week's forecast (grill days only).
-function derivePills(days, forecast) {
-  const out = {};
-  days.forEach(d => {
-    const pills = [];
-    if (isGrillWeather((forecast || {})[d]))  pills.push({ label:"grill", source:"auto" });
-    out[d] = pills;
-  });
-  return out;
-}
-
-const hasPill = (dayPills, day, label) => (dayPills?.[day] || []).some(p => p.label === label);
+// Would the engine allow grilling on a day with this forecast? Same rule as
+// composeWeek's capability gate (season open AND warm AND dry).
+const engineGrillOk = (grillOpen, fc) => !!grillOpen && !!fc && fc.hi >= ENGINE.GRILL_MIN_F && fc.pop <= ENGINE.GRILL_MAX_POP;
 
 // Count how many of THIS WEEK's planned meals use each ingredient. The app stores
 // meal→ingredient links as presence only (no amounts), so this can flag overlap
@@ -1089,97 +1074,6 @@ function multiMealCounts(mealPlan, meals) {
   const multi = {};
   Object.entries(counts).forEach(([id, n]) => { if (n >= 2) multi[id] = n; });
   return multi;
-}
-
-// Interim: this whole function is replaced by composeWeek at the SWAP (REFACTOR
-// S1). Until then it reads the new inputs — timeLevels (B1) and general
-// per-day presence (B2) — in place of effortMap/easy and the Partner/away-member
-// special cases. isPresentOn(person, day) → bool.
-function getMealSuggestions(isPresentOn, meals, days, timeLevels, alreadyPlanned = [], recentMeals = [], seenThisSession = [], dayPills = {}, forecast = {}, contacts = []) {
-  const pool = meals;
-  const recent = new Set(recentMeals);   // archived recent weeks → soft weight
-  const seen   = new Set(seenThisSession); // this session's rerolls → skip if possible
-  const plan = {};
-  const used = new Set(alreadyPlanned);
-
-  // Resolve semantic roles once, by name — never by position/initials.
-  // Fallbacks (seed/public safety): a missing role simply has no effect below.
-  const selfMember = contacts.find(f => f.isSelf);
-
-  for (const day of days.filter(d => !plan[d])) {
-    // Only a "much"-time day unlocks involved meals (REFACTOR B1).
-    const involvedOk = ((timeLevels || {})[day] || seedTimeLevel(day)) === "much";
-    // Presence-aware scoring: an away member's likes/dislikes drop out of the
-    // score for this day. No hard gates.
-    const isPresent = person => isPresentOn(person, day);
-    // Favorite weight from existing preferences: likes minus dislikes across
-    // the family members present today (household consensus). The self
-    // member's own like adds a small extra tiebreaker when present, since
-    // it's the deliberate thumb on the scale. All soft — nothing excludes.
-    const favScore = m => {
-      const prefs    = (m.preferences || []).filter(p => isPresent(p.person));
-      const likes    = prefs.filter(p => p.pref === "likes").length;
-      const dislikes = prefs.filter(p => p.pref === "dislikes").length;
-      const selfLike = selfMember && prefs.some(p => p.person === selfMember.name && p.pref === "likes") ? 0.5 : 0;
-      return (likes - dislikes) + selfLike;
-    };
-    // Per-day conditions (replaces the old week-level weather value): each day's
-    // own forecast drives the temperature nudge, and its own grill pill decides
-    // whether grillable meals are allowed.
-    const fc        = forecast[day];
-    const dayIsHot  = !!fc && fc.hi >= 82;
-    const dayIsCold = !!fc && fc.hi <= 55;
-    const grillOk   = hasPill(dayPills, day, "grill");
-    const candidates    = pool.filter(m => {
-      if (used.has(m.name)) return false;
-      // Only main dinners are auto-suggested. Sides, batch, and takeout are
-      // excluded — they're chosen manually, not proposed as a night's meal.
-      if ((m.type || "dinner") !== "dinner") return false;
-      if (!involvedOk && m.effort === "involved") return false;
-      // GRILLABLE = conditional HARD gate, now PER DAY: grillable meals only
-      // appear on days flagged as grill days (warm + dry, auto-derived from the
-      // forecast, or set manually).
-      if (m.grillable && !grillOk) return false;
-      return true;
-    });
-    if (candidates.length > 0) {
-      // Reroll freshness: if we have options not yet surfaced this session, use
-      // only those (so consecutive rerolls show new meals). Fall back to all
-      // candidates once the pool is exhausted, so nothing hard-bans.
-      const unseen = candidates.filter(m => !seen.has(m.name));
-      const tier   = unseen.length > 0 ? unseen : candidates;
-
-      // WEIGHTED pick (not flat random). Each meal gets a weight from soft nudges;
-      // nothing is excluded here — weights only change how likely a meal is.
-      //  • recency: meals served in recent archived weeks are down-weighted (soft,
-      //    so they still can appear, but much less often — this replaces the old
-      //    hard "fresh tier" that collapsed and let recent meals back in at full
-      //    weight once history grew large)
-      //  • temperature: comfort floats up on cold days, sinks on hot; light the reverse
-      //  • grill day: grillable meals get a boost
-      //  • favorite: household likes-minus-dislikes (+ user's tiebreaker)
-      const weightFor = m => {
-        let w = 1;
-        if (recent.has(m.name)) w *= 0.15;   // strong soft penalty for recent meals
-        const aff = m.tempAffinity || "neutral";
-        if (dayIsCold) { if (aff === "comfort") w *= 2.2; if (aff === "light") w *= 0.4; }
-        if (dayIsHot)  { if (aff === "light")   w *= 2.2; if (aff === "comfort") w *= 0.4; }
-        if (grillOk && m.grillable) w *= 1.8;
-        w *= 1 + Math.max(0, favScore(m)) * 0.25;   // favorites lean up, never below base
-        return w;
-      };
-      const weights = tier.map(weightFor);
-      const total   = weights.reduce((s, x) => s + x, 0);
-      let r = Math.random() * total;
-      let pick = tier[0];
-      for (let i = 0; i < tier.length; i++) { r -= weights[i]; if (r <= 0) { pick = tier[i]; break; } }
-      plan[day] = pick.name;
-      used.add(pick.name);
-    } else {
-      plan[day] = "Choose your own night";
-    }
-  }
-  return plan;
 }
 
 // ── Styles ─────────────────────────────────────────────────────────────────────
@@ -1564,8 +1458,7 @@ function PlanTab({ db, persistDB, onGoToImport }) {
   const setRemovedIdsP  = v => { const nv = typeof v === "function" ? v(removedIds)  : v; setRemovedIds(nv);  saveDraft({ removedIds: nv }); };
   const setAddedItemsP  = v => { const nv = typeof v === "function" ? v(addedItems)  : v; setAddedItems(nv);  saveDraft({ addedItems: nv }); };
   const setDayNotesP    = v => { const nv = typeof v === "function" ? v(dayNotes)    : v; setDayNotes(nv);    saveDraft({ dayNotes: nv }); };
-  // opts.derived marks the one-shot weather derivation as done for this plan.
-  const setDayPillsP    = (v, opts = {}) => { const nv = typeof v === "function" ? v(dayPills)    : v; setDayPills(nv);    saveDraft({ dayPills: nv, ...(opts.derived ? { pillsDerived: true } : {}) }, opts); };
+  const setDayPillsP    = v => { const nv = typeof v === "function" ? v(dayPills)    : v; setDayPills(nv);    saveDraft({ dayPills: nv }); };
   const setStapleFlagsP = v => { const nv = typeof v === "function" ? v(stapleFlags) : v; setStapleFlags(nv); saveDraft({ stapleFlags: nv }); };
   const setQuantitiesP  = v => { const nv = typeof v === "function" ? v(quantities)  : v; setQuantities(nv);  saveDraft({ quantities: nv }); };
   const setWeatherP     = v => { const nv = typeof v === "function" ? v(weather)     : v; setWeather(nv);     saveDraft({ weather: nv }); };
@@ -1625,7 +1518,7 @@ function PlanTab({ db, persistDB, onGoToImport }) {
       // Auto-populate day notes from this week's baked-in schedule so a new plan
       // never starts blank. notesTouched tracks manual edits so a later refresh
       // can tell "never edited" from "deliberately changed".
-      step:1, maxStep:1, timeLevels:freshLevels, presence:{}, mealPlan:freshMeals, checkedIds:[], removedIds:[], addedItems:[], dayNotes:{ ...defaultNotes }, dayPills:{}, pillsDerived:false, notesTouched:false, _stepsVer:4, stapleFlags:{}, quantities:{}, weather:"hot", startedAt:new Date().toISOString(),
+      step:1, maxStep:1, timeLevels:freshLevels, presence:{}, mealPlan:freshMeals, checkedIds:[], removedIds:[], addedItems:[], dayNotes:{ ...defaultNotes }, dayPills:{}, notesTouched:false, _stepsVer:4, stapleFlags:{}, quantities:{}, weather:"hot", startedAt:new Date().toISOString(),
     };
 
     persistDB(writeActivePlan({ ...db, mealHistory }, freshPlan));
@@ -1650,7 +1543,7 @@ function PlanTab({ db, persistDB, onGoToImport }) {
     const freshPlan = {
       weekStartDate: nextStart, notes:"", meals:{}, items:[],
       cartItems:[], cartIngredientIds:[], dismissedShared:[],
-      step:1, maxStep:1, timeLevels:seedTimeLevels(), presence:{}, mealPlan:freshMeals, checkedIds:[], removedIds:[], addedItems:[], dayNotes:{ ...defaultNotes }, dayPills:{}, pillsDerived:false, notesTouched:false, _stepsVer:4, stapleFlags:{}, quantities:{}, weather:"hot", startedAt:new Date().toISOString(),
+      step:1, maxStep:1, timeLevels:seedTimeLevels(), presence:{}, mealPlan:freshMeals, checkedIds:[], removedIds:[], addedItems:[], dayNotes:{ ...defaultNotes }, dayPills:{}, notesTouched:false, _stepsVer:4, stapleFlags:{}, quantities:{}, weather:"hot", startedAt:new Date().toISOString(),
     };
     persistDB({ ...db, plans: { ...db.plans, next: freshPlan }, activePlan: "next" });
   };
@@ -1721,7 +1614,7 @@ function PlanTab({ db, persistDB, onGoToImport }) {
       <WeekSelector db={db} persistDB={persistDB} />
       <StepNav />
       <div style={S.body}>
-        {step === 1 && <PlanMeals   mealPlan={mealPlan} setMealPlan={setMealPlanP} commitMealToPlan={commitMealToPlan} timeLevels={timeLevels} setTimeLevels={setTimeLevelsP} presence={presence} setPresence={setPresenceP} weekStartDate={draft?.weekStartDate} pillsDerived={!!draft?.pillsDerived} meals={meals} onNext={() => goToStep(2)} days={days} daysFull={daysFull} dayNotes={dayNotes} setDayNotes={setDayNotesP} dayPills={dayPills} setDayPills={setDayPillsP} db={db} persistDB={persistDB} />}
+        {step === 1 && <PlanMeals   mealPlan={mealPlan} setMealPlan={setMealPlanP} commitMealToPlan={commitMealToPlan} timeLevels={timeLevels} setTimeLevels={setTimeLevelsP} presence={presence} setPresence={setPresenceP} weekStartDate={draft?.weekStartDate} adventurousWeek={!!draft?.adventurousWeek} setAdventurousWeek={v => saveDraft({ adventurousWeek: v })} meals={meals} onNext={() => goToStep(2)} days={days} daysFull={daysFull} dayNotes={dayNotes} setDayNotes={setDayNotesP} dayPills={dayPills} setDayPills={setDayPillsP} db={db} persistDB={persistDB} />}
         {step === 2 && <PlanInventory checkedIds={checkedIds} setCheckedIds={setCheckedIdsP} stapleFlags={stapleFlags} setStapleFlags={setStapleFlagsP} quantities={quantities} setQuantities={setQuantitiesP} mealPlan={mealPlan} meals={meals} ingredients={ingredients} onNext={() => goToStep(3)} days={days} cartIngredientIds={draft?.cartIngredientIds || []} onChangeItemTier={(id, tier, subtype) => persistDB({ ...db, ingredients: db.ingredients.map(i => i.id === id ? { ...i, tier, stapleType: subtype || undefined } : i) })} />}
         {step === 3 && <PlanConfirm mode="confirm" checkedIds={checkedIds} removedIds={removedIds} setRemovedIds={setRemovedIdsP} addedItems={addedItems} setAddedItems={setAddedItemsP} stapleFlags={stapleFlags} quantities={quantities} setQuantities={setQuantitiesP} mealPlan={mealPlan} meals={meals} ingredients={ingredients} onNext={() => goToStep(4)} db={db} persistDB={persistDB} days={days} daysFull={daysFull} />}
         {step === 4 && <PlanConfirm mode="sparky" checkedIds={checkedIds} removedIds={removedIds} setRemovedIds={setRemovedIdsP} addedItems={addedItems} setAddedItems={setAddedItemsP} stapleFlags={stapleFlags} quantities={quantities} setQuantities={setQuantitiesP} mealPlan={mealPlan} meals={meals} ingredients={ingredients} onFinish={finishPlan} db={db} persistDB={persistDB} days={days} daysFull={daysFull} />}
@@ -1883,7 +1776,7 @@ function AutoGrowTextarea({ value, onChange, placeholder, style }) {
   );
 }
 
-function PlanMeals({ mealPlan, setMealPlan, commitMealToPlan, timeLevels, setTimeLevels, presence, setPresence, weekStartDate, pillsDerived, meals, onNext, days, daysFull, dayNotes, setDayNotes, dayPills, setDayPills, db, persistDB }) {
+function PlanMeals({ mealPlan, setMealPlan, commitMealToPlan, timeLevels, setTimeLevels, presence, setPresence, weekStartDate, adventurousWeek, setAdventurousWeek, meals, onNext, days, daysFull, dayNotes, setDayNotes, dayPills, setDayPills, db, persistDB }) {
   const [editing, setEditing] = useState(null);
   const [moving,  setMoving]  = useState(null);
   const [search,  setSearch]  = useState("");
@@ -1941,31 +1834,24 @@ function PlanMeals({ mealPlan, setMealPlan, commitMealToPlan, timeLevels, setTim
     : browseSorted;
   const totalMeals = Object.values(mealPlan).flat().length;
 
-  const [seenSuggestions, setSeenSuggestions] = useState([]);
+  // The engine's session state (REFACTOR S1). Only seenThisSession is carried: the
+  // caller rebuilds alreadyPlaced from the plan on every call. Session-local BY DESIGN
+  // — the model resets session-seen per planning sitting, so this is the one piece of
+  // Meals-step state that deliberately is NOT lifted into the persisted plan.
+  const [seenThisSession, setSeenThisSession] = useState([]);
+  // Stopgap until the observation/rationale panels (REFACTOR C2): concerns and
+  // always-visible rationale from the last fill, so nothing the engine flags is silent.
+  const [composeNotes, setComposeNotes] = useState([]);
   // Live weather: fetch once on mount (cached 6h). Falls back to {} when blocked
   // or offline, which every consumer treats as neutral. See fetchLiveForecast.
-  // NOTE: declared BEFORE the pill-derive effect below, which reads them — const
-  // has no hoisting, so using them earlier throws a temporal-dead-zone ReferenceError.
+  // NOTE: declared BEFORE regenerate and the day cards, which read them — const has
+  // no hoisting, so using them earlier throws a temporal-dead-zone ReferenceError.
   const [forecast, setForecast] = useState({});
-  const [forecastLoaded, setForecastLoaded] = useState(false);
   useEffect(() => {
     let cancelled = false;
-    fetchLiveForecast().then(f => { if (!cancelled) { setForecast(f); setForecastLoaded(true); } });
+    fetchLiveForecast().then(f => { if (!cancelled) setForecast(f); });
     return () => { cancelled = true; };
   }, []);
-  // Auto-derive pills ONCE per plan. Gated on forecastLoaded so a slow/blocked
-  // weather fetch can't cause this plan to miss its one shot at auto-flagging
-  // grill days. After that, the user's edits always win. Tracked by the plan's
-  // pillsDerived flag rather than "no pills yet": with the easy pill gone, a
-  // week with no grill weather legitimately has no pills, and re-deriving on
-  // every visit would resurrect grill pills the user removed.
-  useEffect(() => {
-    if (!forecastLoaded || pillsDerived) return;
-    const anySet = days.some(d => (dayPills?.[d] || []).length > 0);
-    // background:true — this is an automatic weather-driven write, not a user
-    // edit, so it must not bump dataChangedAt (see SPEC-data-provenance.md).
-    setDayPills(anySet ? dayPills : derivePills(days, forecast), { background: true, derived: true });
-  }, [forecastLoaded]);
   // Notes safety net (carried over from the old Partner step): if this step opens
   // with every day note blank, fill from the baked schedule once. Fires only when
   // ALL are empty, so it never clobbers edits. New plans seed notes in startFresh;
@@ -1989,26 +1875,48 @@ function PlanMeals({ mealPlan, setMealPlan, commitMealToPlan, timeLevels, setTim
     setNewPillLabel("");
   };
 
+  // The forecast covers the current shopping week (see getShoppingWeekDates), keyed
+  // by day name; the engine and the grill indicator only use a day's forecast when
+  // its DATE is this plan's date, so a next-week plan never borrows this week's weather.
+  const forecastDates = getShoppingWeekDates().dates;
+  const forecastByDate = Object.fromEntries(Object.entries(forecast || {})
+    .filter(([abbr]) => forecastDates[abbr]).map(([abbr, fc]) => [forecastDates[abbr], fc]));
+  const grillOpen = db.settings?.grillOpen !== false;
+
+  // Fill every EMPTY day with a composed plate (REFACTOR S1 — composeWeek replaces the
+  // old weighted-random getMealSuggestions). Days that already have anything on them are
+  // never touched: they go to the engine as fixed context (alreadyPlaced), so spacing,
+  // leftovers and the floor are worked out around them.
   const regenerate = async () => {
     setLoading(true);
-    await new Promise(r => setTimeout(r, 400));
-    const alreadyPlanned = Object.values(mealPlan).flat();
-    // Soft variety: meals served in the last 3 archived weeks get deprioritized.
-    const recentMeals = (db.mealHistory || []).slice(-3).flatMap(h => h.meals || []);
-    // #3: also skip meals already surfaced in THIS session's rerolls, so each
-    // regenerate shows fresh options instead of re-landing on the same few.
-    // Once we'd have nothing new to show, reset the seen set and start over.
-    const eligibleCount = allMeals.filter(m => !alreadyPlanned.includes(m.name)).length;
-    let seen = seenSuggestions;
-    if (seen.length >= eligibleCount) seen = [];   // exhausted the pool → reset
-    const suggestions = getMealSuggestions(isPresentOn, allMeals, days, timeLevels, alreadyPlanned, recentMeals, seen, dayPills, forecast, db.settings?.familyContacts || []);
-    const freshlySuggested = days.map(d => suggestions[d]).filter(Boolean);
-    setSeenSuggestions([...new Set([...seen, ...freshlySuggested])]);
+    await new Promise(r => setTimeout(r, 30));   // let "Thinking..." paint
+    const planKey = db.activePlan || "current";
+    const plan = { ...(db.plans?.[planKey] || {}), weekStartDate, mealPlan, timeLevels, presence };
+    let out;
+    try {
+      const { args, notes } = assembleComposeInputs({ db, planKey, plan, forecastByDate, seenThisSession, today: todayLocalISO(), days });
+      out = runComposeWeek(composeWeek, args, notes);
+    } catch (e) {
+      out = { week: {}, sessionState: { seenThisSession }, rationale: [],
+        observations: [{ property: "input", severity: "concern", text: `Couldn't prepare the planner's inputs: ${e.message}` }] };
+    }
+    const nameOf = id => (db.meals || []).find(m => m.id === id)?.name;
     setMealPlan(prev => {
       const next = { ...prev };
-      days.forEach(d => { if (!prev[d] || !prev[d].length) next[d] = suggestions[d] ? [suggestions[d]] : []; });
+      days.forEach(d => {
+        if ((prev[d] || []).length) return;
+        const dishes = [...(out.week[dateOfDay[d]] || [])].sort((x, y) => (x.role === "main" ? 0 : 1) - (y.role === "main" ? 0 : 1));
+        next[d] = dishes.map(p => nameOf(p.mealId)).filter(Boolean);
+      });
       return next;
     });
+    setSeenThisSession(out.sessionState?.seenThisSession || seenThisSession);
+    const filled = new Set(days.filter(d => !(mealPlan[d] || []).length).map(d => dateOfDay[d]));
+    setComposeNotes([
+      ...out.observations.filter(o => o.severity === "concern"),
+      ...out.rationale.filter(r => r.visibility === "always" && filled.has(r.day))
+        .map(r => ({ property: r.factor, severity: "info", text: `${abbrOfISO(r.day)}: ${r.text}` })),
+    ]);
     setLoading(false);
   };
 
@@ -2088,15 +1996,30 @@ function PlanMeals({ mealPlan, setMealPlan, commitMealToPlan, timeLevels, setTim
         <div style={S.h2}>This week's dinners</div>
         <div style={{ marginBottom:12 }}>
           <div style={{ fontSize:12, color:C.faint, lineHeight:1.5 }}>
-            Each day uses its own forecast, time to cook, and who's home. Only "much" time allows involved meals. Tap a name to mark them away for that night; longer away periods live in Manage → Config. Grill days are auto-detected from the weather; tap a day's pills to adjust.
+            Each day uses its own forecast, time to cook, and who's home. Only "much" time allows involved meals. Tap a name to mark them away for that night; longer away periods live in Manage → Config. Grilling needs grill weather and grill season open (Manage → Config). Filling only touches empty days.
           </div>
         </div>
+        <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", gap:10, padding:"8px 0", marginBottom:8, borderTop:`1px solid ${C.border}` }}>
+          <div><div style={{ fontWeight:600, fontSize:14 }}>Adventurous week</div><div style={{ fontSize:12, color:C.faint }}>Place one meal you haven't tried yet</div></div>
+          <Toggle value={!!adventurousWeek} onChange={v => setAdventurousWeek(v)} />
+        </div>
         <button style={{ ...S.btn, ...S.btnS, marginBottom:0 }} onClick={regenerate} disabled={loading}>{loading?"Thinking...":"Regenerate empty days"}</button>
+        {composeNotes.length > 0 && (
+          <div style={{ marginTop:10 }}>
+            {composeNotes.map((n, k) => (
+              <div key={k} style={{ fontSize:12, lineHeight:1.45, padding:"6px 8px", marginTop:4, borderRadius:6, color: n.severity === "concern" ? C.warning : C.muted, background: n.severity === "concern" ? C.warningLight : "#F3F4F6" }}>
+                {n.severity === "concern" ? "⚠ " : "ℹ "}{n.text}
+              </div>
+            ))}
+          </div>
+        )}
       </div>
       {totalMeals === 0 && <button style={{ ...S.btn, ...S.btnP }} onClick={regenerate}>Generate meal plan</button>}
       {days.map((day, i) => {
         const dayMeals      = mealPlan[day] || [];
-        const pills         = dayPills?.[day] || [];
+        // Stored "grill" pills are from before grill became engine-derived; not shown.
+        const pills         = (dayPills?.[day] || []).filter(p => p.label !== "grill");
+        const grillOk       = engineGrillOk(grillOpen, forecastByDate[dateOfDay[day]]);
         const timeLevel     = (timeLevels || {})[day] || seedTimeLevel(day);
         const isEditingNew  = editing?.day === day && editing?.mealIdx == null;
         const editingPills  = pillEditDay === day;
@@ -2125,6 +2048,7 @@ function PlanMeals({ mealPlan, setMealPlan, commitMealToPlan, timeLevels, setTim
               </div>
             )}
             <div style={{ display:"flex", flexWrap:"wrap", gap:4, alignItems:"center", marginBottom:6 }}>
+              {grillOk && <span title="Grill weather and grill season open — grillable meals can be suggested" style={S.tag(PILL_STYLE.grill.c, PILL_STYLE.grill.bg)}>🔥 grill ok</span>}
               {pills.map(p => {
                 const st = PILL_STYLE[p.label] || { c:C.muted, bg:"#F3F4F6" };
                 return (
@@ -2153,7 +2077,7 @@ function PlanMeals({ mealPlan, setMealPlan, commitMealToPlan, timeLevels, setTim
                     onChange={e => setNewPillLabel(e.target.value)} onKeyDown={e => { if (e.key === "Enter") addCustomPill(day); }} />
                   <button style={{ ...S.btnSm, background:C.primary, color:"#fff" }} onClick={() => addCustomPill(day)}>Add</button>
                 </div>
-                <div style={{ fontSize:10, color:C.faint, marginTop:6 }}>grill affects suggestions. special and custom labels are visual only.</div>
+                <div style={{ fontSize:10, color:C.faint, marginTop:6 }}>Labels are visual only. "grill ok" is worked out from the forecast and grill season.</div>
               </div>
             )}
             <input
