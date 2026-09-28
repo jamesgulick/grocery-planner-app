@@ -51,8 +51,14 @@ const LEFTOVER_OPTIONS = ["none","yes"];
 const TEMP_AFFINITY_OPTIONS = ["comfort","neutral","light"];
 const MEAL_TYPES       = ["dinner","side","remix","batch","takeout"];
 const FAMILY_NAMES     = ["Partner","Kid 1","Kid 2","Kid 3","Me"];
-const DB_KEY           = "grocery_db";
-const RECOVERY_KEY     = "grocery_recovery";
+// Preview builds (VITE_PREVIEW=1, deployed at /preview/) share an origin — and so
+// localStorage — with the live app. Every key gets a _preview suffix so a preview
+// can never write the live DB; the live DB is only ever READ, to seed the preview.
+const IS_PREVIEW       = !!import.meta.env.VITE_PREVIEW;
+const KEY_SUFFIX       = IS_PREVIEW ? "_preview" : "";
+const LIVE_DB_KEY      = "grocery_db";
+const DB_KEY           = LIVE_DB_KEY + KEY_SUFFIX;
+const RECOVERY_KEY     = "grocery_recovery" + KEY_SUFFIX;
 const SHORTCUT_GET     = "shortcuts://run-shortcut?name=Get%20My%20Grocery%20Data";
 const SHORTCUT_SAVE    = "shortcuts://run-shortcut?name=Save%20My%20Grocery%20Data";
 const PLAN_STEPS       = ["Welcome","Meals","Inventory","Confirm","Sparky"];
@@ -769,7 +775,22 @@ const autoRetirePlans = db => {
 let storageHealth = "unknown"; // "ok" | "unavailable" | "unknown"
 const getStorageHealth = () => storageHealth;
 
+// Preview only: copy the live DB into the preview key (read-only on the live side).
+// `force` overwrites an existing preview DB; otherwise only seeds an empty one.
+function seedPreviewFromLive(force = false) {
+  if (!IS_PREVIEW) return false;
+  try {
+    if (!force && localStorage.getItem(DB_KEY)) return false;
+    const live = localStorage.getItem(LIVE_DB_KEY);
+    if (!live) return false;
+    localStorage.setItem(DB_KEY, live);
+    localStorage.removeItem(RECOVERY_KEY);
+    return true;
+  } catch { return false; }
+}
+
 async function loadDB() {
+  seedPreviewFromLive();
   try {
     const raw = localStorage.getItem(DB_KEY);
     if (raw) {
@@ -858,7 +879,7 @@ const EXTRACT_TOKENS = 2500;
 // nothing breaks; it simply shows no live data until hosted.
 const FORECAST_LAT = 39.44843;            // configure for your location (default: generic US point)
 const FORECAST_LON = -75.71768;
-const FORECAST_CACHE_KEY = "grocery_forecast_cache";
+const FORECAST_CACHE_KEY = "grocery_forecast_cache" + KEY_SUFFIX;
 const FORECAST_CACHE_TTL_MS = 6 * 60 * 60 * 1000; // 6 hours
 
 // The shopping week runs Tue → Mon. Given "today", find this cycle's Tuesday and
@@ -4366,6 +4387,16 @@ export default function App() {
   return (
     <ErrorBoundary>
       <div style={S.app}>
+        {IS_PREVIEW && (
+          <div style={{ background:"#7A4DFF", color:"#fff", fontSize:12, fontWeight:700, padding:"6px 12px", display:"flex", alignItems:"center", justifyContent:"space-between", gap:10 }}>
+            <span>PREVIEW — separate data; your live app is untouched</span>
+            <button
+              style={{ background:"rgba(255,255,255,0.2)", color:"#fff", border:"1px solid rgba(255,255,255,0.5)", borderRadius:6, fontSize:11, fontWeight:700, padding:"3px 8px", cursor:"pointer" }}
+              onClick={() => { if (window.confirm("Discard preview data and re-copy your live data?") && seedPreviewFromLive(true)) window.location.reload(); }}
+              title="Discard preview data and re-copy your live data (live data is only read)"
+            >Reset from live</button>
+          </div>
+        )}
         <div style={S.header}>
           <div style={S.headerTop}>
             <div style={S.headerTitle}>Grocery Planner</div>
