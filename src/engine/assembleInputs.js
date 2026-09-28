@@ -142,15 +142,116 @@ export function toEngineMeals(dbMeals) {
 /** name → engine meal, for mapping the app's name-keyed plans onto ids. */
 export const indexByName = (meals) => new Map(meals.map((m) => [nameKey(m.name), m]));
 
-/** A day's stored names → PlacedDish[], with the given carries policy. */
-function placeNames(names, byName, withCarries, unknown) {
+// ── Plates (REFACTOR C1) ──────────────────────────────────────────────────────────
+// A plan's `mealPlan` stays the day's content (day abbr → meal NAMES) — every screen,
+// the export and the family Shortcut read that. `plates` ANNOTATES it, per day:
+//
+//   plates[day] = { mainId, leftovers: string[],
+//                   dishes: [{ name, mealId, role, carries?, source, why: string[] }] }
+//
+// dishes[i] describes mealPlan[day][i]. `carries` is SNAPSHOTTED when the dish is
+// placed — that snapshot, never the meal's current tags, is what later weeks read as
+// as-served leftovers (model requirement 3; integration rulings 3 and 6). `source` is
+// "engine" (a composed main), "floor-fill" (a side covering someone who won't eat the
+// main), "accompaniment" (a side that goes with the main) or "manual" (placed by hand).
+// A day that has not been touched since plates existed has no entry: it is treated as
+// pre-integration (no carries).
+
+/** One stored meal record → the dish fields a plate snapshots (role, carries). */
+export function placedFromMeal(dbMeal) {
+  if (!dbMeal) return null;
+  const [m] = toEngineMeals([dbMeal]).meals;
+  if (!m) return null;
+  const out = { mealId: m.id, role: m.role };
+  if (m.carries) out.carries = { ...m.carries };
+  return out;
+}
+
+const sameList = (a, b) => (a || []).length === (b || []).length && (a || []).every((x, i) => x === (b || [])[i]);
+
+/**
+ * Keep `plates` in step with a change to `mealPlan`. Days whose name list is unchanged
+ * keep their plate as-is. A changed day is rebuilt: a dish keeps its entry if the same
+ * name was already on that day (so its snapshot and reason survive a neighbour's edit);
+ * `annotations[day]` (from a fill) supplies entries for engine-placed dishes; anything
+ * else is a fresh "manual" entry snapshotted now. Leftover notes survive only while the
+ * day's main is unchanged — they were worked out for that main.
+ */
+export function reconcilePlates(prevMealPlan = {}, nextMealPlan = {}, prevPlates = {}, dbMeals = [], annotations = {}) {
+  const byName = new Map((dbMeals || []).map((m) => [nameKey(m.name), m]));
+  const out = {};
+  for (const [day, names] of Object.entries(nextMealPlan || {})) {
+    if (!(names || []).length) continue;
+    const prev = prevPlates[day];
+    const ann = annotations[day];
+    // Unchanged day: keep its plate — or keep it UNPLATED. A day placed before plates
+    // existed must not acquire a snapshot just because a neighbour changed (ruling 3).
+    if (!ann && sameList(prevMealPlan[day], names)) { if (prev) out[day] = prev; continue; }
+    const pool = [...(prev?.dishes || [])];
+    const dishes = names.map((n) => {
+      const a = ann?.dishes?.find((d) => nameKey(d.name) === nameKey(n));
+      if (a) return a;
+      const k = pool.findIndex((d) => nameKey(d.name) === nameKey(n));
+      if (k >= 0) return pool.splice(k, 1)[0];
+      const base = placedFromMeal(byName.get(nameKey(n)));
+      return { name: n, ...(base || { mealId: null, role: 'main' }), source: 'manual', why: [] };
+    });
+    const mainId = dishes.find((d) => d.role === 'main')?.mealId || null;
+    const leftovers = ann ? (ann.leftovers || []) : (prev && prev.mainId === mainId ? prev.leftovers || [] : []);
+    out[day] = { mainId, leftovers, dishes };
+  }
+  return out;
+}
+
+/**
+ * composeWeek output → plate annotations for reconcilePlates, one per day that got
+ * dishes. `dateOfDay` maps day abbr → ISO date. Each dish records why it is there (the
+ * engine's rationale text for that day+meal); a side is "floor-fill" when the engine
+ * placed it to cover someone who won't eat the main, else "accompaniment". A day's
+ * carried-in leftovers (who is covered by what) become its `leftovers` notes.
+ */
+export function platesFromCompose(out, dateOfDay, dbMeals = []) {
+  const byId = new Map((dbMeals || []).map((m) => [m.id, m]));
+  const ann = {};
+  for (const [abbr, iso] of Object.entries(dateOfDay || {})) {
+    const placed = [...((out.week || {})[iso] || [])].sort((a, b) => (a.role === 'main' ? 0 : 1) - (b.role === 'main' ? 0 : 1));
+    if (!placed.length) continue;
+    const rat = (out.rationale || []).filter((r) => r.day === iso);
+    ann[abbr] = {
+      dishes: placed.map((p) => {
+        const m = byId.get(p.mealId);
+        if (!m) return null;
+        const mine = rat.filter((r) => r.mealId === p.mealId);
+        const carries = p.carries || placedFromMeal(m)?.carries;
+        return {
+          name: m.name, mealId: p.mealId, role: p.role,
+          ...(carries ? { carries: { ...carries } } : {}),
+          source: p.role === 'main' ? 'engine' : mine.some((r) => r.factor === 'floor-fill') ? 'floor-fill' : 'accompaniment',
+          why: mine.map((r) => r.text),
+        };
+      }).filter(Boolean),
+      leftovers: rat.filter((r) => r.factor === 'carried-leftover-fill').map((r) => r.text),
+    };
+  }
+  return ann;
+}
+
+/** A day's names → PlacedDish[]. Carries come ONLY from a matching plate snapshot. */
+function placeDay(names, plate, byName, unknown) {
   const out = [];
+  const pool = [...(plate?.dishes || [])];
   for (const n of names || []) {
+    const k = pool.findIndex((d) => nameKey(d.name) === nameKey(n) && d.mealId);
+    if (k >= 0) {
+      const d = pool.splice(k, 1)[0];
+      const dish = { mealId: d.mealId, role: d.role };
+      if (d.carries) dish.carries = { ...d.carries };
+      out.push(dish);
+      continue;
+    }
     const meal = byName.get(nameKey(n));
     if (!meal) { if (n) unknown.add(n); continue; }
-    const dish = { mealId: meal.id, role: meal.role };
-    if (withCarries && meal.carries) dish.carries = { ...meal.carries };
-    out.push(dish);
+    out.push({ mealId: meal.id, role: meal.role });   // pre-integration: no carries
   }
   return out;
 }
@@ -160,11 +261,12 @@ function placeNames(names, byName, withCarries, unknown) {
 /**
  * History = planTail (day-level, dated) + mealHistory (name-set recency), kept separate.
  *
- * INTEGRATION RULING 3 (9/28): carries are recorded AS SERVED and never re-derived. The
- * app's pre-integration tail is name-keyed with no carries, so those weeks are mapped
- * name→id (role from the current type) and feed cadence/freshness ONLY — carry-back reads
- * the fridge as empty across that seam. A tail week that already carries dated PlacedDish
- * `days` (stored at commit, post-integration) is passed through as-served.
+ * Leftovers (carries) come ONLY from plate snapshots taken when a dish was placed:
+ *  - INTEGRATION RULING 3: a day with no plate predates the new planner. It is mapped
+ *    name→id (role from the current type) and feeds cadence/freshness only — carry-back
+ *    reads the fridge as empty across that seam.
+ *  - INTEGRATION RULING 6: a day placed under the new planner is read from its plate's
+ *    snapshot, which is what counts a live week's leftovers when composing the next.
  *
  * `extraWeeks` are plans that precede the target week but haven't been archived yet —
  * e.g. the current week when composing next week. They are the most recent real history.
@@ -172,29 +274,24 @@ function placeNames(names, byName, withCarries, unknown) {
 export function buildHistory({ planTail = [], mealHistory = [], extraWeeks = [], byName, targetWeekStart }) {
   const notes = [];
   const unknown = new Set();
-  let nameOnlyWeeks = 0;
+  let unplatedDays = 0;
 
-  const tailWeek = (w, isExtra) => {
+  const tailWeek = (w) => {
     if (!w || !w.weekStartDate) return null;
-    if (w.days && typeof w.days === 'object') {
-      return { weekStartDate: w.weekStartDate, days: w.days };                  // as-served, pass through
-    }
     const dates = weekDates(w.weekStartDate);
     const days = {};
     for (const [abbr, names] of Object.entries(w.mealPlan || {})) {
       const iso = dates[abbr];
       if (!iso || (targetWeekStart && iso >= targetWeekStart)) continue;       // never the target week itself
-      const placed = placeNames(names, byName, isExtra, unknown);
+      const plate = (w.plates || {})[abbr];
+      if (!plate && (names || []).length) unplatedDays++;
+      const placed = placeDay(names, plate, byName, unknown);
       if (placed.length) days[iso] = placed;
     }
-    if (!isExtra) nameOnlyWeeks++;
     return { weekStartDate: w.weekStartDate, days };
   };
 
-  const planTailOut = [
-    ...planTail.map((w) => tailWeek(w, false)),
-    ...extraWeeks.map((w) => tailWeek(w, true)),
-  ].filter(Boolean);
+  const planTailOut = [...planTail, ...extraWeeks].map(tailWeek).filter(Boolean);
 
   const mealHistoryOut = (mealHistory || [])
     .filter((h) => h && typeof h.archivedAt === 'string')
@@ -203,10 +300,10 @@ export function buildHistory({ planTail = [], mealHistory = [], extraWeeks = [],
       ids: [...new Set((h.ids || h.meals || []).map((n) => byName.get(nameKey(n))?.id).filter(Boolean))],
     }));
 
-  if (nameOnlyWeeks) {
+  if (unplatedDays) {
     notes.push({
       property: 'history', severity: 'info',
-      text: `Leftover carry-back is unavailable for ${nameOnlyWeeks} week(s) from before the new planner (they were saved without leftovers data); those weeks still count for variety and recency.`,
+      text: `Leftover carry-back is unavailable for ${unplatedDays} past day(s) planned before the new planner (saved without leftovers data); they still count for variety and recency.`,
     });
   }
   if (unknown.size) {
@@ -257,18 +354,23 @@ export function buildSchedule({ weekStartDate, days, timeLevels = {}, presence =
 // ── Session state + config ──────────────────────────────────────────────────────────
 
 /**
- * alreadyPlaced = what's on the target week's days now (hand-placed or accepted). These
- * are being served THIS week, so their current tags are their as-served tags: carries
- * are snapshotted. seenThisSession is carried unchanged (session-local by design).
+ * alreadyPlaced = what's on the target week's days now (hand-placed or accepted). Carries
+ * come from the day's plate snapshot; a dish with no plate yet (placed before the new
+ * planner) carries its meal's current tags, since this is the week being served now
+ * (integration ruling 6). seenThisSession is carried unchanged (session-local by design).
  */
-export function buildSessionState({ mealPlan = {}, weekStartDate, byName, seenThisSession = [] }) {
+export function buildSessionState({ mealPlan = {}, plates = {}, weekStartDate, byName, seenThisSession = [] }) {
   const dates = weekDates(weekStartDate);
   const unknown = new Set();
   const alreadyPlaced = {};
   for (const [abbr, names] of Object.entries(mealPlan)) {
     const iso = dates[abbr];
     if (!iso) continue;
-    const placed = placeNames(names, byName, true, unknown);
+    const plate = plates[abbr];
+    const placed = plate
+      ? placeDay(names, plate, byName, unknown)
+      : (names || []).map((n) => byName.get(nameKey(n)) || (n && unknown.add(n), null)).filter(Boolean)
+          .map((m) => ({ mealId: m.id, role: m.role, ...(m.carries ? { carries: { ...m.carries } } : {}) }));
     if (placed.length) alreadyPlaced[iso] = placed;
   }
   const notes = unknown.size
@@ -311,7 +413,7 @@ export function assembleComposeInputs({ db, planKey, plan, forecastByDate = {}, 
     awayRanges: settings.awayRanges, roster: (settings.familyContacts || []).map((f) => f.name),
     forecastByDate,
   });
-  const ss = buildSessionState({ mealPlan: target.mealPlan, weekStartDate: target.weekStartDate, byName, seenThisSession });
+  const ss = buildSessionState({ mealPlan: target.mealPlan, plates: target.plates, weekStartDate: target.weekStartDate, byName, seenThisSession });
   const config = buildConfig({ grillOpen: settings.grillOpen, adventurousWeek: target.adventurousWeek, today, weekStartDate: target.weekStartDate });
 
   return {

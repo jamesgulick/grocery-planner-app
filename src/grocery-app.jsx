@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from "react";
 // Engine input assembly (REFACTOR B3). The time-level and presence rules live there so
 // the app's UI and the engine's inputs can never disagree about them.
-import { TIME_LEVELS, seedTimeLevel, presentOn, abbrOfISO, assembleComposeInputs, runComposeWeek } from "./engine/assembleInputs.js";
+import { TIME_LEVELS, seedTimeLevel, presentOn, abbrOfISO, assembleComposeInputs, runComposeWeek, reconcilePlates, platesFromCompose } from "./engine/assembleInputs.js";
 // The validated week-composition engine (REFACTOR S1). Shipped unchanged; called only
 // through runComposeWeek, which assembles and guards its inputs.
 import { composeWeek, CONSTANTS as ENGINE } from "./engine/composeWeek.js";
@@ -803,6 +803,8 @@ const autoRetirePlans = db => {
         archivedAt: new Date().toISOString(),
         weekStartDate: outgoing.weekStartDate || null,
         mealPlan: outgoing.mealPlan || outgoing.meals || {},
+        // Plate annotations (C1) carry the as-served leftovers snapshots history needs.
+        ...(outgoing.plates ? { plates: outgoing.plates } : {}),
       }
     : null;
   const prevTails = db.planTail || [];
@@ -1409,6 +1411,10 @@ function PlanTab({ db, persistDB, onGoToImport }) {
   const [timeLevels, setTimeLevels]   = useState(draft?.timeLevels || seedTimeLevels());
   const [presence, setPresence]       = useState(draft?.presence || {});
   const [mealPlan, setMealPlan]       = useState(draft?.mealPlan || Object.fromEntries(days.map(d => [d, []])));
+  // Plate annotations for mealPlan (REFACTOR C1): role, reason and leftovers snapshot
+  // per dish. Persisted on the plan so they survive every step transition; always
+  // rebuilt from mealPlan via reconcilePlates, never edited on their own.
+  const [plates, setPlates]           = useState(draft?.plates || {});
   const [checkedIds, setCheckedIds]   = useState(draft?.checkedIds || []);
   const [removedIds, setRemovedIds]   = useState(draft?.removedIds || []);
   const [addedItems, setAddedItems]   = useState(draft?.addedItems || []);
@@ -1431,7 +1437,7 @@ function PlanTab({ db, persistDB, onGoToImport }) {
   const saveDraft = (patch = {}, opts = {}) => {
     const next = {
       ...draft,
-      step, maxStep, timeLevels, presence, mealPlan, checkedIds, removedIds, addedItems, dayNotes, dayPills, stapleFlags, quantities, weather,
+      step, maxStep, timeLevels, presence, mealPlan, plates, checkedIds, removedIds, addedItems, dayNotes, dayPills, stapleFlags, quantities, weather,
       _stepsVer: 4,
       startedAt: draft?.startedAt || new Date().toISOString(),
       ...patch,
@@ -1453,7 +1459,12 @@ function PlanTab({ db, persistDB, onGoToImport }) {
   // Wrapped setters: update local state AND persist the draft in one shot.
   const setTimeLevelsP  = v => { const nv = typeof v === "function" ? v(timeLevels)  : v; setTimeLevels(nv);  saveDraft({ timeLevels: nv }); };
   const setPresenceP    = v => { const nv = typeof v === "function" ? v(presence)    : v; setPresence(nv);    saveDraft({ presence: nv }); };
-  const setMealPlanP    = v => { const nv = typeof v === "function" ? v(mealPlan)    : v; setMealPlan(nv);    saveDraft({ mealPlan: nv }); };
+  // annotations: plate entries for engine-placed dishes (see platesFromCompose).
+  const setMealPlanP    = (v, annotations) => {
+    const nv = typeof v === "function" ? v(mealPlan) : v;
+    const np = reconcilePlates(mealPlan, nv, plates, db.meals || [], annotations);
+    setMealPlan(nv); setPlates(np); saveDraft({ mealPlan: nv, plates: np });
+  };
   const setCheckedIdsP  = v => { const nv = typeof v === "function" ? v(checkedIds)  : v; setCheckedIds(nv);  saveDraft({ checkedIds: nv }); };
   const setRemovedIdsP  = v => { const nv = typeof v === "function" ? v(removedIds)  : v; setRemovedIds(nv);  saveDraft({ removedIds: nv }); };
   const setAddedItemsP  = v => { const nv = typeof v === "function" ? v(addedItems)  : v; setAddedItems(nv);  saveDraft({ addedItems: nv }); };
@@ -1475,7 +1486,9 @@ function PlanTab({ db, persistDB, onGoToImport }) {
     if (nm && !meals.some(m => m.name.toLowerCase() === nm.toLowerCase())) {
       meals = [...meals, { id:"m"+Date.now()+Math.random().toString(36).slice(2,5), createdAt:new Date().toISOString(), name:nm, effort:"medium", type:"dinner", weather:"any", tempAffinity:"neutral", grillable:false, leftovers:"none", preferences:[], notes:"", ingredients:[] }];
     }
-    const nextDraft = { ...draft, step, maxStep, timeLevels, presence, mealPlan:newMealPlan, checkedIds, removedIds, addedItems, dayNotes, stapleFlags, quantities, weather, startedAt: draft?.startedAt || new Date().toISOString() };
+    const nextPlates = reconcilePlates(mealPlan, newMealPlan, plates, meals);
+    setPlates(nextPlates);
+    const nextDraft = { ...draft, step, maxStep, timeLevels, presence, mealPlan:newMealPlan, plates:nextPlates, checkedIds, removedIds, addedItems, dayNotes, stapleFlags, quantities, weather, startedAt: draft?.startedAt || new Date().toISOString() };
     persistDB(writeActivePlan({ ...db, meals }, nextDraft));
   };
 
@@ -1491,6 +1504,7 @@ function PlanTab({ db, persistDB, onGoToImport }) {
     const freshMeals  = Object.fromEntries(days.map(d => [d, []]));
     setTimeLevels(freshLevels);
     setPresence({});
+    setPlates({});
     setMealPlan(freshMeals);
     setCheckedIds([]);
     setRemovedIds([]);
@@ -1518,7 +1532,7 @@ function PlanTab({ db, persistDB, onGoToImport }) {
       // Auto-populate day notes from this week's baked-in schedule so a new plan
       // never starts blank. notesTouched tracks manual edits so a later refresh
       // can tell "never edited" from "deliberately changed".
-      step:1, maxStep:1, timeLevels:freshLevels, presence:{}, mealPlan:freshMeals, checkedIds:[], removedIds:[], addedItems:[], dayNotes:{ ...defaultNotes }, dayPills:{}, notesTouched:false, _stepsVer:4, stapleFlags:{}, quantities:{}, weather:"hot", startedAt:new Date().toISOString(),
+      step:1, maxStep:1, timeLevels:freshLevels, presence:{}, mealPlan:freshMeals, plates:{}, checkedIds:[], removedIds:[], addedItems:[], dayNotes:{ ...defaultNotes }, dayPills:{}, notesTouched:false, _stepsVer:4, stapleFlags:{}, quantities:{}, weather:"hot", startedAt:new Date().toISOString(),
     };
 
     persistDB(writeActivePlan({ ...db, mealHistory }, freshPlan));
@@ -1543,7 +1557,7 @@ function PlanTab({ db, persistDB, onGoToImport }) {
     const freshPlan = {
       weekStartDate: nextStart, notes:"", meals:{}, items:[],
       cartItems:[], cartIngredientIds:[], dismissedShared:[],
-      step:1, maxStep:1, timeLevels:seedTimeLevels(), presence:{}, mealPlan:freshMeals, checkedIds:[], removedIds:[], addedItems:[], dayNotes:{ ...defaultNotes }, dayPills:{}, notesTouched:false, _stepsVer:4, stapleFlags:{}, quantities:{}, weather:"hot", startedAt:new Date().toISOString(),
+      step:1, maxStep:1, timeLevels:seedTimeLevels(), presence:{}, mealPlan:freshMeals, plates:{}, checkedIds:[], removedIds:[], addedItems:[], dayNotes:{ ...defaultNotes }, dayPills:{}, notesTouched:false, _stepsVer:4, stapleFlags:{}, quantities:{}, weather:"hot", startedAt:new Date().toISOString(),
     };
     persistDB({ ...db, plans: { ...db.plans, next: freshPlan }, activePlan: "next" });
   };
@@ -1614,7 +1628,7 @@ function PlanTab({ db, persistDB, onGoToImport }) {
       <WeekSelector db={db} persistDB={persistDB} />
       <StepNav />
       <div style={S.body}>
-        {step === 1 && <PlanMeals   mealPlan={mealPlan} setMealPlan={setMealPlanP} commitMealToPlan={commitMealToPlan} timeLevels={timeLevels} setTimeLevels={setTimeLevelsP} presence={presence} setPresence={setPresenceP} weekStartDate={draft?.weekStartDate} adventurousWeek={!!draft?.adventurousWeek} setAdventurousWeek={v => saveDraft({ adventurousWeek: v })} meals={meals} onNext={() => goToStep(2)} days={days} daysFull={daysFull} dayNotes={dayNotes} setDayNotes={setDayNotesP} dayPills={dayPills} setDayPills={setDayPillsP} db={db} persistDB={persistDB} />}
+        {step === 1 && <PlanMeals   mealPlan={mealPlan} plates={plates} setMealPlan={setMealPlanP} commitMealToPlan={commitMealToPlan} timeLevels={timeLevels} setTimeLevels={setTimeLevelsP} presence={presence} setPresence={setPresenceP} weekStartDate={draft?.weekStartDate} adventurousWeek={!!draft?.adventurousWeek} setAdventurousWeek={v => saveDraft({ adventurousWeek: v })} meals={meals} onNext={() => goToStep(2)} days={days} daysFull={daysFull} dayNotes={dayNotes} setDayNotes={setDayNotesP} dayPills={dayPills} setDayPills={setDayPillsP} db={db} persistDB={persistDB} />}
         {step === 2 && <PlanInventory checkedIds={checkedIds} setCheckedIds={setCheckedIdsP} stapleFlags={stapleFlags} setStapleFlags={setStapleFlagsP} quantities={quantities} setQuantities={setQuantitiesP} mealPlan={mealPlan} meals={meals} ingredients={ingredients} onNext={() => goToStep(3)} days={days} cartIngredientIds={draft?.cartIngredientIds || []} onChangeItemTier={(id, tier, subtype) => persistDB({ ...db, ingredients: db.ingredients.map(i => i.id === id ? { ...i, tier, stapleType: subtype || undefined } : i) })} />}
         {step === 3 && <PlanConfirm mode="confirm" checkedIds={checkedIds} removedIds={removedIds} setRemovedIds={setRemovedIdsP} addedItems={addedItems} setAddedItems={setAddedItemsP} stapleFlags={stapleFlags} quantities={quantities} setQuantities={setQuantitiesP} mealPlan={mealPlan} meals={meals} ingredients={ingredients} onNext={() => goToStep(4)} db={db} persistDB={persistDB} days={days} daysFull={daysFull} />}
         {step === 4 && <PlanConfirm mode="sparky" checkedIds={checkedIds} removedIds={removedIds} setRemovedIds={setRemovedIdsP} addedItems={addedItems} setAddedItems={setAddedItemsP} stapleFlags={stapleFlags} quantities={quantities} setQuantities={setQuantitiesP} mealPlan={mealPlan} meals={meals} ingredients={ingredients} onFinish={finishPlan} db={db} persistDB={persistDB} days={days} daysFull={daysFull} />}
@@ -1776,7 +1790,18 @@ function AutoGrowTextarea({ value, onChange, placeholder, style }) {
   );
 }
 
-function PlanMeals({ mealPlan, setMealPlan, commitMealToPlan, timeLevels, setTimeLevels, presence, setPresence, weekStartDate, adventurousWeek, setAdventurousWeek, meals, onNext, days, daysFull, dayNotes, setDayNotes, dayPills, setDayPills, db, persistDB }) {
+// A side's job on the plate, labelled distinctly (REFACTOR C1): a FLOOR-FILL side is
+// there because someone present won't eat the main; an ACCOMPANIMENT goes with the
+// main. A side placed by hand just says "side". The engine's own sentence for why it
+// is there is shown under the name.
+function sideBadge(dish) {
+  if (!dish || dish.role !== "side") return null;
+  if (dish.source === "floor-fill")    return <span style={S.tag(C.warning, C.warningLight)} title="Covers someone who won't eat the main">covers</span>;
+  if (dish.source === "accompaniment") return <span style={S.tag(C.primary, C.primaryLight)} title="Goes with the main">goes with</span>;
+  return <span style={S.tag(C.muted, "#F3F4F6")}>side</span>;
+}
+
+function PlanMeals({ mealPlan, plates, setMealPlan, commitMealToPlan, timeLevels, setTimeLevels, presence, setPresence, weekStartDate, adventurousWeek, setAdventurousWeek, meals, onNext, days, daysFull, dayNotes, setDayNotes, dayPills, setDayPills, db, persistDB }) {
   const [editing, setEditing] = useState(null);
   const [moving,  setMoving]  = useState(null);
   const [search,  setSearch]  = useState("");
@@ -1891,7 +1916,7 @@ function PlanMeals({ mealPlan, setMealPlan, commitMealToPlan, timeLevels, setTim
     setLoading(true);
     await new Promise(r => setTimeout(r, 30));   // let "Thinking..." paint
     const planKey = db.activePlan || "current";
-    const plan = { ...(db.plans?.[planKey] || {}), weekStartDate, mealPlan, timeLevels, presence };
+    const plan = { ...(db.plans?.[planKey] || {}), weekStartDate, mealPlan, plates, timeLevels, presence };
     let out;
     try {
       const { args, notes } = assembleComposeInputs({ db, planKey, plan, forecastByDate, seenThisSession, today: todayLocalISO(), days });
@@ -1900,16 +1925,15 @@ function PlanMeals({ mealPlan, setMealPlan, commitMealToPlan, timeLevels, setTim
       out = { week: {}, sessionState: { seenThisSession }, rationale: [],
         observations: [{ property: "input", severity: "concern", text: `Couldn't prepare the planner's inputs: ${e.message}` }] };
     }
-    const nameOf = id => (db.meals || []).find(m => m.id === id)?.name;
+    // Only empty days take the engine's plate; each placed dish carries its reason and
+    // a leftovers snapshot (platesFromCompose → reconcilePlates, REFACTOR C1).
+    const emptyDates = Object.fromEntries(days.filter(d => !(mealPlan[d] || []).length).map(d => [d, dateOfDay[d]]));
+    const annotations = platesFromCompose(out, emptyDates, db.meals || []);
     setMealPlan(prev => {
       const next = { ...prev };
-      days.forEach(d => {
-        if ((prev[d] || []).length) return;
-        const dishes = [...(out.week[dateOfDay[d]] || [])].sort((x, y) => (x.role === "main" ? 0 : 1) - (y.role === "main" ? 0 : 1));
-        next[d] = dishes.map(p => nameOf(p.mealId)).filter(Boolean);
-      });
+      Object.entries(annotations).forEach(([d, a]) => { if (!(prev[d] || []).length) next[d] = a.dishes.map(x => x.name); });
       return next;
-    });
+    }, annotations);
     setSeenThisSession(out.sessionState?.seenThisSession || seenThisSession);
     const filled = new Set(days.filter(d => !(mealPlan[d] || []).length).map(d => dateOfDay[d]));
     setComposeNotes([
@@ -2023,6 +2047,11 @@ function PlanMeals({ mealPlan, setMealPlan, commitMealToPlan, timeLevels, setTim
         const timeLevel     = (timeLevels || {})[day] || seedTimeLevel(day);
         const isEditingNew  = editing?.day === day && editing?.mealIdx == null;
         const editingPills  = pillEditDay === day;
+        // The day as a PLATE (REFACTOR C1): the plate entry for each listed meal, when
+        // the day has one (days untouched since before plates existed don't).
+        const plate         = plates?.[day];
+        const dishAt        = idx => (plate?.dishes?.[idx]?.name === dayMeals[idx] ? plate.dishes[idx] : null);
+        const isSide        = idx => (dishAt(idx)?.role || (allMeals.find(m => m.name === dayMeals[idx])?.type === "side" ? "side" : "main")) === "side";
         return (
           <div key={day} style={S.mealCard(timeLevel === "none" ? "easy" : "medium")}>
             <div style={{ fontSize:11, fontWeight:700, color:C.accentMuted, letterSpacing:"0.06em", textTransform:"uppercase", marginBottom:4 }}>
@@ -2102,8 +2131,14 @@ function PlanMeals({ mealPlan, setMealPlan, commitMealToPlan, timeLevels, setTim
                   ) : isChanging ? (
                     <MealSearch day={day} mealIdx={mealIdx} />
                   ) : (
-                    <div style={{ display:"flex", alignItems:"center", gap:8 }}>
-                      <div style={{ flex:1, fontWeight:600, fontSize:15 }}>{meal}</div>
+                    <div style={{ display:"flex", alignItems:"center", gap:8, ...(isSide(mealIdx) ? { paddingLeft:14 } : {}) }}>
+                      <div style={{ flex:1, minWidth:0 }}>
+                        <div style={{ fontWeight: isSide(mealIdx) ? 500 : 600, fontSize: isSide(mealIdx) ? 14 : 15, display:"flex", alignItems:"center", gap:6, flexWrap:"wrap" }}>
+                          {meal}
+                          {sideBadge(dishAt(mealIdx))}
+                        </div>
+                        {isSide(mealIdx) && dishAt(mealIdx)?.why?.[0] && <div style={{ fontSize:11, color:C.faint, lineHeight:1.35 }}>{dishAt(mealIdx).why[0]}</div>}
+                      </div>
                       <button style={{ ...S.btnSm, background:"none", border:`1px solid ${C.border}`, color:C.muted, fontSize:11 }} onClick={() => setMoving({day,mealIdx})}>Move</button>
                       <button style={{ ...S.btnSm, background:"none", border:`1px solid ${C.border}`, color:C.muted, fontSize:11 }} onClick={() => setEditing({day,mealIdx})}>Change</button>
                       <button style={{ background:"none", border:"none", color:C.faint, fontSize:18, cursor:"pointer", padding:"0 4px" }} onClick={() => removeMeal(day,mealIdx)}>×</button>
@@ -2112,6 +2147,13 @@ function PlanMeals({ mealPlan, setMealPlan, commitMealToPlan, timeLevels, setTim
                 </div>
               );
             })}
+            {(plate?.leftovers || []).length > 0 && dayMeals.length > 0 && (
+              <div style={{ marginTop:6 }}>
+                {plate.leftovers.map((t, k) => (
+                  <div key={k} style={{ fontSize:11, color:C.muted, lineHeight:1.4 }}>🥡 {t}</div>
+                ))}
+              </div>
+            )}
             {isEditingNew ? <MealSearch day={day} /> : (
               <button style={{ background:"none", border:`1.5px dashed ${C.border}`, borderRadius:8, padding:"6px 12px", fontSize:13, cursor:"pointer", color:C.faint, marginTop:8, width:"100%" }} onClick={() => setEditing({day, mealIdx:null})}>
                 + Add meal
