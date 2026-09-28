@@ -63,6 +63,14 @@ const SHORTCUT_GET     = "shortcuts://run-shortcut?name=Get%20My%20Grocery%20Dat
 const SHORTCUT_SAVE    = "shortcuts://run-shortcut?name=Save%20My%20Grocery%20Data";
 const PLAN_STEPS       = ["Welcome","Meals","Inventory","Confirm","Sparky"];
 
+// Per-day time to cook (REFACTOR B1) — replaces the old binary `easy` pill and the
+// hidden "shopping day + Mon + Tue are easy" rule. Only "much" unlocks involved
+// meals. The weekday seed is a UI default the owner overrides; the engine reads
+// the level, never the weekday.
+const TIME_LEVELS    = ["none","some","much"];
+const seedTimeLevel  = day => (day === "Sat" || day === "Sun") ? "much" : (day === "Mon" || day === "Tue") ? "none" : "some";
+const seedTimeLevels = () => Object.fromEntries(DAYS_ALL.map(d => [d, seedTimeLevel(d)]));
+
 const isPC = () => !/Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent);
 
 const toSentenceCase = s => s ? s.charAt(0).toUpperCase() + s.slice(1).toLowerCase() : s;
@@ -234,16 +242,15 @@ const extractJSON = text => {
 };
 
 // Shared ordering builder: given the index (into DAYS_ALL/DAYS_FULL) of the
-// day the week starts on, produce the 7-day days/daysFull/effortMap triple.
+// day the week starts on, produce the 7-day days/daysFull pair.
 function buildWeekFromStartIndex(startIdx) {
-  const days = [], daysFull = [], effortMap = {};
+  const days = [], daysFull = [];
   for (let i = 0; i < 7; i++) {
     const idx = (startIdx + i) % 7;
     days.push(DAYS_ALL[idx]);
     daysFull.push(DAYS_FULL[idx]);
-    effortMap[DAYS_ALL[idx]] = (i === 0 || DAYS_ALL[idx] === "Mon" || DAYS_ALL[idx] === "Tue") ? "easy" : "medium";
   }
-  return { days, daysFull, effortMap };
+  return { days, daysFull };
 }
 
 // Fallback ordering source, used only when no active plan (and thus no
@@ -521,6 +528,9 @@ const SEED_MEALS = [
 
 const DEFAULT_SETTINGS = {
   shoppingDay:"Wednesday", pickupTime:"5:00-6:00pm", budgetLimit:250, awayMemberHome:true,
+  // Date-range away periods for meal planning (REFACTOR B2): [{ id, name, from, to }],
+  // ISO dates, either end may be null (open). See presentOn.
+  awayRanges:[],
   // Grill season (capability, not weather): set by hand when the grill is opened
   // or closed for the year. Absent reads as open. Grillable meals need this AND
   // grill-able weather. Fed to composeWeek as config.grillOpen.
@@ -539,10 +549,13 @@ const DEFAULT_DB = { settings:DEFAULT_SETTINGS, meals:SEED_MEALS, ingredients:SE
 // { v:2, publishedAt, items:[ { key, label, body }, ... ] }
 
 // plan shape (db.plans.current / db.plans.next — see SPEC-two-plan-model.md):
-// { step, maxStep, awayHome, mealPlan, checkedIds, dayNotes, dayPills,
-//   notesTouched, stapleFlags, quantities, weather, startedAt, _stepsVer,
+// { step, maxStep, timeLevels, presence, mealPlan, checkedIds, dayNotes, dayPills,
+//   pillsDerived, notesTouched, stapleFlags, quantities, weather, startedAt, _stepsVer,
 //   meals, items, cartItems, cartIngredientIds, dismissedShared, notes,
 //   weekStartDate }
+// timeLevels: { dayAbbr: "none"|"some"|"much" } (B1). presence: per-night
+// overrides only, { dayAbbr: { name: bool } } (B2) — see presentOn.
+// pillsDerived: the one-shot weather pill derivation has run for this plan.
 // mealPlan is the live-editing meal grid (day abbr -> meal NAMES); meals is the
 // last-committed snapshot of the same shape, written by savePlan. weekStartDate
 // (ISO YYYY-MM-DD) is the single canonical week-start; it drives auto-retire,
@@ -605,6 +618,20 @@ const resolvePlanForDate = (db, dateISO) => {
   return db.plans?.current || null;
 };
 
+// ── Presence (REFACTOR B2) ─────────────────────────────────────────────────────
+// Who is home for dinner, per day × per person, for EVERY roster member (no
+// partner/away-member special cases). Most specific layer wins:
+//   1. presence[day][name] — an explicit per-night toggle on the Meals day card
+//   2. settings.awayRanges — date-range bulk-set ("at college X–Y"), open ends allowed
+//   3. otherwise present
+const inAwayRange = (ranges, name, dateISO) =>
+  !!dateISO && (ranges || []).some(r => r.name === name && (!r.from || dateISO >= r.from) && (!r.to || dateISO <= r.to));
+const presentOn = (presence, ranges, name, day, dateISO) => {
+  const o = presence?.[day]?.[name];
+  if (typeof o === "boolean") return o;
+  return !inAwayRange(ranges, name, dateISO);
+};
+
 // Plan count that tolerates both the legacy array shape (pre-migration db, e.g.
 // an old recovery snapshot or pasted import awaiting confirmation) and the
 // current { current, next } object shape.
@@ -627,6 +654,7 @@ const mapBothPlans = (db, fn) => ({
 // becoming "current" (the owner's explicit choice). Idempotent — a db already
 // at _planModelVer >= 1 is returned unchanged. mealHistory is untouched.
 const PLAN_MODEL_VER = 1;
+const PLAN_INPUTS_VER = 1;   // timeLevels + presence (see the plan-inputs block below)
 const migrateDB = db => {
   if (!db) return db;
   let out = db;
@@ -703,6 +731,49 @@ const migrateDB = db => {
       }
       out = { ...out, settings: { ...out.settings, familyContacts: migrated } };
     }
+  }
+
+  // Plan-inputs migration (REFACTOR B1 + B2). Runs after the role backfill above,
+  // which it reads. Idempotent via _planInputsVer.
+  //   B1: the binary `easy` pill → per-day timeLevels. A day that carried an easy
+  //       pill becomes "none"; every other day gets the weekday seed. Easy pills
+  //       are dropped (no longer a built-in).
+  //   B2: the Partner-only per-day awayHome map → per-night presence overrides;
+  //       the persistent away-member toggle, when off, → an open-ended away
+  //       period, so planning sees the same absence it did before. The toggle
+  //       itself stays: it still decides who gets family texts.
+  if ((out._planInputsVer || 0) < PLAN_INPUTS_VER) {
+    const contacts   = out.settings?.familyContacts || [];
+    const partner    = contacts.find(f => f.isPartner);
+    const awayMember = contacts.find(f => f.canBeAway);
+    const upgradePlan = p => {
+      if (!p) return p;
+      const pills = p.dayPills || {};
+      const hasEasy = d => (pills[d] || []).some(x => x.label === "easy");
+      const timeLevels = p.timeLevels || Object.fromEntries(DAYS_ALL.map(d => [d, hasEasy(d) ? "none" : seedTimeLevel(d)]));
+      const dayPills = Object.fromEntries(Object.entries(pills).map(([d, ps]) => [d, (ps || []).filter(x => x.label !== "easy")]));
+      const presence = { ...(p.presence || {}) };
+      if (partner) Object.entries(p.awayHome || {}).forEach(([d, home]) => {
+        if (home === false) presence[d] = { ...(presence[d] || {}), [partner.name]: false };
+      });
+      const { awayHome, ...rest } = p;
+      return {
+        ...rest, timeLevels, dayPills, presence,
+        // Any pills at all (easy included) means the one-shot derive already ran.
+        pillsDerived: p.pillsDerived ?? Object.values(pills).some(ps => (ps || []).length > 0),
+      };
+    };
+    let settings = out.settings;
+    if (settings && !Array.isArray(settings.awayRanges)) {
+      const ranges = awayMember && settings.awayMemberHome === false
+        ? [{ id: "r" + Date.now(), name: awayMember.name, from: null, to: null }]
+        : [];
+      settings = { ...settings, awayRanges: ranges };
+    }
+    const plans = out.plans && !Array.isArray(out.plans)
+      ? { current: upgradePlan(out.plans.current), next: upgradePlan(out.plans.next) }
+      : out.plans;
+    out = { ...out, settings, plans, _planInputsVer: PLAN_INPUTS_VER };
   }
 
   return out;
@@ -983,15 +1054,14 @@ function RefreshReminder({ compact, dayNotes }) {
 // ── Day pills ─────────────────────────────────────────────────────────────────
 // A pill is an attribute on a day: { label, source: "auto"|"manual" }.
 // Only BUILT-IN labels carry generation effects; custom labels are visual only.
-//   easy    → exclude "involved" meals (long-standing behavior, via effortMap)
 //   grill   → allow + boost grillable meals (otherwise they're gated out)
 //   special → visual label only; no generation effect (a plain label to guide
 //             manual selection, same as a custom pill)
-// Auto-derivation runs ONCE at plan start; after that a day's `touched` flag
-// means the user's edits always win and regeneration never clobbers them.
-const BUILTIN_PILLS = ["easy","grill","special"];
+// Time to cook is no longer a pill — see TIME_LEVELS (per-day timeLevels).
+// Auto-derivation runs ONCE per plan (plan.pillsDerived); after that the user's
+// edits always win and regeneration never clobbers them.
+const BUILTIN_PILLS = ["grill","special"];
 const PILL_STYLE = {
-  easy:    { c:"#2F6B4F",      bg:"#EAF3EC" },
   grill:   { c:"#9A3412",      bg:"#FFEDD5" },
   special: { c:"#7C3AED",      bg:"#EDE9FE" },
 };
@@ -999,13 +1069,11 @@ const PILL_STYLE = {
 // Is a day grill-suitable? Warm enough and dry enough, from the baked forecast.
 const isGrillWeather = fc => !!fc && fc.hi >= 70 && fc.pop <= 35;
 
-// Propose pills for each day from what the app already knows: the effort map
-// (shopping day + Mon/Tue are "easy") and this week's baked forecast.
-function derivePills(days, effortMap, forecast) {
+// Propose pills for each day from this week's forecast (grill days only).
+function derivePills(days, forecast) {
   const out = {};
   days.forEach(d => {
     const pills = [];
-    if ((effortMap || {})[d] === "easy") pills.push({ label:"easy", source:"auto" });
     if (isGrillWeather((forecast || {})[d]))  pills.push({ label:"grill", source:"auto" });
     out[d] = pills;
   });
@@ -1029,7 +1097,11 @@ function multiMealCounts(mealPlan, meals) {
   return multi;
 }
 
-function getMealSuggestions(awayHome, meals, days, effortMap, alreadyPlanned = [], recentMeals = [], seenThisSession = [], dayPills = {}, forecast = {}, contacts = [], awayMemberHome = true) {
+// Interim: this whole function is replaced by composeWeek at the SWAP (REFACTOR
+// S1). Until then it reads the new inputs — timeLevels (B1) and general
+// per-day presence (B2) — in place of effortMap/easy and the Partner/away-member
+// special cases. isPresentOn(person, day) → bool.
+function getMealSuggestions(isPresentOn, meals, days, timeLevels, alreadyPlanned = [], recentMeals = [], seenThisSession = [], dayPills = {}, forecast = {}, contacts = []) {
   const pool = meals;
   const recent = new Set(recentMeals);   // archived recent weeks → soft weight
   const seen   = new Set(seenThisSession); // this session's rerolls → skip if possible
@@ -1038,24 +1110,14 @@ function getMealSuggestions(awayHome, meals, days, effortMap, alreadyPlanned = [
 
   // Resolve semantic roles once, by name — never by position/initials.
   // Fallbacks (seed/public safety): a missing role simply has no effect below.
-  const partner    = contacts.find(f => f.isPartner);
-  const awayMember = contacts.find(f => f.canBeAway);
   const selfMember = contacts.find(f => f.isSelf);
 
   for (const day of days.filter(d => !plan[d])) {
-    const effort        = (effortMap && effortMap[day]) || "medium";
-    // Presence-aware scoring (SPEC-family-roles.md): a member is absent for
-    // this day only if they're the Partner and today's pill marks them away,
-    // or they're the away-able member and the persistent toggle is off.
-    // Everyone else is always present. No hard gates — absence just drops a
-    // member's likes/dislikes out of the score for this day.
-    const partnerAway      = !!partner && awayHome[day] === false;
-    const awayMemberAbsent = !!awayMember && !awayMemberHome;
-    const isPresent = person => {
-      if (partner && person === partner.name && partnerAway) return false;
-      if (awayMember && person === awayMember.name && awayMemberAbsent) return false;
-      return true;
-    };
+    // Only a "much"-time day unlocks involved meals (REFACTOR B1).
+    const involvedOk = ((timeLevels || {})[day] || seedTimeLevel(day)) === "much";
+    // Presence-aware scoring: an away member's likes/dislikes drop out of the
+    // score for this day. No hard gates.
+    const isPresent = person => isPresentOn(person, day);
     // Favorite weight from existing preferences: likes minus dislikes across
     // the family members present today (household consensus). The self
     // member's own like adds a small extra tiebreaker when present, since
@@ -1074,13 +1136,12 @@ function getMealSuggestions(awayHome, meals, days, effortMap, alreadyPlanned = [
     const dayIsHot  = !!fc && fc.hi >= 82;
     const dayIsCold = !!fc && fc.hi <= 55;
     const grillOk   = hasPill(dayPills, day, "grill");
-    const easyPill  = hasPill(dayPills, day, "easy") || effort === "easy";
     const candidates    = pool.filter(m => {
       if (used.has(m.name)) return false;
       // Only main dinners are auto-suggested. Sides, batch, and takeout are
       // excluded — they're chosen manually, not proposed as a night's meal.
       if ((m.type || "dinner") !== "dinner") return false;
-      if (easyPill && m.effort === "involved") return false;
+      if (!involvedOk && m.effort === "involved") return false;
       // GRILLABLE = conditional HARD gate, now PER DAY: grillable meals only
       // appear on days flagged as grill days (warm + dry, auto-derived from the
       // forecast, or set manually).
@@ -1425,7 +1486,7 @@ function PlanTab({ db, persistDB, onGoToImport }) {
   // render so editing the date (see the date input in PlanWelcome) reorders
   // the days live. Falls back to the shoppingDay default only when there's no
   // active plan yet (very first load, before any plan exists).
-  const { days, daysFull, effortMap } = draft?.weekStartDate
+  const { days, daysFull } = draft?.weekStartDate
     ? getWeekFromDate(draft.weekStartDate)
     : getWeekFromDay(db.settings?.shoppingDay || "Wednesday");
 
@@ -1457,7 +1518,8 @@ function PlanTab({ db, persistDB, onGoToImport }) {
   // Initialize from saved draft if present, else fresh defaults.
   const [step, setStep]               = useState(initStep);
   const [maxStep, setMaxStep]         = useState(initMaxStep);
-  const [awayHome, setAwayHome]   = useState(draft?.awayHome || Object.fromEntries(days.map(d => [d, true])));
+  const [timeLevels, setTimeLevels]   = useState(draft?.timeLevels || seedTimeLevels());
+  const [presence, setPresence]       = useState(draft?.presence || {});
   const [mealPlan, setMealPlan]       = useState(draft?.mealPlan || Object.fromEntries(days.map(d => [d, []])));
   const [checkedIds, setCheckedIds]   = useState(draft?.checkedIds || []);
   const [removedIds, setRemovedIds]   = useState(draft?.removedIds || []);
@@ -1481,7 +1543,7 @@ function PlanTab({ db, persistDB, onGoToImport }) {
   const saveDraft = (patch = {}, opts = {}) => {
     const next = {
       ...draft,
-      step, maxStep, awayHome, mealPlan, checkedIds, removedIds, addedItems, dayNotes, dayPills, stapleFlags, quantities, weather,
+      step, maxStep, timeLevels, presence, mealPlan, checkedIds, removedIds, addedItems, dayNotes, dayPills, stapleFlags, quantities, weather,
       _stepsVer: 4,
       startedAt: draft?.startedAt || new Date().toISOString(),
       ...patch,
@@ -1501,13 +1563,15 @@ function PlanTab({ db, persistDB, onGoToImport }) {
   };
 
   // Wrapped setters: update local state AND persist the draft in one shot.
-  const setAwayHomeP  = v => { const nv = typeof v === "function" ? v(awayHome)  : v; setAwayHome(nv);  saveDraft({ awayHome: nv }); };
+  const setTimeLevelsP  = v => { const nv = typeof v === "function" ? v(timeLevels)  : v; setTimeLevels(nv);  saveDraft({ timeLevels: nv }); };
+  const setPresenceP    = v => { const nv = typeof v === "function" ? v(presence)    : v; setPresence(nv);    saveDraft({ presence: nv }); };
   const setMealPlanP    = v => { const nv = typeof v === "function" ? v(mealPlan)    : v; setMealPlan(nv);    saveDraft({ mealPlan: nv }); };
   const setCheckedIdsP  = v => { const nv = typeof v === "function" ? v(checkedIds)  : v; setCheckedIds(nv);  saveDraft({ checkedIds: nv }); };
   const setRemovedIdsP  = v => { const nv = typeof v === "function" ? v(removedIds)  : v; setRemovedIds(nv);  saveDraft({ removedIds: nv }); };
   const setAddedItemsP  = v => { const nv = typeof v === "function" ? v(addedItems)  : v; setAddedItems(nv);  saveDraft({ addedItems: nv }); };
   const setDayNotesP    = v => { const nv = typeof v === "function" ? v(dayNotes)    : v; setDayNotes(nv);    saveDraft({ dayNotes: nv }); };
-  const setDayPillsP    = (v, opts) => { const nv = typeof v === "function" ? v(dayPills)    : v; setDayPills(nv);    saveDraft({ dayPills: nv }, opts); };
+  // opts.derived marks the one-shot weather derivation as done for this plan.
+  const setDayPillsP    = (v, opts = {}) => { const nv = typeof v === "function" ? v(dayPills)    : v; setDayPills(nv);    saveDraft({ dayPills: nv, ...(opts.derived ? { pillsDerived: true } : {}) }, opts); };
   const setStapleFlagsP = v => { const nv = typeof v === "function" ? v(stapleFlags) : v; setStapleFlags(nv); saveDraft({ stapleFlags: nv }); };
   const setQuantitiesP  = v => { const nv = typeof v === "function" ? v(quantities)  : v; setQuantities(nv);  saveDraft({ quantities: nv }); };
   const setWeatherP     = v => { const nv = typeof v === "function" ? v(weather)     : v; setWeather(nv);     saveDraft({ weather: nv }); };
@@ -1524,7 +1588,7 @@ function PlanTab({ db, persistDB, onGoToImport }) {
     if (nm && !meals.some(m => m.name.toLowerCase() === nm.toLowerCase())) {
       meals = [...meals, { id:"m"+Date.now()+Math.random().toString(36).slice(2,5), createdAt:new Date().toISOString(), name:nm, effort:"medium", type:"dinner", weather:"any", tempAffinity:"neutral", grillable:false, leftovers:"none", preferences:[], notes:"", ingredients:[] }];
     }
-    const nextDraft = { ...draft, step, maxStep, awayHome, mealPlan:newMealPlan, checkedIds, removedIds, addedItems, dayNotes, stapleFlags, quantities, weather, startedAt: draft?.startedAt || new Date().toISOString() };
+    const nextDraft = { ...draft, step, maxStep, timeLevels, presence, mealPlan:newMealPlan, checkedIds, removedIds, addedItems, dayNotes, stapleFlags, quantities, weather, startedAt: draft?.startedAt || new Date().toISOString() };
     persistDB(writeActivePlan({ ...db, meals }, nextDraft));
   };
 
@@ -1536,9 +1600,10 @@ function PlanTab({ db, persistDB, onGoToImport }) {
   // after the first plan, so the archive-before-clear step below is a safety
   // net for that edge case rather than the everyday path.
   const startFresh = () => {
-    const freshAway = Object.fromEntries(days.map(d => [d, true]));
+    const freshLevels = seedTimeLevels();
     const freshMeals  = Object.fromEntries(days.map(d => [d, []]));
-    setAwayHome(freshAway);
+    setTimeLevels(freshLevels);
+    setPresence({});
     setMealPlan(freshMeals);
     setCheckedIds([]);
     setRemovedIds([]);
@@ -1566,7 +1631,7 @@ function PlanTab({ db, persistDB, onGoToImport }) {
       // Auto-populate day notes from this week's baked-in schedule so a new plan
       // never starts blank. notesTouched tracks manual edits so a later refresh
       // can tell "never edited" from "deliberately changed".
-      step:1, maxStep:1, awayHome:freshAway, mealPlan:freshMeals, checkedIds:[], removedIds:[], addedItems:[], dayNotes:{ ...defaultNotes }, dayPills:{}, notesTouched:false, _stepsVer:4, stapleFlags:{}, quantities:{}, weather:"hot", startedAt:new Date().toISOString(),
+      step:1, maxStep:1, timeLevels:freshLevels, presence:{}, mealPlan:freshMeals, checkedIds:[], removedIds:[], addedItems:[], dayNotes:{ ...defaultNotes }, dayPills:{}, pillsDerived:false, notesTouched:false, _stepsVer:4, stapleFlags:{}, quantities:{}, weather:"hot", startedAt:new Date().toISOString(),
     };
 
     persistDB(writeActivePlan({ ...db, mealHistory }, freshPlan));
@@ -1585,14 +1650,13 @@ function PlanTab({ db, persistDB, onGoToImport }) {
   // defensive backstop rather than silently overwriting.
   const startNextWeek = () => {
     if (db.plans?.next) return;
-    const freshAway  = Object.fromEntries(days.map(d => [d, true]));
     const freshMeals = Object.fromEntries(days.map(d => [d, []]));
     const anchor     = draft?.weekStartDate || new Date().toISOString().split("T")[0];
     const nextStart  = addDaysISO(anchor, 7);
     const freshPlan = {
       weekStartDate: nextStart, notes:"", meals:{}, items:[],
       cartItems:[], cartIngredientIds:[], dismissedShared:[],
-      step:1, maxStep:1, awayHome:freshAway, mealPlan:freshMeals, checkedIds:[], removedIds:[], addedItems:[], dayNotes:{ ...defaultNotes }, dayPills:{}, notesTouched:false, _stepsVer:4, stapleFlags:{}, quantities:{}, weather:"hot", startedAt:new Date().toISOString(),
+      step:1, maxStep:1, timeLevels:seedTimeLevels(), presence:{}, mealPlan:freshMeals, checkedIds:[], removedIds:[], addedItems:[], dayNotes:{ ...defaultNotes }, dayPills:{}, pillsDerived:false, notesTouched:false, _stepsVer:4, stapleFlags:{}, quantities:{}, weather:"hot", startedAt:new Date().toISOString(),
     };
     persistDB({ ...db, plans: { ...db.plans, next: freshPlan }, activePlan: "next" });
   };
@@ -1663,7 +1727,7 @@ function PlanTab({ db, persistDB, onGoToImport }) {
       <WeekSelector db={db} persistDB={persistDB} />
       <StepNav />
       <div style={S.body}>
-        {step === 1 && <PlanMeals   mealPlan={mealPlan} setMealPlan={setMealPlanP} commitMealToPlan={commitMealToPlan} awayHome={awayHome} setAwayHome={setAwayHomeP} meals={meals} onNext={() => goToStep(2)} days={days} daysFull={daysFull} effortMap={effortMap} dayNotes={dayNotes} setDayNotes={setDayNotesP} dayPills={dayPills} setDayPills={setDayPillsP} db={db} persistDB={persistDB} />}
+        {step === 1 && <PlanMeals   mealPlan={mealPlan} setMealPlan={setMealPlanP} commitMealToPlan={commitMealToPlan} timeLevels={timeLevels} setTimeLevels={setTimeLevelsP} presence={presence} setPresence={setPresenceP} weekStartDate={draft?.weekStartDate} pillsDerived={!!draft?.pillsDerived} meals={meals} onNext={() => goToStep(2)} days={days} daysFull={daysFull} dayNotes={dayNotes} setDayNotes={setDayNotesP} dayPills={dayPills} setDayPills={setDayPillsP} db={db} persistDB={persistDB} />}
         {step === 2 && <PlanInventory checkedIds={checkedIds} setCheckedIds={setCheckedIdsP} stapleFlags={stapleFlags} setStapleFlags={setStapleFlagsP} quantities={quantities} setQuantities={setQuantitiesP} mealPlan={mealPlan} meals={meals} ingredients={ingredients} onNext={() => goToStep(3)} days={days} cartIngredientIds={draft?.cartIngredientIds || []} onChangeItemTier={(id, tier, subtype) => persistDB({ ...db, ingredients: db.ingredients.map(i => i.id === id ? { ...i, tier, stapleType: subtype || undefined } : i) })} />}
         {step === 3 && <PlanConfirm mode="confirm" checkedIds={checkedIds} removedIds={removedIds} setRemovedIds={setRemovedIdsP} addedItems={addedItems} setAddedItems={setAddedItemsP} stapleFlags={stapleFlags} quantities={quantities} setQuantities={setQuantitiesP} mealPlan={mealPlan} meals={meals} ingredients={ingredients} onNext={() => goToStep(4)} db={db} persistDB={persistDB} days={days} daysFull={daysFull} />}
         {step === 4 && <PlanConfirm mode="sparky" checkedIds={checkedIds} removedIds={removedIds} setRemovedIds={setRemovedIdsP} addedItems={addedItems} setAddedItems={setAddedItemsP} stapleFlags={stapleFlags} quantities={quantities} setQuantities={setQuantitiesP} mealPlan={mealPlan} meals={meals} ingredients={ingredients} onFinish={finishPlan} db={db} persistDB={persistDB} days={days} daysFull={daysFull} />}
@@ -1825,7 +1889,7 @@ function AutoGrowTextarea({ value, onChange, placeholder, style }) {
   );
 }
 
-function PlanMeals({ mealPlan, setMealPlan, commitMealToPlan, awayHome, setAwayHome, meals, onNext, days, daysFull, effortMap, dayNotes, setDayNotes, dayPills, setDayPills, db, persistDB }) {
+function PlanMeals({ mealPlan, setMealPlan, commitMealToPlan, timeLevels, setTimeLevels, presence, setPresence, weekStartDate, pillsDerived, meals, onNext, days, daysFull, dayNotes, setDayNotes, dayPills, setDayPills, db, persistDB }) {
   const [editing, setEditing] = useState(null);
   const [moving,  setMoving]  = useState(null);
   const [search,  setSearch]  = useState("");
@@ -1834,6 +1898,18 @@ function PlanMeals({ mealPlan, setMealPlan, commitMealToPlan, awayHome, setAwayH
   // Resolved by role flag, never by hardcoded name — see SPEC-family-roles.md.
   const partner     = (db.settings?.familyContacts || []).find(f => f.isPartner);
   const partnerName = partner?.name || "Partner";
+
+  // Presence (REFACTOR B2): everyone on the roster, every day. A day's date is
+  // its offset from weekStartDate (days[] is ordered from that weekday), which
+  // is what away periods are matched against.
+  const roster     = (db.settings?.familyContacts || []).map(f => f.name);
+  const awayRanges = db.settings?.awayRanges || [];
+  const dateOfDay  = Object.fromEntries(days.map((d, i) => [d, weekStartDate ? addDaysISO(weekStartDate, i) : null]));
+  const isPresentOn = (name, day) => presentOn(presence, awayRanges, name, day, dateOfDay[day]);
+  const togglePresence = (day, name) => {
+    const here = isPresentOn(name, day);
+    setPresence(prev => ({ ...prev, [day]: { ...((prev || {})[day] || {}), [name]: !here } }));
+  };
 
   // When browsing (empty search box), order intentionally to aid discovery:
   //   sides (A–Z) → mains/dinners (least-recently-used first) → remix/batch/takeout.
@@ -1883,15 +1959,18 @@ function PlanMeals({ mealPlan, setMealPlan, commitMealToPlan, awayHome, setAwayH
     fetchLiveForecast().then(f => { if (!cancelled) { setForecast(f); setForecastLoaded(true); } });
     return () => { cancelled = true; };
   }, []);
-  // Auto-derive pills ONCE if this plan has none yet. Gated on forecastLoaded so a
-  // slow/blocked weather fetch can't cause this plan to miss its one shot at
-  // auto-flagging grill days. After that, the user's edits always win.
+  // Auto-derive pills ONCE per plan. Gated on forecastLoaded so a slow/blocked
+  // weather fetch can't cause this plan to miss its one shot at auto-flagging
+  // grill days. After that, the user's edits always win. Tracked by the plan's
+  // pillsDerived flag rather than "no pills yet": with the easy pill gone, a
+  // week with no grill weather legitimately has no pills, and re-deriving on
+  // every visit would resurrect grill pills the user removed.
   useEffect(() => {
-    if (!forecastLoaded) return;
+    if (!forecastLoaded || pillsDerived) return;
     const anySet = days.some(d => (dayPills?.[d] || []).length > 0);
     // background:true — this is an automatic weather-driven write, not a user
     // edit, so it must not bump dataChangedAt (see SPEC-data-provenance.md).
-    if (!anySet) setDayPills(derivePills(days, effortMap, forecast), { background: true });
+    setDayPills(anySet ? dayPills : derivePills(days, forecast), { background: true, derived: true });
   }, [forecastLoaded]);
   // Notes safety net (carried over from the old Partner step): if this step opens
   // with every day note blank, fill from the baked schedule once. Fires only when
@@ -1928,7 +2007,7 @@ function PlanMeals({ mealPlan, setMealPlan, commitMealToPlan, awayHome, setAwayH
     const eligibleCount = allMeals.filter(m => !alreadyPlanned.includes(m.name)).length;
     let seen = seenSuggestions;
     if (seen.length >= eligibleCount) seen = [];   // exhausted the pool → reset
-    const suggestions = getMealSuggestions(awayHome, allMeals, days, effortMap, alreadyPlanned, recentMeals, seen, dayPills, forecast, db.settings?.familyContacts || [], db.settings?.awayMemberHome !== false);
+    const suggestions = getMealSuggestions(isPresentOn, allMeals, days, timeLevels, alreadyPlanned, recentMeals, seen, dayPills, forecast, db.settings?.familyContacts || []);
     const freshlySuggested = days.map(d => suggestions[d]).filter(Boolean);
     setSeenSuggestions([...new Set([...seen, ...freshlySuggested])]);
     setMealPlan(prev => {
@@ -2015,7 +2094,7 @@ function PlanMeals({ mealPlan, setMealPlan, commitMealToPlan, awayHome, setAwayH
         <div style={S.h2}>This week's dinners</div>
         <div style={{ marginBottom:12 }}>
           <div style={{ fontSize:12, color:C.faint, lineHeight:1.5 }}>
-            Each day uses its own forecast and pills. Grill days are auto-detected from the weather; tap a day's pills to adjust.
+            Each day uses its own forecast, time to cook, and who's home. Only "much" time allows involved meals. Tap a name to mark them away for that night; longer away periods live in Manage → Config. Grill days are auto-detected from the weather; tap a day's pills to adjust.
           </div>
         </div>
         <button style={{ ...S.btn, ...S.btnS, marginBottom:0 }} onClick={regenerate} disabled={loading}>{loading?"Thinking...":"Regenerate empty days"}</button>
@@ -2024,20 +2103,33 @@ function PlanMeals({ mealPlan, setMealPlan, commitMealToPlan, awayHome, setAwayH
       {days.map((day, i) => {
         const dayMeals      = mealPlan[day] || [];
         const pills         = dayPills?.[day] || [];
-        const isEasy        = pills.some(p => p.label === "easy");
-        const memberAway    = !awayHome[day];
+        const timeLevel     = (timeLevels || {})[day] || seedTimeLevel(day);
         const isEditingNew  = editing?.day === day && editing?.mealIdx == null;
         const editingPills  = pillEditDay === day;
         return (
-          <div key={day} style={S.mealCard(isEasy)}>
+          <div key={day} style={S.mealCard(timeLevel === "none" ? "easy" : "medium")}>
             <div style={{ fontSize:11, fontWeight:700, color:C.accentMuted, letterSpacing:"0.06em", textTransform:"uppercase", marginBottom:4 }}>
               {daysFull[i]}
               {forecast[day] && <span style={{ marginLeft:8, fontWeight:600, color:C.muted, textTransform:"none", letterSpacing:0 }}>{forecast[day].icon} {forecast[day].hi}° · {forecast[day].pop}% rain</span>}
-              <span onClick={() => setAwayHome(prev => ({ ...prev, [day]: !(prev[day] !== false) }))}
-                style={{ marginLeft:8, cursor:"pointer", ...S.tag(memberAway ? C.warning : C.faint, memberAway ? C.warningLight : "#F1F1F1") }}>
-                {memberAway ? `${partnerName} away` : `${partnerName} home`}
-              </span>
             </div>
+            <div style={{ display:"flex", alignItems:"center", gap:4, flexWrap:"wrap", marginBottom:6 }}>
+              <span style={{ fontSize:11, color:C.faint, fontWeight:600, marginRight:2 }}>Time to cook</span>
+              {TIME_LEVELS.map(l => {
+                const on = timeLevel === l;
+                return <button key={l} style={{ ...S.btnSm, padding:"2px 10px", fontSize:11, background:on?C.primaryLight:"#FFF", color:on?C.primary:C.muted, border:`1px solid ${on?C.primary:C.border}`, fontWeight:on?700:500 }}
+                  onClick={() => setTimeLevels(prev => ({ ...prev, [day]: l }))}>{l}</button>;
+              })}
+            </div>
+            {roster.length > 0 && (
+              <div style={{ display:"flex", alignItems:"center", gap:4, flexWrap:"wrap", marginBottom:6 }}>
+                <span style={{ fontSize:11, color:C.faint, fontWeight:600, marginRight:2 }}>Home</span>
+                {roster.map(name => {
+                  const here = isPresentOn(name, day);
+                  return <span key={name} title={here ? "Tap to mark away tonight" : "Away — tap to mark home tonight"} onClick={() => togglePresence(day, name)}
+                    style={{ cursor:"pointer", ...S.tag(here ? C.muted : C.warning, here ? "#F1F1F1" : C.warningLight), textDecoration: here ? "none" : "line-through" }}>{name}</span>;
+                })}
+              </div>
+            )}
             <div style={{ display:"flex", flexWrap:"wrap", gap:4, alignItems:"center", marginBottom:6 }}>
               {pills.map(p => {
                 const st = PILL_STYLE[p.label] || { c:C.muted, bg:"#F3F4F6" };
@@ -2067,7 +2159,7 @@ function PlanMeals({ mealPlan, setMealPlan, commitMealToPlan, awayHome, setAwayH
                     onChange={e => setNewPillLabel(e.target.value)} onKeyDown={e => { if (e.key === "Enter") addCustomPill(day); }} />
                   <button style={{ ...S.btnSm, background:C.primary, color:"#fff" }} onClick={() => addCustomPill(day)}>Add</button>
                 </div>
-                <div style={{ fontSize:10, color:C.faint, marginTop:6 }}>easy / grill / special affect suggestions. Custom labels are visual only.</div>
+                <div style={{ fontSize:10, color:C.faint, marginTop:6 }}>grill affects suggestions. special and custom labels are visual only.</div>
               </div>
             )}
             <input
@@ -2885,6 +2977,49 @@ function ManageHelp() {
 }
 
 // ── Meal editor ────────────────────────────────────────────────────────────────
+
+// Date-range away periods (REFACTOR B2's bulk-set convenience): "Kid 3 at college
+// Sep 1 – Dec 15". Either end may be left blank (open). A per-night toggle on
+// the Meals day card overrides a period for that one night. Module-level with
+// its own state so typing into the date fields keeps focus (see AutoGrowTextarea).
+function AwayPeriods({ contacts, ranges, onChange }) {
+  const [name, setName] = useState(contacts[0]?.name || "");
+  const [from, setFrom] = useState("");
+  const [to, setTo]     = useState("");
+  const fmt = iso => new Date(iso + "T00:00:00").toLocaleDateString("en-US", { month:"short", day:"numeric", year:"numeric" });
+  const describe = r => r.from && r.to ? `${fmt(r.from)} – ${fmt(r.to)}`
+    : r.from ? `from ${fmt(r.from)} until further notice`
+    : r.to   ? `until ${fmt(r.to)}`
+    : "until further notice";
+  const invalid = !name || (from && to && to < from);
+  const add = () => {
+    if (invalid) return;
+    onChange([...ranges, { id:"r"+Date.now(), name, from: from || null, to: to || null }]);
+    setFrom(""); setTo("");
+  };
+  return (
+    <div style={{ padding:"10px 0", borderBottom:`1px solid ${C.border}` }}>
+      <div style={{ fontWeight:600 }}>Away periods</div>
+      <div style={{ fontSize:12, color:C.faint, marginBottom:8 }}>Who's away for meal planning, by date. Leave a date blank for open-ended.</div>
+      {ranges.length === 0 && <div style={{ fontSize:13, color:C.faint, marginBottom:8 }}>None — everyone is home unless marked away on a day.</div>}
+      {ranges.map(r => (
+        <div key={r.id} style={{ display:"flex", alignItems:"center", gap:8, padding:"6px 0" }}>
+          <div style={{ flex:1, fontSize:14 }}><span style={{ fontWeight:600 }}>{r.name}</span> <span style={{ color:C.muted }}>{describe(r)}</span></div>
+          <button style={{ background:"none", border:"none", color:C.faint, fontSize:18, cursor:"pointer", padding:"0 4px" }} title="Remove" onClick={() => onChange(ranges.filter(x => x.id !== r.id))}>×</button>
+        </div>
+      ))}
+      <div style={{ display:"flex", gap:6, flexWrap:"wrap", alignItems:"center", marginTop:6 }}>
+        <select style={{ ...S.select, flex:"1 1 110px", marginBottom:0 }} value={name} onChange={e => setName(e.target.value)}>
+          {contacts.map(f => <option key={f.name} value={f.name}>{f.name}</option>)}
+        </select>
+        <input type="date" aria-label="Away from" style={{ ...S.input, flex:"1 1 130px", marginBottom:0 }} value={from} onChange={e => setFrom(e.target.value)} />
+        <input type="date" aria-label="Away until" style={{ ...S.input, flex:"1 1 130px", marginBottom:0 }} value={to} onChange={e => setTo(e.target.value)} />
+        <button style={{ ...S.btnSm, background:invalid?"#F3F4F6":C.primary, color:invalid?C.muted:"#fff" }} disabled={invalid} onClick={add}>Add</button>
+      </div>
+      {from && to && to < from && <div style={{ fontSize:11, color:C.danger, marginTop:4 }}>"Until" is before "from".</div>}
+    </div>
+  );
+}
 
 function MealEditor({ meal, ingredients, onSave, onCancel, onDelete, onAddIngredient, initialName, familyContacts }) {
   const [form, setForm] = useState(meal || { id:"m"+Date.now(), createdAt:new Date().toISOString(), name:toSentenceCase(initialName||""), effort:"medium", type:"dinner", weather:"any", tempAffinity:"neutral", grillable:false, leftovers:"none", preferences:[], notes:"", ingredients:[] });
@@ -3832,9 +3967,10 @@ function ManageConfig({ db, persistDB }) {
       <div style={S.card}>
         <div style={S.sectionLabel}>Family</div>
         <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"10px 0", borderBottom:`1px solid ${C.border}` }}>
-          <div><div style={{ fontWeight:600 }}>{(db.settings.familyContacts||[]).find(f=>f.canBeAway)?.name || "Away member"} is home</div><div style={{ fontSize:12, color:C.faint }}>Toggle off when away (e.g. at college)</div></div>
+          <div><div style={{ fontWeight:600 }}>{(db.settings.familyContacts||[]).find(f=>f.canBeAway)?.name || "Away member"} gets family texts</div><div style={{ fontSize:12, color:C.faint }}>Off leaves them out of family texts (e.g. at college). Meal planning uses Away periods below.</div></div>
           <Toggle value={db.settings.awayMemberHome} onChange={v => upd("awayMemberHome",v)} />
         </div>
+        <AwayPeriods contacts={db.settings.familyContacts || []} ranges={db.settings.awayRanges || []} onChange={r => upd("awayRanges", r)} />
         {(db.settings.familyContacts||[]).map((f,i,arr) => (
           <div key={f.name} style={{ ...S.row, padding:"10px 0", ...(i===arr.length-1?S.rowLast:{}) }}>
             <div style={{ flex:1 }}><div style={{ fontWeight:600 }}>{f.name}</div><div style={{ fontSize:12, color:C.faint }}>{f.phone||"No number set"}</div></div>
