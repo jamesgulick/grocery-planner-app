@@ -1,0 +1,21 @@
+name: Refresh preview
+
+# A push to the preview branch re-runs the Pages deploy *from main*, which
+# rebuilds production (unchanged) plus the branch into /preview/. The deploy
+# itself never runs from the branch, so the Pages environment's main-only
+# protection stays intact and the branch can't change how production deploys.
+
+on:
+  push:
+    branches: [integration/composeWeek]
+
+permissions:
+  actions: write
+
+jobs:
+  dispatch:
+    runs-on: ubuntu-latest
+    steps:
+      - run: gh workflow run deploy.yml --ref main --repo "$GITHUB_REPOSITORY"
+        env:
+          GH_TOKEN: ${{ github.token }}

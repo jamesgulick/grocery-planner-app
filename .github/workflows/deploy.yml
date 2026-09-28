@@ -1,5 +1,14 @@
 name: Deploy to GitHub Pages
 
+# Production = `main`, built at the site root. Always.
+# Preview    = `integration/composeWeek`, built into /preview/ when that branch
+#              exists. Best-effort: a failing preview build never blocks the
+#              production deploy — the preview is simply left out.
+#
+# This workflow always runs from `main` (push to main, or a manual/dispatched run
+# on main — see preview-trigger.yml), so the branch can never alter how
+# production is built or deployed.
+
 on:
   push:
     branches: [main]
@@ -14,16 +23,50 @@ concurrency:
   group: pages
   cancel-in-progress: true
 
+env:
+  PREVIEW_BRANCH: integration/composeWeek
+
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: main
       - uses: actions/setup-node@v4
         with:
           node-version: 20
       - run: npm install
       - run: npm run build
+
+      # ---- preview (best-effort) -------------------------------------------
+      - name: Check for preview branch
+        id: preview
+        run: |
+          if git ls-remote --exit-code --heads origin "$PREVIEW_BRANCH" >/dev/null; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "No $PREVIEW_BRANCH branch; skipping preview."
+          fi
+      - uses: actions/checkout@v4
+        if: steps.preview.outputs.exists == 'true'
+        continue-on-error: true
+        with:
+          ref: ${{ env.PREVIEW_BRANCH }}
+          path: preview-src
+      - name: Build preview into dist/preview
+        if: steps.preview.outputs.exists == 'true'
+        continue-on-error: true
+        working-directory: preview-src
+        run: |
+          # Guard: the preview shares an origin (and so localStorage) with the
+          # live app. Refuse to publish a preview build that doesn't isolate its
+          # storage keys behind VITE_PREVIEW.
+          grep -q "VITE_PREVIEW" src/grocery-app.jsx || { echo "Preview does not isolate storage; refusing."; exit 1; }
+          npm install
+          VITE_PREVIEW=1 npm run build -- --outDir ../preview-dist
+          mv ../preview-dist ../dist/preview
+
       - uses: actions/upload-pages-artifact@v3
         with:
           path: dist
