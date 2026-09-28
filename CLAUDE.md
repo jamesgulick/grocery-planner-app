@@ -58,7 +58,8 @@ in one file: **`src/grocery-app.jsx`**. `src/main.jsx` only mounts it.
   (outputs to `dist/`).
 - **Deploy:** `.github/workflows/deploy.yml` builds and publishes to GitHub Pages on
   every push to `main`. Pages source must be set to "GitHub Actions" in repo
-  settings.
+  settings. **The repo must be PUBLIC for Pages to serve it on the free plan — this
+  deploy IS the product. See "THE REPO MUST BE PUBLIC" below before committing anything.**
 - **`vite.config.js`** sets `base: "./"` so built asset paths are relative — the
   site works at a project subpath (`username.github.io/repo/`) without hardcoding
   the repo name. Don't change this to an absolute base unless you also fix the paths.
@@ -157,18 +158,64 @@ Pre-migration DBs carry two older single-slot concepts (db.planDraft live-editin
   refactor that genericized personal data. They're just variable names.
   **Ephemeral component-local state dies across a re-rendered-instance transition, and the bundler does NOT catch it.** PlanConfirm is rendered as TWO instances — mode="confirm" (step 3) and mode="sparky" (step 4). Any state held in a local useState inside that component is discarded when the flow moves between the two instances, because they're different mounts. This has bitten the project at least twice: the removed set (confirm-step removals) and then the added set both vanished on the Confirm→Sparky transition. Any state that must survive that transition has to be lifted to the persisted plan object (as removedIds / added-items were), not kept component-local. When adding state to PlanConfirm, ask: does this need to survive the confirm↔sparky switch? If yes, lift it.
 
-## Privacy / sanitization (important)
+## THE REPO MUST BE PUBLIC — and what that forces (READ BEFORE ANY COMMIT)
 
-This repo is **public**. The app was sanitized before publishing: no real names,
-phone numbers, addresses, or personal calendar data. When editing:
+**This repo is public, and it has to stay public.** That is not a preference or an
+accident of history. The whole point of this project is that James uses the planner as a
+real web app on his phone and laptop instead of a Claude artifact, and it is served by
+**GitHub Pages from `main`**. On GitHub's free plan **Pages only serves a public repo** —
+so making the repo private takes the app offline. (Confirmed the hard way on 2026-09-27:
+the repo went private and `jamesgulick.github.io/grocery-planner-app/` immediately went
+to 404.) "Just make it private" is therefore never the answer to a privacy problem here.
+
+Because it cannot be made private, the repo's contents are the only control there is:
+
+### RULE: only files the running app requires may be committed.
+
+Before any `git add`, commit, or push, ask of every file: **does the running app need
+this to build and serve?** If no, it does not go in the repo — add it to `.gitignore`
+instead and leave it on disk as a working file.
+
+**Belongs in the repo:** `src/`, `index.html`, `package.json`, `package-lock.json`,
+`vite.config.js`, `.github/workflows/deploy.yml`, `.gitignore`, `.gitattributes`,
+`LICENSE`, `README.md`, this file — and, once integration wires it in, the engine's
+`composeWeek.js`.
+
+**Never, whatever a past instruction said:** the tagged corpus (`meal-tags.json`),
+scenario fixtures (`scenarios.json`), the validation harness, design and model docs
+(`MODEL-*.md`, `CONTRACT-*.md`, `HANDOFF.md`, `SPEC-*.md`, `*-BRIEF-*.md`), exported
+DBs, or anything else that exists to support design, tagging or validation rather than to
+run the app. These carry real family names and real per-person food preferences. They are
+working files. **They live on disk, untracked.**
+
+### Check CONTENTS, not just the diff.
+
+A clean, purely-additive merge can still publish personal data. On 2026-09-27 an engine
+branch was merged and pushed after verifying the build passed and that no file under
+`src/` had changed — which put `meal-tags.json` (52 meals of likes/dislikes for five
+real people) onto the public default branch. Additive is not the same as safe. Open the
+data files.
+
+### Git history is public too.
+
+Deleting a file in a later commit does NOT remove it — it stays readable in history for
+as long as the repo is public. Un-publishing something already pushed means rewriting
+history (`git filter-repo` + force-push on every ref) and asking GitHub Support to
+garbage-collect the unreferenced objects. Far cheaper never to commit it.
+
+## Privacy / sanitization
 
 - Do NOT add real personal data (names, numbers, home address, private notes) to the
-  source or seed data. Use generic placeholders.
+  source or seed data. Use generic placeholders. The sanitized roster constants in
+  `src/` are the pattern — `SPEC-family-names.md` maps them to `Partner / Kid 1 /
+  Kid 2 / Kid 3 / Me`. Real names belong only in James's `localStorage` DB, which is
+  never in the repo.
 - `FORECAST_LAT` / `FORECAST_LON` are a neutral placeholder. If setting a real
   location, prefer a nearby town-center coordinate over an exact home address — the
   weather is identical and it's public.
 - The deployed site's JS is publicly readable (static host), so treat anything in
-  the code as public regardless of any future repo-visibility change.
+  the code as public. There is no future repo-visibility change to fall back on — see
+  above.
 
 ## Typical tasks
 
