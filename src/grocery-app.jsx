@@ -754,11 +754,14 @@ const migrateDB = db => {
         pillsDerived: p.pillsDerived ?? Object.values(pills).some(ps => (ps || []).length > 0),
       };
     };
+    // Keyed off the version stamp, not "awayRanges missing": an import merges
+    // DEFAULT_SETTINGS (awayRanges: []) in before this runs.
     let settings = out.settings;
-    if (settings && !Array.isArray(settings.awayRanges)) {
-      const ranges = awayMember && settings.awayMemberHome === false
-        ? [{ id: "r" + Date.now(), name: awayMember.name, from: null, to: null }]
-        : [];
+    if (settings) {
+      let ranges = Array.isArray(settings.awayRanges) ? settings.awayRanges : [];
+      if (awayMember && settings.awayMemberHome === false && !ranges.some(r => r.name === awayMember.name)) {
+        ranges = [...ranges, { id: "r" + Date.now(), name: awayMember.name, from: null, to: null }];
+      }
       settings = { ...settings, awayRanges: ranges };
     }
     const plans = out.plans && !Array.isArray(out.plans)
