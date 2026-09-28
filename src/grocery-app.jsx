@@ -521,6 +521,10 @@ const SEED_MEALS = [
 
 const DEFAULT_SETTINGS = {
   shoppingDay:"Wednesday", pickupTime:"5:00-6:00pm", budgetLimit:250, awayMemberHome:true,
+  // Grill season (capability, not weather): set by hand when the grill is opened
+  // or closed for the year. Absent reads as open. Grillable meals need this AND
+  // grill-able weather. Fed to composeWeek as config.grillOpen.
+  grillOpen:true,
   familyContacts: FAMILY.map(f => ({...f, phone:""})),
 };
 
@@ -981,7 +985,8 @@ function RefreshReminder({ compact, dayNotes }) {
 // Only BUILT-IN labels carry generation effects; custom labels are visual only.
 //   easy    → exclude "involved" meals (long-standing behavior, via effortMap)
 //   grill   → allow + boost grillable meals (otherwise they're gated out)
-//   special → prefer higher-effort / favorite meals
+//   special → visual label only; no generation effect (a plain label to guide
+//             manual selection, same as a custom pill)
 // Auto-derivation runs ONCE at plan start; after that a day's `touched` flag
 // means the user's edits always win and regeneration never clobbers them.
 const BUILTIN_PILLS = ["easy","grill","special"];
@@ -1069,7 +1074,6 @@ function getMealSuggestions(awayHome, meals, days, effortMap, alreadyPlanned = [
     const dayIsHot  = !!fc && fc.hi >= 82;
     const dayIsCold = !!fc && fc.hi <= 55;
     const grillOk   = hasPill(dayPills, day, "grill");
-    const isSpecial = hasPill(dayPills, day, "special");
     const easyPill  = hasPill(dayPills, day, "easy") || effort === "easy";
     const candidates    = pool.filter(m => {
       if (used.has(m.name)) return false;
@@ -1106,8 +1110,6 @@ function getMealSuggestions(awayHome, meals, days, effortMap, alreadyPlanned = [
         if (dayIsCold) { if (aff === "comfort") w *= 2.2; if (aff === "light") w *= 0.4; }
         if (dayIsHot)  { if (aff === "light")   w *= 2.2; if (aff === "comfort") w *= 0.4; }
         if (grillOk && m.grillable) w *= 1.8;
-        // "special" nudges toward higher-effort and well-liked meals.
-        if (isSpecial) { if (m.effort === "involved") w *= 1.8; w *= 1 + Math.max(0, favScore(m)) * 0.2; }
         w *= 1 + Math.max(0, favScore(m)) * 0.25;   // favorites lean up, never below base
         return w;
       };
@@ -3817,6 +3819,14 @@ function ManageConfig({ db, persistDB }) {
           <input type="range" min={100} max={500} step={10} value={db.settings.budgetLimit} onChange={e => upd("budgetLimit",Number(e.target.value))} style={{ width:"100%" }} />
           <div style={{ display:"flex", justifyContent:"space-between", fontSize:12, color:C.faint }}><span>$100</span><span style={{ fontWeight:700, color:C.primary }}>${db.settings.budgetLimit}</span><span>$500</span></div>
         </FieldGroup>
+      </div>
+
+      <div style={S.card}>
+        <div style={S.sectionLabel}>Cooking</div>
+        <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"10px 0" }}>
+          <div><div style={{ fontWeight:600 }}>Grill season open</div><div style={{ fontSize:12, color:C.faint }}>Turn off when you close the grill for the year. Grillable meals need this and grill weather.</div></div>
+          <Toggle value={db.settings.grillOpen !== false} onChange={v => upd("grillOpen",v)} />
+        </div>
       </div>
 
       <div style={S.card}>

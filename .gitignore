@@ -24,7 +24,7 @@ side-retag-RESULT.json
 # the offline engine workspace: composeWeek, its adapter, the validation harness.
 # At integration the engine's one app-required file moves into src/ — nothing here
 # is ever committed from this path.
-engine/
+/engine/
 
 # design, model and spec documents — handed between chats by James, not by git
 MODEL-*.md
@@ -43,3 +43,7 @@ build-plan-page.js
 
 # this working note (contains the pre-purge SHAs)
 GITHUB-SUPPORT-REQUEST.md
+
+# exported app databases (real names, preferences, notes) — the live DB lives in
+# the browser; exports are hand-carried working files, never committed
+grocery_db*.json
