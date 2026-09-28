@@ -147,7 +147,9 @@ export const indexByName = (meals) => new Map(meals.map((m) => [nameKey(m.name),
 // the export and the family Shortcut read that. `plates` ANNOTATES it, per day:
 //
 //   plates[day] = { mainId, leftovers: string[],
-//                   dishes: [{ name, mealId, role, carries?, source, why: string[] }] }
+//                   dishes: [{ name, mealId, role, carries?, source, why: Reason[] }] }
+//   Reason = { factor, tier, role, visibility, text } — the engine's rationale items for
+//   that dish at placement (C2 shows `always` ones by default, all of them in learn mode).
 //
 // dishes[i] describes mealPlan[day][i]. `carries` is SNAPSHOTTED when the dish is
 // placed — that snapshot, never the meal's current tags, is what later weeks read as
@@ -206,7 +208,7 @@ export function reconcilePlates(prevMealPlan = {}, nextMealPlan = {}, prevPlates
 /**
  * composeWeek output → plate annotations for reconcilePlates, one per day that got
  * dishes. `dateOfDay` maps day abbr → ISO date. Each dish records why it is there (the
- * engine's rationale text for that day+meal); a side is "floor-fill" when the engine
+ * engine's rationale items for that day+meal, minus the day/meal keys); a side is "floor-fill" when the engine
  * placed it to cover someone who won't eat the main, else "accompaniment". A day's
  * carried-in leftovers (who is covered by what) become its `leftovers` notes.
  */
@@ -227,7 +229,7 @@ export function platesFromCompose(out, dateOfDay, dbMeals = []) {
           name: m.name, mealId: p.mealId, role: p.role,
           ...(carries ? { carries: { ...carries } } : {}),
           source: p.role === 'main' ? 'engine' : mine.some((r) => r.factor === 'floor-fill') ? 'floor-fill' : 'accompaniment',
-          why: mine.map((r) => r.text),
+          why: mine.map(({ factor, tier, role, visibility, text }) => ({ factor, tier, role, visibility, text })),
         };
       }).filter(Boolean),
       leftovers: rat.filter((r) => r.factor === 'carried-leftover-fill').map((r) => r.text),
@@ -235,6 +237,9 @@ export function platesFromCompose(out, dateOfDay, dbMeals = []) {
   }
   return ann;
 }
+
+/** A dish's reasons as Reason objects (plates from before C2 stored plain strings). */
+export const reasonsOf = (dish) => (dish?.why || []).map((w) => (typeof w === 'string' ? { text: w, visibility: 'quiet' } : w));
 
 /** A day's names → PlacedDish[]. Carries come ONLY from a matching plate snapshot. */
 function placeDay(names, plate, byName, unknown) {
@@ -393,14 +398,16 @@ export const buildConfig = ({ grillOpen, adventurousWeek, today, weekStartDate }
  * from the app DB. `plan` may be the live-editing copy (PlanTab's state) rather than the
  * stored one. `today` is passed in (local date) — nothing here reads the clock.
  */
-export function assembleComposeInputs({ db, planKey, plan, forecastByDate = {}, seenThisSession = [], today, days }) {
+export function assembleComposeInputs({ db, planKey, plan, forecastByDate = {}, seenThisSession = [], today, days, onlyDays }) {
   const settings = db.settings || {};
   const target = plan || db.plans?.[planKey];
   if (!target || !target.weekStartDate) throw new Error('assembleComposeInputs: no plan with a weekStartDate');
 
   const m = toEngineMeals(db.meals);
   const byName = indexByName(m.meals);
-  const order = days || Object.keys(weekDates(target.weekStartDate));
+  // onlyDays restricts the schedule (the week CHECK passes just the planned days, so the
+  // engine never invents plates for empty ones).
+  const order = (days || Object.keys(weekDates(target.weekStartDate))).filter((d) => !onlyDays || onlyDays.includes(d));
 
   // Any other plan that starts BEFORE the target is still-unarchived recent history.
   const other = planKey === 'next' ? db.plans?.current : null;
@@ -421,6 +428,40 @@ export function assembleComposeInputs({ db, planKey, plan, forecastByDate = {}, 
     notes: [...m.notes, ...h.notes, ...s.notes, ...ss.notes],
     byName,
   };
+}
+
+/**
+ * WEEK CHECK (REFACTOR C2): the week-shape observations for the plan AS IT STANDS —
+ * recommended and hand-placed together — without changing it.
+ *
+ * Only the planned days are scheduled, so empty days are never invented. One engine
+ * behaviour to be honest about: composeWeek completes a planned day that has a main
+ * but no sides (and picks a main for a day that has only sides), and its floor
+ * observation counts what it added. Rather than hide that, the dishes the check added
+ * are returned as `assumed[day]`, and the UI says the check assumes them.
+ */
+export function checkWeek(composeWeek, { db, planKey, plan, forecastByDate = {}, today, days }) {
+  const planned = (days || []).filter((d) => (plan?.mealPlan?.[d] || []).length);
+  if (!planned.length) return { planned: 0, observations: [], assumed: {}, leftovers: {} };
+  const dates = weekDates(plan.weekStartDate);
+  const { args, notes } = assembleComposeInputs({ db, planKey, plan, forecastByDate, seenThisSession: [], today, days, onlyDays: planned });
+  const out = runComposeWeek(composeWeek, args, notes);
+  const byId = new Map(args[0].map((m) => [m.id, m]));
+  const assumed = {}, leftovers = {};
+  for (const d of planned) {
+    const iso = dates[d];
+    const onPlan = new Set(((args[3].alreadyPlaced || {})[iso] || []).map((p) => p.mealId));
+    const extra = ((out.week || {})[iso] || []).filter((p) => !onPlan.has(p.mealId));
+    if (extra.length) {
+      assumed[d] = extra.map((p) => ({
+        name: byId.get(p.mealId)?.name || p.mealId, role: p.role,
+        why: (out.rationale || []).filter((r) => r.day === iso && r.mealId === p.mealId).map((r) => r.text),
+      }));
+    }
+    const lo = (out.rationale || []).filter((r) => r.day === iso && r.factor === 'carried-leftover-fill').map((r) => r.text);
+    if (lo.length) leftovers[d] = lo;
+  }
+  return { planned: planned.length, observations: out.observations || [], assumed, leftovers };
 }
 
 /**

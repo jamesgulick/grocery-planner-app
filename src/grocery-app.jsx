@@ -1,7 +1,7 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useMemo } from "react";
 // Engine input assembly (REFACTOR B3). The time-level and presence rules live there so
 // the app's UI and the engine's inputs can never disagree about them.
-import { TIME_LEVELS, seedTimeLevel, presentOn, abbrOfISO, assembleComposeInputs, runComposeWeek, reconcilePlates, platesFromCompose } from "./engine/assembleInputs.js";
+import { TIME_LEVELS, seedTimeLevel, presentOn, abbrOfISO, assembleComposeInputs, runComposeWeek, reconcilePlates, platesFromCompose, checkWeek, reasonsOf } from "./engine/assembleInputs.js";
 // The validated week-composition engine (REFACTOR S1). Shipped unchanged; called only
 // through runComposeWeek, which assembles and guards its inputs.
 import { composeWeek, CONSTANTS as ENGINE } from "./engine/composeWeek.js";
@@ -1790,6 +1790,44 @@ function AutoGrowTextarea({ value, onChange, placeholder, style }) {
   );
 }
 
+// Engine text names dates as ISO ("carried from 2026-09-26"); show them as "Sat 9/26".
+const prettyDates = text => String(text || "").replace(/\b(\d{4})-(\d{2})-(\d{2})\b/g,
+  (iso, y, m, d) => `${abbrOfISO(iso)} ${Number(m)}/${Number(d)}`);
+
+// WEEK CHECK panel (REFACTOR C2). The engine rates each observation; this maps severity
+// to presentation, quiet by default: concerns always shown, "ok" as a short check line,
+// info folded away behind a count. Learn mode ("Show reasoning") turns on the full
+// per-dish rationale on the day cards.
+function WeekCheckPanel({ check, total, showInfo, setShowInfo, learnMode, setLearnMode }) {
+  const obs      = check?.observations || [];
+  const concerns = obs.filter(o => o.severity === "concern");
+  const oks      = obs.filter(o => o.severity === "ok");
+  const infos    = obs.filter(o => o.severity === "info");
+  const assumed  = Object.keys(check?.assumed || {});
+  const line = (bg, color) => ({ fontSize:12, lineHeight:1.45, padding:"6px 8px", marginTop:4, borderRadius:6, background:bg, color });
+  return (
+    <div style={S.card}>
+      <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", gap:8, flexWrap:"wrap" }}>
+        <div style={{ ...S.sectionLabel, marginBottom:0 }}>Week check · {check?.planned || 0} of {total} days planned</div>
+        <button style={{ ...S.btnSm, padding:"2px 10px", fontSize:11, background:learnMode?C.primaryLight:"#FFF", color:learnMode?C.primary:C.muted, border:`1px solid ${learnMode?C.primary:C.border}`, fontWeight:learnMode?700:500 }}
+          onClick={() => setLearnMode(!learnMode)} title="Show why each meal and side is where it is">{learnMode ? "✓ Show reasoning" : "Show reasoning"}</button>
+      </div>
+      {!check?.planned && <div style={{ fontSize:12, color:C.faint, marginTop:6 }}>Plan or fill some days to check the week.</div>}
+      {concerns.map((o, k) => <div key={"c"+k} style={line(C.warningLight, C.warning)}>⚠ {prettyDates(o.text)}</div>)}
+      {oks.map((o, k) => <div key={"o"+k} style={line("#F0FAF4", C.primary)}>✓ {prettyDates(o.text)}</div>)}
+      {assumed.length > 0 && (
+        <div style={line("#F3F4F6", C.muted)}>ℹ This check assumes the suggested {assumed.length === 1 ? "dish" : "dishes"} shown on {assumed.join(", ")} (not on your plan yet). Add or skip {assumed.length === 1 ? "it" : "them"} and the check updates.</div>
+      )}
+      {infos.length > 0 && (
+        <button style={{ background:"none", border:"none", color:C.muted, fontSize:12, cursor:"pointer", padding:"6px 0 0", textAlign:"left" }} onClick={() => setShowInfo(!showInfo)}>
+          {showInfo ? "▾" : "▸"} {infos.length} more {infos.length === 1 ? "note" : "notes"} about this week
+        </button>
+      )}
+      {showInfo && infos.map((o, k) => <div key={"i"+k} style={line("#F9FAFB", C.muted)}>ℹ {prettyDates(o.text)}</div>)}
+    </div>
+  );
+}
+
 // A side's job on the plate, labelled distinctly (REFACTOR C1): a FLOOR-FILL side is
 // there because someone present won't eat the main; an ACCOMPANIMENT goes with the
 // main. A side placed by hand just says "side". The engine's own sentence for why it
@@ -1864,9 +1902,12 @@ function PlanMeals({ mealPlan, plates, setMealPlan, commitMealToPlan, timeLevels
   // — the model resets session-seen per planning sitting, so this is the one piece of
   // Meals-step state that deliberately is NOT lifted into the persisted plan.
   const [seenThisSession, setSeenThisSession] = useState([]);
-  // Stopgap until the observation/rationale panels (REFACTOR C2): concerns and
-  // always-visible rationale from the last fill, so nothing the engine flags is silent.
-  const [composeNotes, setComposeNotes] = useState([]);
+  // Problems from the last FILL itself (bad inputs, an engine error). Everything else
+  // the engine says about the week comes from the live week check below (REFACTOR C2).
+  const [fillNotes, setFillNotes] = useState([]);
+  const [showWeekInfo, setShowWeekInfo] = useState(false);
+  const learnMode = !!db.settings?.learnMode;
+  const setLearnMode = v => persistDB({ ...db, settings: { ...db.settings, learnMode: v } });
   // Live weather: fetch once on mount (cached 6h). Falls back to {} when blocked
   // or offline, which every consumer treats as neutral. See fetchLiveForecast.
   // NOTE: declared BEFORE regenerate and the day cards, which read them — const has
@@ -1908,6 +1949,17 @@ function PlanMeals({ mealPlan, plates, setMealPlan, commitMealToPlan, timeLevels
     .filter(([abbr]) => forecastDates[abbr]).map(([abbr, fc]) => [forecastDates[abbr], fc]));
   const grillOpen = db.settings?.grillOpen !== false;
 
+  // WEEK CHECK (REFACTOR C2): observations for the plan as it stands — hand-placed and
+  // recommended together — recomputed whenever anything it reads changes. Declared
+  // after forecastByDate/dateOfDay, which it reads (TDZ).
+  const forecastKey = JSON.stringify(forecastByDate);
+  const weekCheck = useMemo(() => {
+    const planKey = db.activePlan || "current";
+    const plan = { ...(db.plans?.[planKey] || {}), weekStartDate, mealPlan, plates, timeLevels, presence, adventurousWeek };
+    if (!weekStartDate) return { planned: 0, observations: [], assumed: {}, leftovers: {} };
+    return checkWeek(composeWeek, { db, planKey, plan, forecastByDate, today: todayLocalISO(), days });
+  }, [mealPlan, plates, timeLevels, presence, adventurousWeek, forecastKey, db.meals, db.settings, db.planTail, db.mealHistory, weekStartDate]);
+
   // Fill every EMPTY day with a composed plate (REFACTOR S1 — composeWeek replaces the
   // old weighted-random getMealSuggestions). Days that already have anything on them are
   // never touched: they go to the engine as fixed context (alreadyPlaced), so spacing,
@@ -1935,12 +1987,7 @@ function PlanMeals({ mealPlan, plates, setMealPlan, commitMealToPlan, timeLevels
       return next;
     }, annotations);
     setSeenThisSession(out.sessionState?.seenThisSession || seenThisSession);
-    const filled = new Set(days.filter(d => !(mealPlan[d] || []).length).map(d => dateOfDay[d]));
-    setComposeNotes([
-      ...out.observations.filter(o => o.severity === "concern"),
-      ...out.rationale.filter(r => r.visibility === "always" && filled.has(r.day))
-        .map(r => ({ property: r.factor, severity: "info", text: `${abbrOfISO(r.day)}: ${r.text}` })),
-    ]);
+    setFillNotes(out.observations.filter(o => o.severity === "concern" && (o.property === "engine" || o.property === "input" || o.property === "pool")));
     setLoading(false);
   };
 
@@ -2028,16 +2075,11 @@ function PlanMeals({ mealPlan, plates, setMealPlan, commitMealToPlan, timeLevels
           <Toggle value={!!adventurousWeek} onChange={v => setAdventurousWeek(v)} />
         </div>
         <button style={{ ...S.btn, ...S.btnS, marginBottom:0 }} onClick={regenerate} disabled={loading}>{loading?"Thinking...":"Regenerate empty days"}</button>
-        {composeNotes.length > 0 && (
-          <div style={{ marginTop:10 }}>
-            {composeNotes.map((n, k) => (
-              <div key={k} style={{ fontSize:12, lineHeight:1.45, padding:"6px 8px", marginTop:4, borderRadius:6, color: n.severity === "concern" ? C.warning : C.muted, background: n.severity === "concern" ? C.warningLight : "#F3F4F6" }}>
-                {n.severity === "concern" ? "⚠ " : "ℹ "}{n.text}
-              </div>
-            ))}
-          </div>
-        )}
+        {fillNotes.map((n, k) => (
+          <div key={k} style={{ fontSize:12, lineHeight:1.45, padding:"6px 8px", marginTop:8, borderRadius:6, color:C.warning, background:C.warningLight }}>⚠ {prettyDates(n.text)}</div>
+        ))}
       </div>
+      <WeekCheckPanel check={weekCheck} total={days.length} showInfo={showWeekInfo} setShowInfo={setShowWeekInfo} learnMode={learnMode} setLearnMode={setLearnMode} />
       {totalMeals === 0 && <button style={{ ...S.btn, ...S.btnP }} onClick={regenerate}>Generate meal plan</button>}
       {days.map((day, i) => {
         const dayMeals      = mealPlan[day] || [];
@@ -2052,6 +2094,14 @@ function PlanMeals({ mealPlan, plates, setMealPlan, commitMealToPlan, timeLevels
         const plate         = plates?.[day];
         const dishAt        = idx => (plate?.dishes?.[idx]?.name === dayMeals[idx] ? plate.dishes[idx] : null);
         const isSide        = idx => (dishAt(idx)?.role || (allMeals.find(m => m.name === dayMeals[idx])?.type === "side" ? "side" : "main")) === "side";
+        // Why each dish is here (REFACTOR C2), from the reasons saved when it was placed.
+        // A side's headline reason is its floor-fill/affinity sentence. Other reasons the
+        // engine marked "always" show by default; learn mode shows every reason.
+        const reasons       = idx => reasonsOf(dishAt(idx));
+        const headline      = idx => isSide(idx) ? (reasons(idx).find(r => r.factor === "floor-fill" || r.factor === "affinity") || reasons(idx)[0]) : null;
+        const extraReasons  = idx => reasons(idx).filter(r => r !== headline(idx) && (learnMode || r.visibility === "always"));
+        const dayLeftovers  = weekCheck.leftovers?.[day] || [];
+        const dayAssumed    = weekCheck.assumed?.[day] || [];
         return (
           <div key={day} style={S.mealCard(timeLevel === "none" ? "easy" : "medium")}>
             <div style={{ fontSize:11, fontWeight:700, color:C.accentMuted, letterSpacing:"0.06em", textTransform:"uppercase", marginBottom:4 }}>
@@ -2137,7 +2187,12 @@ function PlanMeals({ mealPlan, plates, setMealPlan, commitMealToPlan, timeLevels
                           {meal}
                           {sideBadge(dishAt(mealIdx))}
                         </div>
-                        {isSide(mealIdx) && dishAt(mealIdx)?.why?.[0] && <div style={{ fontSize:11, color:C.faint, lineHeight:1.35 }}>{dishAt(mealIdx).why[0]}</div>}
+                        {headline(mealIdx) && <div style={{ fontSize:11, color:C.faint, lineHeight:1.35 }}>{prettyDates(headline(mealIdx).text)}</div>}
+                        {extraReasons(mealIdx).map((r, k) => (
+                          <div key={k} style={{ fontSize:11, lineHeight:1.35, color: r.visibility === "always" ? C.muted : C.faint }}>
+                            {learnMode && r.tier ? <span style={{ fontWeight:600 }}>{r.tier} · {r.role}: </span> : "• "}{prettyDates(r.text)}
+                          </div>
+                        ))}
                       </div>
                       <button style={{ ...S.btnSm, background:"none", border:`1px solid ${C.border}`, color:C.muted, fontSize:11 }} onClick={() => setMoving({day,mealIdx})}>Move</button>
                       <button style={{ ...S.btnSm, background:"none", border:`1px solid ${C.border}`, color:C.muted, fontSize:11 }} onClick={() => setEditing({day,mealIdx})}>Change</button>
@@ -2147,10 +2202,15 @@ function PlanMeals({ mealPlan, plates, setMealPlan, commitMealToPlan, timeLevels
                 </div>
               );
             })}
-            {(plate?.leftovers || []).length > 0 && dayMeals.length > 0 && (
+            {(dayLeftovers.length > 0 || dayAssumed.length > 0) && dayMeals.length > 0 && (
               <div style={{ marginTop:6 }}>
-                {plate.leftovers.map((t, k) => (
-                  <div key={k} style={{ fontSize:11, color:C.muted, lineHeight:1.4 }}>🥡 {t}</div>
+                {dayLeftovers.map((t, k) => (
+                  <div key={"l"+k} style={{ fontSize:11, color:C.muted, lineHeight:1.4 }}>🥡 {prettyDates(t)}</div>
+                ))}
+                {dayAssumed.map((a, k) => (
+                  <div key={"a"+k} style={{ fontSize:11, color:C.faint, lineHeight:1.4, fontStyle:"italic" }}>
+                    Week check assumes {a.role === "side" ? "side" : "main"}: {a.name}{a.why?.[0] ? ` — ${prettyDates(a.why[0])}` : ""}
+                  </div>
                 ))}
               </div>
             )}
