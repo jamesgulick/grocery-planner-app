@@ -1,4 +1,7 @@
 import React, { useState, useEffect, useRef } from "react";
+// Engine input assembly (REFACTOR B3). The time-level and presence rules live there so
+// the app's UI and the engine's inputs can never disagree about them.
+import { TIME_LEVELS, seedTimeLevel, presentOn } from "./engine/assembleInputs.js";
 
 // ── Globals ────────────────────────────────────────────────────────────────────
 
@@ -65,10 +68,8 @@ const PLAN_STEPS       = ["Welcome","Meals","Inventory","Confirm","Sparky"];
 
 // Per-day time to cook (REFACTOR B1) — replaces the old binary `easy` pill and the
 // hidden "shopping day + Mon + Tue are easy" rule. Only "much" unlocks involved
-// meals. The weekday seed is a UI default the owner overrides; the engine reads
-// the level, never the weekday.
-const TIME_LEVELS    = ["none","some","much"];
-const seedTimeLevel  = day => (day === "Sat" || day === "Sun") ? "much" : (day === "Mon" || day === "Tue") ? "none" : "some";
+// meals. The weekday seed (seedTimeLevel, imported) is a UI default the owner
+// overrides; the engine reads the level, never the weekday.
 const seedTimeLevels = () => Object.fromEntries(DAYS_ALL.map(d => [d, seedTimeLevel(d)]));
 
 const isPC = () => !/Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent);
@@ -618,19 +619,9 @@ const resolvePlanForDate = (db, dateISO) => {
   return db.plans?.current || null;
 };
 
-// ── Presence (REFACTOR B2) ─────────────────────────────────────────────────────
-// Who is home for dinner, per day × per person, for EVERY roster member (no
-// partner/away-member special cases). Most specific layer wins:
-//   1. presence[day][name] — an explicit per-night toggle on the Meals day card
-//   2. settings.awayRanges — date-range bulk-set ("at college X–Y"), open ends allowed
-//   3. otherwise present
-const inAwayRange = (ranges, name, dateISO) =>
-  !!dateISO && (ranges || []).some(r => r.name === name && (!r.from || dateISO >= r.from) && (!r.to || dateISO <= r.to));
-const presentOn = (presence, ranges, name, day, dateISO) => {
-  const o = presence?.[day]?.[name];
-  if (typeof o === "boolean") return o;
-  return !inAwayRange(ranges, name, dateISO);
-};
+// Presence (REFACTOR B2): who is home, per day × per person, for every roster member.
+// presentOn (imported from ./engine/assembleInputs.js) resolves a per-night toggle,
+// then a settings.awayRanges period, then defaults to present.
 
 // Plan count that tolerates both the legacy array shape (pre-migration db, e.g.
 // an old recovery snapshot or pasted import awaiting confirmation) and the
