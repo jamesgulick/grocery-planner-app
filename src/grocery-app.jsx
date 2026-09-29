@@ -2002,6 +2002,93 @@ function PlanMeals({ mealPlan, plates, setMealPlan, commitMealToPlan, timeLevels
     setLoading(false);
   };
 
+  // ── Plate-granular reroll (REFACTOR C3) ──────────────────────────────────────
+  // The global fill above touches only empty days; anything already on a day is edited
+  // here, one part at a time, so a fill can never clobber a plate James has tuned.
+  //
+  // Each action composes ONE target day: the day is scheduled with whatever it keeps,
+  // every other PLANNED day is fixed context (spacing, leftovers, the floor), and empty
+  // days are left out so the engine doesn't fill them first and use up candidates.
+  // composeWeek only suggests sides for a day that has none, so actions that want the
+  // engine's sides pass the day with its main alone.
+  const mealRec   = name => (db.meals || []).find(m => m.name.trim() === String(name).trim());
+  const dishesOf  = day => (mealPlan[day] || []).map((n, i) => {
+    const p = plates?.[day]?.dishes?.[i];
+    const d = p && p.name === n ? p : null;
+    return { name: n, mealId: d?.mealId || mealRec(n)?.id, role: d?.role || (mealRec(n)?.type === "side" ? "side" : "main"), source: d?.source || "manual" };
+  });
+  const composeOneDay = (day, keep, extraSeen = []) => {
+    const planKey = db.activePlan || "current";
+    const mp = { ...mealPlan, [day]: keep };
+    const onlyDays = days.filter(d => d === day || (mp[d] || []).length);
+    const plan = { ...(db.plans?.[planKey] || {}), weekStartDate, mealPlan: mp, plates, timeLevels, presence, adventurousWeek };
+    const seen = [...new Set([...seenThisSession, ...extraSeen.filter(Boolean)])];
+    let out;
+    try {
+      const { args, notes } = assembleComposeInputs({ db, planKey, plan, forecastByDate, seenThisSession: seen, today: todayLocalISO(), days, onlyDays });
+      out = runComposeWeek(composeWeek, args, notes);
+    } catch (e) {
+      out = { week: {}, sessionState: { seenThisSession: seen }, rationale: [], observations: [{ property: "input", severity: "concern", text: `Couldn't prepare the planner's inputs: ${e.message}` }] };
+    }
+    setSeenThisSession(out.sessionState?.seenThisSession || seen);
+    const errs = out.observations.filter(o => o.severity === "concern" && (o.property === "engine" || o.property === "input" || o.property === "pool"));
+    const ann = platesFromCompose(out, { [day]: dateOfDay[day] }, db.meals || [])[day] || { dishes: [], leftovers: [] };
+    return { ann, errs };
+  };
+  const dayNote = (day, text) => setFillNotes([{ property: "plate", severity: "concern", text: `${abbrOfISO(dateOfDay[day])} ${Number(dateOfDay[day].slice(5, 7))}/${Number(dateOfDay[day].slice(8))}: ${text}` }]);
+  // Apply new names for a day, carrying annotations only for the dishes the engine just
+  // placed; kept dishes keep their existing plate entries (reconcilePlates).
+  const applyDay = (day, names, newDishes, leftovers) => {
+    setFillNotes([]);
+    setMealPlan(prev => ({ ...prev, [day]: names }),
+      { [day]: { dishes: newDishes, leftovers: leftovers || [] } });
+  };
+
+  // Empty day → compose a fresh plate for it alone.
+  const fillDay = day => {
+    const { ann, errs } = composeOneDay(day, []);
+    if (!ann.dishes.length) { setFillNotes(errs.length ? errs : []); if (!errs.length) dayNote(day, "nothing eligible could be placed"); return; }
+    applyDay(day, ann.dishes.map(d => d.name), ann.dishes, ann.leftovers);
+  };
+
+  // ⟳ main → a different main; the engine's sides re-follow it. Sides placed by hand
+  // stay (they're James's), and with any kept the engine adds no sides of its own.
+  const rerollMain = day => {
+    const cur = dishesOf(day);
+    const main = cur.find(d => d.role === "main");
+    const keptSides = cur.filter(d => d.role === "side" && d.source === "manual");
+    const { ann, errs } = composeOneDay(day, keptSides.map(d => d.name), [main?.mealId]);
+    const newMain = ann.dishes.find(d => d.role === "main" && d.mealId !== main?.mealId);
+    if (!newMain) { if (errs.length) setFillNotes(errs); else dayNote(day, "no other main fits this day"); return; }
+    const newSides = ann.dishes.filter(d => d.role === "side" && !keptSides.some(k => k.name === d.name));
+    applyDay(day, [newMain.name, ...keptSides.map(d => d.name), ...newSides.map(d => d.name)], [newMain, ...newSides], ann.leftovers);
+  };
+
+  // ⟳ side → swap just that side for another the engine would put with this main.
+  const rerollSide = (day, idx) => {
+    const cur = dishesOf(day);
+    const main = cur.find(d => d.role === "main");
+    const side = cur[idx];
+    if (!main || !side) return;
+    const { ann } = composeOneDay(day, [main.name], [side.mealId]);
+    const onPlate = new Set(cur.map(d => d.name.trim()));
+    const pick = ann.dishes.find(d => d.role === "side" && !onPlate.has(d.name.trim()));
+    if (!pick) { dayNote(day, `no other side fits with ${main.name.trim()}`); return; }
+    const names = cur.map(d => d.name); names[idx] = pick.name;
+    applyDay(day, names, [pick], null);
+  };
+
+  // Main present, no sides → complete the plate with the engine's sides for that main.
+  const suggestSides = day => {
+    const cur = dishesOf(day);
+    const main = cur.find(d => d.role === "main");
+    if (!main) return;
+    const { ann } = composeOneDay(day, [main.name]);
+    const sides = ann.dishes.filter(d => d.role === "side");
+    if (!sides.length) { dayNote(day, `${main.name.trim()} needs no sides — it covers everyone present and nothing pairs with it`); return; }
+    applyDay(day, [...cur.map(d => d.name), ...sides.map(d => d.name)], sides, ann.leftovers);
+  };
+
   const [draftSms, setDraftSms] = useState(null);
   const [draftCopied, setDraftCopied] = useState(false);
   const textDraftPlan = () => {
@@ -2085,7 +2172,7 @@ function PlanMeals({ mealPlan, plates, setMealPlan, commitMealToPlan, timeLevels
           <div><div style={{ fontWeight:600, fontSize:14 }}>Adventurous week</div><div style={{ fontSize:12, color:C.faint }}>Place one meal you haven't tried yet</div></div>
           <Toggle value={!!adventurousWeek} onChange={v => setAdventurousWeek(v)} />
         </div>
-        <button style={{ ...S.btn, ...S.btnS, marginBottom:0 }} onClick={regenerate} disabled={loading}>{loading?"Thinking...":"Regenerate empty days"}</button>
+        <button style={{ ...S.btn, ...S.btnS, marginBottom:0 }} onClick={regenerate} disabled={loading}>{loading?"Thinking...":"Fill empty days"}</button>
         {fillNotes.map((n, k) => (
           <div key={k} style={{ fontSize:12, lineHeight:1.45, padding:"6px 8px", marginTop:8, borderRadius:6, color:C.warning, background:C.warningLight }}>⚠ {prettyDates(n.text)}</div>
         ))}
@@ -2204,6 +2291,7 @@ function PlanMeals({ mealPlan, plates, setMealPlan, commitMealToPlan, timeLevels
                           </div>
                         ))}
                       </div>
+                      <button title={isSide(mealIdx) ? "Swap this side for another" : "Try a different main (its sides follow)"} style={{ ...S.btnSm, background:"none", border:`1px solid ${C.border}`, color:C.muted, fontSize:12, padding:"4px 8px" }} onClick={() => (isSide(mealIdx) ? rerollSide(day, mealIdx) : rerollMain(day))}>⟳</button>
                       <button style={{ ...S.btnSm, background:"none", border:`1px solid ${C.border}`, color:C.muted, fontSize:11 }} onClick={() => setMoving({day,mealIdx})}>Move</button>
                       <button style={{ ...S.btnSm, background:"none", border:`1px solid ${C.border}`, color:C.muted, fontSize:11 }} onClick={() => setEditing({day,mealIdx})}>Change</button>
                       <button style={{ background:"none", border:"none", color:C.faint, fontSize:18, cursor:"pointer", padding:"0 4px" }} onClick={() => removeMeal(day,mealIdx)}>×</button>
@@ -2219,10 +2307,18 @@ function PlanMeals({ mealPlan, plates, setMealPlan, commitMealToPlan, timeLevels
                 ))}
               </div>
             )}
+            {!isEditingNew && dayMeals.length > 0 && !dayMeals.some((_, k) => isSide(k)) && (
+              <button style={{ background:"none", border:"none", color:C.primary, fontSize:12, fontWeight:600, cursor:"pointer", padding:"6px 0 0" }} onClick={() => suggestSides(day)}>+ Suggest sides</button>
+            )}
             {isEditingNew ? <MealSearch day={day} /> : (
-              <button style={{ background:"none", border:`1.5px dashed ${C.border}`, borderRadius:8, padding:"6px 12px", fontSize:13, cursor:"pointer", color:C.faint, marginTop:8, width:"100%" }} onClick={() => setEditing({day, mealIdx:null})}>
-                + Add meal
-              </button>
+              <div style={{ display:"flex", gap:8, marginTop:8 }}>
+                {dayMeals.length === 0 && (
+                  <button style={{ background:C.primaryLight, border:`1.5px solid ${C.primaryLight}`, borderRadius:8, padding:"6px 12px", fontSize:13, cursor:"pointer", color:C.primary, fontWeight:600, flex:"0 0 auto" }} onClick={() => fillDay(day)}>⟳ Fill this day</button>
+                )}
+                <button style={{ background:"none", border:`1.5px dashed ${C.border}`, borderRadius:8, padding:"6px 12px", fontSize:13, cursor:"pointer", color:C.faint, flex:1 }} onClick={() => setEditing({day, mealIdx:null})}>
+                  + Add meal
+                </button>
+              </div>
             )}
           </div>
         );
