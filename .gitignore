@@ -39,6 +39,7 @@ CORPUS-EDITS-*.md
 BACKLOG.md
 *-BRIEF-*.md
 INTEGRATION-*.md
+POST-INTEGRATION*.md
 build-plan-page.js
 *.pdf
 
