@@ -700,7 +700,15 @@ function toPlacedDish(meal, role) {
   return dish;
 }
 
-/** Present people with nothing acceptable on `date`, counting the plate and leftovers. */
+/**
+ * Present people with nothing acceptable on `date`, counting the plate and leftovers.
+ *
+ * Only a dish that can HOLD a floor counts (canHoldFloor): a non-`substantial` side feeds
+ * nobody, whoever placed it. INTEGRATION RULING 10 (9/29) — a fix: this used to count any
+ * non-disliked dish, so a salad could read as "covering" someone and composeWeek's floor
+ * observation disagreed with evaluateWeek's. Behaviour-neutral on the corpus (0 of 182
+ * composed nights changed, 26 weeks) because floor-fill already draws only substantial sides.
+ */
 function gapsOnDay(date, ctx) {
   const cover = leftoverCoverage(date, ctx);
   const dishes = ctx.week[date] || [];
@@ -708,7 +716,7 @@ function gapsOnDay(date, ctx) {
     if (cover.has(person)) return false;
     return !dishes.some((p) => {
       const m = ctx.mealsById.get(p.mealId);
-      return m && feeds(m, person);
+      return m && canHoldFloor(m) && feeds(m, person);
     });
   });
 }
@@ -1632,8 +1640,10 @@ export function evaluateWeek(meals, history, schedule, plan, config) {
  * not uncovered — ruling 9: an `info` note plus a `floor-unknown` rationale item, never a
  * floor concern. Anyone else is uncovered: a floor `concern` (Ruling 7).
  *
- * A day with no main is an `info` note (ruling 8.1); it becomes a concern only through
- * the floor test above, i.e. when a present person is actually uncovered.
+ * A day with no main is an `info` note. Ruling 8.1 as clarified (9/29): an EMPTY day
+ * (nothing placed) is ONLY that note, never a floor concern — "have you filled this day?"
+ * and "does what you placed feed everyone?" are different questions. The floor test runs
+ * only on a day with something on it (a main and/or sides).
  */
 /** "A", "A and B", "A, B and C" */
 const nameList = (xs) => (xs.length < 3 ? xs.join(' and ') : `${xs.slice(0, -1).join(', ')} and ${xs[xs.length - 1]}`);
@@ -1657,7 +1667,7 @@ function evaluateDay(day, ctx, rationale, observations) {
   const gaps = [];
   const unknown = [];
   let untriedMain = null;
-  for (const person of ctx.presentPeople(day.date)) {
+  for (const person of placed.length ? ctx.presentPeople(day.date) : []) {
     if (cover.has(person)) continue;
     const knownFed = placed.some((p) => {
       const m = mealOf(p);
