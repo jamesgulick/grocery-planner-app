@@ -1569,6 +1569,141 @@ function emitWeekObservations(ctx, observations) {
   }
 }
 
+/* ================================================================== evaluate (as built) */
+
+/**
+ * @typedef {{observations: Observation[], rationale: RationaleItem[]}} EvaluateWeekOutput
+ */
+
+/**
+ * CROSS-CHECK A WEEK AS BUILT — contract v2.6–v2.8 `evaluateWeek`, model FLOOR CROSS-CHECK
+ * ruling (Ruling 7) and its EVALUATE-ONLY SEMANTICS (integration rulings 8.1–8.3, 9).
+ *
+ * The second entry point to the same floor logic: it composes NOTHING. No main or side is
+ * selected and no floor-fill is injected, so every observation describes `plan` exactly as
+ * James built it — an uncovered present person is a floor `concern`, never an `ok` that
+ * assumes a side the engine would have added. composeWeek is untouched; this reuses its
+ * context, leftover carry-back, per-day cross-check and week summary, and adds only the
+ * as-built floor judgement below.
+ *
+ * Scope is `schedule.days`; a missing `plan` key is an empty day, and `plan` entries for
+ * other dates are ignored. Leftovers inside the week come from each PlacedDish.carries in
+ * `plan` (snapshotted when placed), earlier ones from `history` — as in composeWeek.
+ *
+ * @param {Meal[]} meals
+ * @param {History} history
+ * @param {Schedule} schedule
+ * @param {Record<string, PlacedDish[]>} plan  the week as built, day-keyed
+ * @param {Config} config
+ * @returns {EvaluateWeekOutput}
+ */
+export function evaluateWeek(meals, history, schedule, plan, config) {
+  /** @type {Observation[]} */ const observations = [];
+  /** @type {RationaleItem[]} */ const rationale = [];
+
+  const ctx = buildContext(meals, history, schedule, { seenThisSession: [], alreadyPlaced: plan || {} }, config, observations);
+  let anyUnknown = false;
+  for (const day of ctx.days) {
+    if (evaluateDay(day, ctx, rationale, observations)) anyUnknown = true;
+  }
+  emitWeekObservations(ctx, observations);
+
+  // Ruling 9: unknown coverage is not a gap, but the week summary must not claim more
+  // than it knows. (Only evaluateWeek's own output is adjusted; the shared summary is not.)
+  if (anyUnknown) {
+    for (const o of observations) {
+      if (o.property === 'floor' && o.severity === 'ok') {
+        o.text = 'Everyone present has something acceptable every night, apart from coverage that is unknown (untried meals)';
+      }
+    }
+  }
+  return { observations, rationale };
+}
+
+/**
+ * One day, as built. Returns true when someone's coverage is unknown.
+ *
+ * WHO IS FED (the as-built floor):
+ *  - a covering leftover (leftoverCoverage — same rules as compose), or
+ *  - a dish on the plate that can hold a floor (canHoldFloor: a main, or a `substantial`
+ *    side — ruling 8.2: a non-substantial side holds nobody's floor, whoever placed it)
+ *    and that they don't dislike, and that isn't untried.
+ * An untried (`experimental`) main they haven't declared a dislike of leaves them UNKNOWN,
+ * not uncovered — ruling 9: an `info` note plus a `floor-unknown` rationale item, never a
+ * floor concern. Anyone else is uncovered: a floor `concern` (Ruling 7).
+ *
+ * A day with no main is an `info` note (ruling 8.1); it becomes a concern only through
+ * the floor test above, i.e. when a present person is actually uncovered.
+ */
+/** "A", "A and B", "A, B and C" */
+const nameList = (xs) => (xs.length < 3 ? xs.join(' and ') : `${xs.slice(0, -1).join(', ')} and ${xs[xs.length - 1]}`);
+
+function evaluateDay(day, ctx, rationale, observations) {
+  const placed = ctx.week[day.date] || [];
+  const mealOf = (p) => ctx.mealsById.get(p.mealId);
+  const mainDish = placed.find((p) => p.role === 'main');
+  const mainMeal = mainDish && mealOf(mainDish);
+
+  if (mainMeal) crossCheckDay(day, mainMeal, ctx, observations);
+  else {
+    observations.push({
+      property: 'unplanned',
+      severity: 'info',
+      text: placed.length ? `No main planned on ${day.date} (sides only)` : `Nothing planned on ${day.date} yet`,
+    });
+  }
+
+  const cover = leftoverCoverage(day.date, ctx);
+  const gaps = [];
+  const unknown = [];
+  let untriedMain = null;
+  for (const person of ctx.presentPeople(day.date)) {
+    if (cover.has(person)) continue;
+    const knownFed = placed.some((p) => {
+      const m = mealOf(p);
+      return m && canHoldFloor(m) && !inReserve(m) && feeds(m, person);
+    });
+    if (knownFed) continue;
+    const untried = placed.map(mealOf).find((m) => m && canHoldFloor(m) && inReserve(m) && !dislikes(m, person));
+    if (untried) { unknown.push(person); untriedMain = untriedMain || untried; continue; }
+    gaps.push(person);
+  }
+
+  if (gaps.length) {
+    ctx.floorGapDays.push(day.date);
+    observations.push({
+      property: 'floor',
+      severity: 'concern',
+      text: `${nameList(gaps)} ${gaps.length > 1 ? 'have' : 'has'} nothing acceptable on ${day.date}`,
+    });
+  }
+  if (unknown.length) {
+    observations.push({
+      property: 'floor',
+      severity: 'info',
+      text: `${day.date}: coverage is unknown for ${nameList(unknown)} — ${untriedMain.name} is untried`,
+    });
+    rationale.push({
+      day: day.date, mealId: untriedMain.id,
+      factor: 'floor-unknown', tier: 'floor', role: 'lean', visibility: 'always',
+      text: `nobody has tried this yet, so whether it feeds ${nameList(unknown)} is unknown`,
+    });
+  }
+
+  // Carried-in leftovers holding someone who is off the main — the same reasoning compose
+  // shows. With no main, every leftover that is covering someone is doing the holding.
+  for (const [person, src] of cover) {
+    if (mainMeal && feeds(mainMeal, person) && !inReserve(mainMeal)) continue;
+    const m = ctx.mealsById.get(src.mealId);
+    rationale.push({
+      day: day.date, mealId: src.mealId,
+      factor: 'carried-leftover-fill', tier: 'floor', role: 'decisive', visibility: 'always',
+      text: `${person} is covered by ${m ? m.name : src.mealId} carried from ${src.servedOn}`,
+    });
+  }
+  return unknown.length > 0;
+}
+
 /* ================================================================== vocabulary check */
 
 /**

@@ -431,58 +431,41 @@ export function assembleComposeInputs({ db, planKey, plan, forecastByDate = {}, 
 }
 
 /**
- * WEEK CHECK (REFACTOR C2): the week-shape observations for the plan AS IT STANDS —
- * recommended and hand-placed together — without changing it.
+ * WEEK CHECK (REFACTOR C2): the week's observations for the plan AS BUILT — hand-placed
+ * and recommended together — without changing it. Calls the engine's evaluateWeek
+ * (contract v2.6–v2.8), which composes nothing: an uncovered present person is a floor
+ * concern (Ruling 7), an empty day is an info note unless someone is actually uncovered
+ * (8.1), a non-substantial side holds nobody's floor (8.2), and an untried main reads
+ * coverage-unknown rather than uncovered (9). All seven days are checked.
  *
- * Only the planned days are scheduled, so empty days are never invented. One engine
- * behaviour to be honest about: composeWeek completes a planned day that has a main
- * but no sides (and picks a main for a day that has only sides), and its floor
- * observation counts what it added. The dishes the check added come back as
- * `assumed[day]` (the UI names them), and — INTEGRATION RULING 7 — any day whose
- * floor depended on one is reported as a floor CONCERN, replacing the engine's "ok".
- * This is the ruled stopgap; the real fix is an engine evaluate-only mode (routed to
- * the contract chat), at which point this adjustment goes away.
+ * Leftovers come from the plan's plate snapshots (buildSessionState), as the contract
+ * requires. Returns the observations (input notes first) and, per day abbr, the
+ * carried-leftover notes. Never throws.
  */
-export function checkWeek(composeWeek, { db, planKey, plan, forecastByDate = {}, today, days }) {
-  const planned = (days || []).filter((d) => (plan?.mealPlan?.[d] || []).length);
-  if (!planned.length) return { planned: 0, observations: [], assumed: {}, leftovers: {} };
-  const dates = weekDates(plan.weekStartDate);
-  const { args, notes } = assembleComposeInputs({ db, planKey, plan, forecastByDate, seenThisSession: [], today, days, onlyDays: planned });
-  const out = runComposeWeek(composeWeek, args, notes);
-  const byId = new Map(args[0].map((m) => [m.id, m]));
-  const assumed = {}, leftovers = {};
-  const asBuiltGaps = [];
-  for (const d of planned) {
-    const iso = dates[d];
-    const onPlan = new Set(((args[3].alreadyPlaced || {})[iso] || []).map((p) => p.mealId));
-    const extra = ((out.week || {})[iso] || []).filter((p) => !onPlan.has(p.mealId));
-    if (extra.length) {
-      assumed[d] = extra.map((p) => {
-        const mine = (out.rationale || []).filter((r) => r.day === iso && r.mealId === p.mealId);
-        const floorFill = mine.find((r) => r.factor === 'floor-fill');
-        const name = byId.get(p.mealId)?.name || p.mealId;
-        // INTEGRATION RULING 7 (stopgap): the floor must be judged on the plate AS BUILT.
-        // When the check had to add a dish to hold someone's floor on a planned day, that
-        // day's floor is NOT held as planned — a concern, with the engine's fix offered.
-        // Coverage is the engine's own finding (its floor-fill reason, or its having to
-        // pick a main); nothing about the floor is computed here.
-        if (floorFill) asBuiltGaps.push(`On ${iso} as planned, someone present has nothing they'll eat — adding ${name} would fix it (${floorFill.text}).`);
-        else if (p.role === 'main') asBuiltGaps.push(`On ${iso} there's no main yet, so whether everyone is fed depends on one — the check assumed ${name}.`);
-        return { name, role: p.role, floorFill: !!floorFill, why: mine.map((r) => r.text) };
-      });
-    }
-    const lo = (out.rationale || []).filter((r) => r.day === iso && r.factor === 'carried-leftover-fill').map((r) => r.text);
-    if (lo.length) leftovers[d] = lo;
+export function checkWeek(evaluateWeek, { db, planKey, plan, forecastByDate = {}, today, days }) {
+  const order = days || [];
+  const planned = order.filter((d) => (plan?.mealPlan?.[d] || []).length).length;
+  if (!plan?.weekStartDate) return { planned, observations: [], leftovers: {} };
+  let args, notes;
+  try {
+    ({ args, notes } = assembleComposeInputs({ db, planKey, plan, forecastByDate, seenThisSession: [], today, days: order }));
+  } catch (e) {
+    return { planned, leftovers: {}, observations: [{ property: 'input', severity: 'concern', text: `Couldn't prepare the week check: ${e.message}` }] };
   }
-  let observations = out.observations || [];
-  if (asBuiltGaps.length) {
-    // The engine's "floor ok" counted dishes that aren't on the plan — drop it.
-    observations = [
-      ...asBuiltGaps.map((text) => ({ property: 'floor', severity: 'concern', text })),
-      ...observations.filter((o) => !(o.property === 'floor' && o.severity === 'ok')),
-    ];
+  const [meals, history, schedule, sessionState, config] = args;
+  let out;
+  try {
+    out = evaluateWeek(meals, history, schedule, sessionState.alreadyPlaced, config);
+  } catch (e) {
+    out = { rationale: [], observations: [{ property: 'engine', severity: 'concern', text: `The week check hit an error: ${e && e.message ? e.message : e}` }] };
   }
-  return { planned: planned.length, observations, assumed, leftovers };
+  const abbrOf = Object.fromEntries(Object.entries(weekDates(plan.weekStartDate)).map(([abbr, iso]) => [iso, abbr]));
+  const leftovers = {};
+  for (const r of out.rationale || []) {
+    if (r.factor !== 'carried-leftover-fill' || !abbrOf[r.day]) continue;
+    (leftovers[abbrOf[r.day]] = leftovers[abbrOf[r.day]] || []).push(r.text);
+  }
+  return { planned, observations: [...notes, ...(out.observations || [])], leftovers };
 }
 
 /**

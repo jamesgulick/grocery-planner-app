@@ -4,7 +4,7 @@ import React, { useState, useEffect, useRef, useMemo } from "react";
 import { TIME_LEVELS, seedTimeLevel, presentOn, abbrOfISO, assembleComposeInputs, runComposeWeek, reconcilePlates, platesFromCompose, checkWeek, reasonsOf } from "./engine/assembleInputs.js";
 // The validated week-composition engine (REFACTOR S1). Shipped unchanged; called only
 // through runComposeWeek, which assembles and guards its inputs.
-import { composeWeek, CONSTANTS as ENGINE } from "./engine/composeWeek.js";
+import { composeWeek, evaluateWeek, CONSTANTS as ENGINE } from "./engine/composeWeek.js";
 
 // ── Globals ────────────────────────────────────────────────────────────────────
 
@@ -1790,6 +1790,22 @@ function AutoGrowTextarea({ value, onChange, placeholder, style }) {
   );
 }
 
+// Carried-leftover notes arrive one per person ("Partner is covered by Chili carried from
+// 2026-09-26"). Display-only: group the people held by the same dish on the same night
+// into one line. Anything not in that exact form is shown as the engine wrote it.
+function groupLeftoverNotes(texts) {
+  const groups = new Map(), loose = [];
+  for (const t of texts || []) {
+    const m = /^(.+?) is covered by (.+) carried from (\d{4}-\d{2}-\d{2})$/.exec(t);
+    if (!m) { loose.push(t); continue; }
+    const key = `${m[2]}|${m[3]}`;
+    if (!groups.has(key)) groups.set(key, { dish: m[2], from: m[3], people: [] });
+    groups.get(key).people.push(m[1]);
+  }
+  const names = xs => (xs.length < 3 ? xs.join(" and ") : `${xs.slice(0, -1).join(", ")} and ${xs[xs.length - 1]}`);
+  return [...[...groups.values()].map(g => prettyDates(`${names(g.people)}: ${g.dish} leftovers (from ${g.from})`)), ...loose.map(prettyDates)];
+}
+
 // Engine text names dates as ISO ("carried from 2026-09-26"); show them as "Sat 9/26".
 const prettyDates = text => String(text || "").replace(/\b(\d{4})-(\d{2})-(\d{2})\b/g,
   (iso, y, m, d) => `${abbrOfISO(iso)} ${Number(m)}/${Number(d)}`);
@@ -1803,7 +1819,6 @@ function WeekCheckPanel({ check, total, showInfo, setShowInfo, learnMode, setLea
   const concerns = obs.filter(o => o.severity === "concern");
   const oks      = obs.filter(o => o.severity === "ok");
   const infos    = obs.filter(o => o.severity === "info");
-  const assumed  = Object.keys(check?.assumed || {});
   const line = (bg, color) => ({ fontSize:12, lineHeight:1.45, padding:"6px 8px", marginTop:4, borderRadius:6, background:bg, color });
   return (
     <div style={S.card}>
@@ -1812,12 +1827,8 @@ function WeekCheckPanel({ check, total, showInfo, setShowInfo, learnMode, setLea
         <button style={{ ...S.btnSm, padding:"2px 10px", fontSize:11, background:learnMode?C.primaryLight:"#FFF", color:learnMode?C.primary:C.muted, border:`1px solid ${learnMode?C.primary:C.border}`, fontWeight:learnMode?700:500 }}
           onClick={() => setLearnMode(!learnMode)} title="Show why each meal and side is where it is">{learnMode ? "✓ Show reasoning" : "Show reasoning"}</button>
       </div>
-      {!check?.planned && <div style={{ fontSize:12, color:C.faint, marginTop:6 }}>Plan or fill some days to check the week.</div>}
       {concerns.map((o, k) => <div key={"c"+k} style={line(C.warningLight, C.warning)}>⚠ {prettyDates(o.text)}</div>)}
       {oks.map((o, k) => <div key={"o"+k} style={line("#F0FAF4", C.primary)}>✓ {prettyDates(o.text)}</div>)}
-      {assumed.length > 0 && (
-        <div style={line("#F3F4F6", C.muted)}>ℹ This check assumes the suggested {assumed.length === 1 ? "dish" : "dishes"} shown on {assumed.join(", ")} (not on your plan yet). Add or skip {assumed.length === 1 ? "it" : "them"} and the check updates.</div>
-      )}
       {infos.length > 0 && (
         <button style={{ background:"none", border:"none", color:C.muted, fontSize:12, cursor:"pointer", padding:"6px 0 0", textAlign:"left" }} onClick={() => setShowInfo(!showInfo)}>
           {showInfo ? "▾" : "▸"} {infos.length} more {infos.length === 1 ? "note" : "notes"} about this week
@@ -1956,8 +1967,8 @@ function PlanMeals({ mealPlan, plates, setMealPlan, commitMealToPlan, timeLevels
   const weekCheck = useMemo(() => {
     const planKey = db.activePlan || "current";
     const plan = { ...(db.plans?.[planKey] || {}), weekStartDate, mealPlan, plates, timeLevels, presence, adventurousWeek };
-    if (!weekStartDate) return { planned: 0, observations: [], assumed: {}, leftovers: {} };
-    return checkWeek(composeWeek, { db, planKey, plan, forecastByDate, today: todayLocalISO(), days });
+    if (!weekStartDate) return { planned: 0, observations: [], leftovers: {} };
+    return checkWeek(evaluateWeek, { db, planKey, plan, forecastByDate, today: todayLocalISO(), days });
   }, [mealPlan, plates, timeLevels, presence, adventurousWeek, forecastKey, db.meals, db.settings, db.planTail, db.mealHistory, weekStartDate]);
 
   // Fill every EMPTY day with a composed plate (REFACTOR S1 — composeWeek replaces the
@@ -2101,7 +2112,6 @@ function PlanMeals({ mealPlan, plates, setMealPlan, commitMealToPlan, timeLevels
         const headline      = idx => isSide(idx) ? (reasons(idx).find(r => r.factor === "floor-fill" || r.factor === "affinity") || reasons(idx)[0]) : null;
         const extraReasons  = idx => reasons(idx).filter(r => r !== headline(idx) && (learnMode || r.visibility === "always"));
         const dayLeftovers  = weekCheck.leftovers?.[day] || [];
-        const dayAssumed    = weekCheck.assumed?.[day] || [];
         return (
           <div key={day} style={S.mealCard(timeLevel === "none" ? "easy" : "medium")}>
             <div style={{ fontSize:11, fontWeight:700, color:C.accentMuted, letterSpacing:"0.06em", textTransform:"uppercase", marginBottom:4 }}>
@@ -2202,15 +2212,10 @@ function PlanMeals({ mealPlan, plates, setMealPlan, commitMealToPlan, timeLevels
                 </div>
               );
             })}
-            {(dayLeftovers.length > 0 || dayAssumed.length > 0) && dayMeals.length > 0 && (
+            {dayLeftovers.length > 0 && (
               <div style={{ marginTop:6 }}>
-                {dayLeftovers.map((t, k) => (
-                  <div key={"l"+k} style={{ fontSize:11, color:C.muted, lineHeight:1.4 }}>🥡 {prettyDates(t)}</div>
-                ))}
-                {dayAssumed.map((a, k) => (
-                  <div key={"a"+k} style={{ fontSize:11, color:C.faint, lineHeight:1.4, fontStyle:"italic" }}>
-                    Week check assumes {a.role === "side" ? "side" : "main"}: {a.name}{a.why?.[0] ? ` — ${prettyDates(a.why[0])}` : ""}
-                  </div>
+                {groupLeftoverNotes(dayLeftovers).map((t, k) => (
+                  <div key={"l"+k} style={{ fontSize:11, color:C.muted, lineHeight:1.4 }}>🥡 {t}</div>
                 ))}
               </div>
             )}
