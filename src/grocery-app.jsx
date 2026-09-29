@@ -1,4 +1,10 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useMemo } from "react";
+// Engine input assembly (REFACTOR B3). The time-level and presence rules live there so
+// the app's UI and the engine's inputs can never disagree about them.
+import { TIME_LEVELS, seedTimeLevel, presentOn, abbrOfISO, assembleComposeInputs, runComposeWeek, reconcilePlates, platesFromCompose, checkWeek, reasonsOf } from "./engine/assembleInputs.js";
+// The validated week-composition engine (REFACTOR S1). Shipped unchanged; called only
+// through runComposeWeek, which assembles and guards its inputs.
+import { composeWeek, evaluateWeek, CONSTANTS as ENGINE } from "./engine/composeWeek.js";
 
 // ── Globals ────────────────────────────────────────────────────────────────────
 
@@ -51,11 +57,23 @@ const LEFTOVER_OPTIONS = ["none","yes"];
 const TEMP_AFFINITY_OPTIONS = ["comfort","neutral","light"];
 const MEAL_TYPES       = ["dinner","side","remix","batch","takeout"];
 const FAMILY_NAMES     = ["Partner","Kid 1","Kid 2","Kid 3","Me"];
-const DB_KEY           = "grocery_db";
-const RECOVERY_KEY     = "grocery_recovery";
+// Preview builds (VITE_PREVIEW=1, deployed at /preview/) share an origin — and so
+// localStorage — with the live app. Every key gets a _preview suffix so a preview
+// can never write the live DB; the live DB is only ever READ, to seed the preview.
+const IS_PREVIEW       = !!import.meta.env.VITE_PREVIEW;
+const KEY_SUFFIX       = IS_PREVIEW ? "_preview" : "";
+const LIVE_DB_KEY      = "grocery_db";
+const DB_KEY           = LIVE_DB_KEY + KEY_SUFFIX;
+const RECOVERY_KEY     = "grocery_recovery" + KEY_SUFFIX;
 const SHORTCUT_GET     = "shortcuts://run-shortcut?name=Get%20My%20Grocery%20Data";
 const SHORTCUT_SAVE    = "shortcuts://run-shortcut?name=Save%20My%20Grocery%20Data";
 const PLAN_STEPS       = ["Welcome","Meals","Inventory","Confirm","Sparky"];
+
+// Per-day time to cook (REFACTOR B1) — replaces the old binary `easy` pill and the
+// hidden "shopping day + Mon + Tue are easy" rule. Only "much" unlocks involved
+// meals. The weekday seed (seedTimeLevel, imported) is a UI default the owner
+// overrides; the engine reads the level, never the weekday.
+const seedTimeLevels = () => Object.fromEntries(DAYS_ALL.map(d => [d, seedTimeLevel(d)]));
 
 const isPC = () => !/Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent);
 
@@ -228,16 +246,15 @@ const extractJSON = text => {
 };
 
 // Shared ordering builder: given the index (into DAYS_ALL/DAYS_FULL) of the
-// day the week starts on, produce the 7-day days/daysFull/effortMap triple.
+// day the week starts on, produce the 7-day days/daysFull pair.
 function buildWeekFromStartIndex(startIdx) {
-  const days = [], daysFull = [], effortMap = {};
+  const days = [], daysFull = [];
   for (let i = 0; i < 7; i++) {
     const idx = (startIdx + i) % 7;
     days.push(DAYS_ALL[idx]);
     daysFull.push(DAYS_FULL[idx]);
-    effortMap[DAYS_ALL[idx]] = (i === 0 || DAYS_ALL[idx] === "Mon" || DAYS_ALL[idx] === "Tue") ? "easy" : "medium";
   }
-  return { days, daysFull, effortMap };
+  return { days, daysFull };
 }
 
 // Fallback ordering source, used only when no active plan (and thus no
@@ -515,6 +532,13 @@ const SEED_MEALS = [
 
 const DEFAULT_SETTINGS = {
   shoppingDay:"Wednesday", pickupTime:"5:00-6:00pm", budgetLimit:250, awayMemberHome:true,
+  // Date-range away periods for meal planning (REFACTOR B2): [{ id, name, from, to }],
+  // ISO dates, either end may be null (open). See presentOn.
+  awayRanges:[],
+  // Grill season (capability, not weather): set by hand when the grill is opened
+  // or closed for the year. Absent reads as open. Grillable meals need this AND
+  // grill-able weather. Fed to composeWeek as config.grillOpen.
+  grillOpen:true,
   familyContacts: FAMILY.map(f => ({...f, phone:""})),
 };
 
@@ -529,10 +553,12 @@ const DEFAULT_DB = { settings:DEFAULT_SETTINGS, meals:SEED_MEALS, ingredients:SE
 // { v:2, publishedAt, items:[ { key, label, body }, ... ] }
 
 // plan shape (db.plans.current / db.plans.next — see SPEC-two-plan-model.md):
-// { step, maxStep, awayHome, mealPlan, checkedIds, dayNotes, dayPills,
+// { step, maxStep, timeLevels, presence, mealPlan, checkedIds, dayNotes, dayPills,
 //   notesTouched, stapleFlags, quantities, weather, startedAt, _stepsVer,
 //   meals, items, cartItems, cartIngredientIds, dismissedShared, notes,
 //   weekStartDate }
+// timeLevels: { dayAbbr: "none"|"some"|"much" } (B1). presence: per-night
+// overrides only, { dayAbbr: { name: bool } } (B2) — see presentOn.
 // mealPlan is the live-editing meal grid (day abbr -> meal NAMES); meals is the
 // last-committed snapshot of the same shape, written by savePlan. weekStartDate
 // (ISO YYYY-MM-DD) is the single canonical week-start; it drives auto-retire,
@@ -595,6 +621,10 @@ const resolvePlanForDate = (db, dateISO) => {
   return db.plans?.current || null;
 };
 
+// Presence (REFACTOR B2): who is home, per day × per person, for every roster member.
+// presentOn (imported from ./engine/assembleInputs.js) resolves a per-night toggle,
+// then a settings.awayRanges period, then defaults to present.
+
 // Plan count that tolerates both the legacy array shape (pre-migration db, e.g.
 // an old recovery snapshot or pasted import awaiting confirmation) and the
 // current { current, next } object shape.
@@ -617,6 +647,7 @@ const mapBothPlans = (db, fn) => ({
 // becoming "current" (the owner's explicit choice). Idempotent — a db already
 // at _planModelVer >= 1 is returned unchanged. mealHistory is untouched.
 const PLAN_MODEL_VER = 1;
+const PLAN_INPUTS_VER = 1;   // timeLevels + presence (see the plan-inputs block below)
 const migrateDB = db => {
   if (!db) return db;
   let out = db;
@@ -695,6 +726,48 @@ const migrateDB = db => {
     }
   }
 
+  // Plan-inputs migration (REFACTOR B1 + B2). Runs after the role backfill above,
+  // which it reads. Idempotent via _planInputsVer.
+  //   B1: the binary `easy` pill → per-day timeLevels. A day that carried an easy
+  //       pill becomes "none"; every other day gets the weekday seed. Easy pills
+  //       are dropped (no longer a built-in).
+  //   B2: the Partner-only per-day awayHome map → per-night presence overrides;
+  //       the persistent away-member toggle, when off, → an open-ended away
+  //       period, so planning sees the same absence it did before. The toggle
+  //       itself stays: it still decides who gets family texts.
+  if ((out._planInputsVer || 0) < PLAN_INPUTS_VER) {
+    const contacts   = out.settings?.familyContacts || [];
+    const partner    = contacts.find(f => f.isPartner);
+    const awayMember = contacts.find(f => f.canBeAway);
+    const upgradePlan = p => {
+      if (!p) return p;
+      const pills = p.dayPills || {};
+      const hasEasy = d => (pills[d] || []).some(x => x.label === "easy");
+      const timeLevels = p.timeLevels || Object.fromEntries(DAYS_ALL.map(d => [d, hasEasy(d) ? "none" : seedTimeLevel(d)]));
+      const dayPills = Object.fromEntries(Object.entries(pills).map(([d, ps]) => [d, (ps || []).filter(x => x.label !== "easy")]));
+      const presence = { ...(p.presence || {}) };
+      if (partner) Object.entries(p.awayHome || {}).forEach(([d, home]) => {
+        if (home === false) presence[d] = { ...(presence[d] || {}), [partner.name]: false };
+      });
+      const { awayHome, ...rest } = p;
+      return { ...rest, timeLevels, dayPills, presence };
+    };
+    // Keyed off the version stamp, not "awayRanges missing": an import merges
+    // DEFAULT_SETTINGS (awayRanges: []) in before this runs.
+    let settings = out.settings;
+    if (settings) {
+      let ranges = Array.isArray(settings.awayRanges) ? settings.awayRanges : [];
+      if (awayMember && settings.awayMemberHome === false && !ranges.some(r => r.name === awayMember.name)) {
+        ranges = [...ranges, { id: "r" + Date.now(), name: awayMember.name, from: null, to: null }];
+      }
+      settings = { ...settings, awayRanges: ranges };
+    }
+    const plans = out.plans && !Array.isArray(out.plans)
+      ? { current: upgradePlan(out.plans.current), next: upgradePlan(out.plans.next) }
+      : out.plans;
+    out = { ...out, settings, plans, _planInputsVer: PLAN_INPUTS_VER };
+  }
+
   return out;
 };
 
@@ -730,6 +803,8 @@ const autoRetirePlans = db => {
         archivedAt: new Date().toISOString(),
         weekStartDate: outgoing.weekStartDate || null,
         mealPlan: outgoing.mealPlan || outgoing.meals || {},
+        // Plate annotations (C1) carry the as-served leftovers snapshots history needs.
+        ...(outgoing.plates ? { plates: outgoing.plates } : {}),
       }
     : null;
   const prevTails = db.planTail || [];
@@ -769,7 +844,22 @@ const autoRetirePlans = db => {
 let storageHealth = "unknown"; // "ok" | "unavailable" | "unknown"
 const getStorageHealth = () => storageHealth;
 
+// Preview only: copy the live DB into the preview key (read-only on the live side).
+// `force` overwrites an existing preview DB; otherwise only seeds an empty one.
+function seedPreviewFromLive(force = false) {
+  if (!IS_PREVIEW) return false;
+  try {
+    if (!force && localStorage.getItem(DB_KEY)) return false;
+    const live = localStorage.getItem(LIVE_DB_KEY);
+    if (!live) return false;
+    localStorage.setItem(DB_KEY, live);
+    localStorage.removeItem(RECOVERY_KEY);
+    return true;
+  } catch { return false; }
+}
+
 async function loadDB() {
+  seedPreviewFromLive();
   try {
     const raw = localStorage.getItem(DB_KEY);
     if (raw) {
@@ -858,7 +948,7 @@ const EXTRACT_TOKENS = 2500;
 // nothing breaks; it simply shows no live data until hosted.
 const FORECAST_LAT = 39.44843;            // configure for your location (default: generic US point)
 const FORECAST_LON = -75.71768;
-const FORECAST_CACHE_KEY = "grocery_forecast_cache";
+const FORECAST_CACHE_KEY = "grocery_forecast_cache" + KEY_SUFFIX;
 const FORECAST_CACHE_TTL_MS = 6 * 60 * 60 * 1000; // 6 hours
 
 // The shopping week runs Tue → Mon. Given "today", find this cycle's Tuesday and
@@ -957,36 +1047,21 @@ function RefreshReminder({ compact, dayNotes }) {
 
 // ── Day pills ─────────────────────────────────────────────────────────────────
 // A pill is an attribute on a day: { label, source: "auto"|"manual" }.
-// Only BUILT-IN labels carry generation effects; custom labels are visual only.
-//   easy    → exclude "involved" meals (long-standing behavior, via effortMap)
-//   grill   → allow + boost grillable meals (otherwise they're gated out)
-//   special → prefer higher-effort / favorite meals
-// Auto-derivation runs ONCE at plan start; after that a day's `touched` flag
-// means the user's edits always win and regeneration never clobbers them.
-const BUILTIN_PILLS = ["easy","grill","special"];
+// Built-in labels are visual only now; custom labels likewise.
+//   special → a plain label to guide manual selection (no generation effect)
+// Grill is NOT a pill you set any more (INTEGRATION RULING 4): the engine decides
+// grillability itself from the day's forecast AND the grill-season toggle. The day
+// card shows that derived state read-only, using the engine's own thresholds.
+// Time to cook is not a pill either — see TIME_LEVELS (per-day timeLevels).
+const BUILTIN_PILLS = ["special"];
 const PILL_STYLE = {
-  easy:    { c:"#2F6B4F",      bg:"#EAF3EC" },
   grill:   { c:"#9A3412",      bg:"#FFEDD5" },
   special: { c:"#7C3AED",      bg:"#EDE9FE" },
 };
 
-// Is a day grill-suitable? Warm enough and dry enough, from the baked forecast.
-const isGrillWeather = fc => !!fc && fc.hi >= 70 && fc.pop <= 35;
-
-// Propose pills for each day from what the app already knows: the effort map
-// (shopping day + Mon/Tue are "easy") and this week's baked forecast.
-function derivePills(days, effortMap, forecast) {
-  const out = {};
-  days.forEach(d => {
-    const pills = [];
-    if ((effortMap || {})[d] === "easy") pills.push({ label:"easy", source:"auto" });
-    if (isGrillWeather((forecast || {})[d]))  pills.push({ label:"grill", source:"auto" });
-    out[d] = pills;
-  });
-  return out;
-}
-
-const hasPill = (dayPills, day, label) => (dayPills?.[day] || []).some(p => p.label === label);
+// Would the engine allow grilling on a day with this forecast? Same rule as
+// composeWeek's capability gate (season open AND warm AND dry).
+const engineGrillOk = (grillOpen, fc) => !!grillOpen && !!fc && fc.hi >= ENGINE.GRILL_MIN_F && fc.pop <= ENGINE.GRILL_MAX_POP;
 
 // Count how many of THIS WEEK's planned meals use each ingredient. The app stores
 // meal→ingredient links as presence only (no amounts), so this can flag overlap
@@ -1001,107 +1076,6 @@ function multiMealCounts(mealPlan, meals) {
   const multi = {};
   Object.entries(counts).forEach(([id, n]) => { if (n >= 2) multi[id] = n; });
   return multi;
-}
-
-function getMealSuggestions(awayHome, meals, days, effortMap, alreadyPlanned = [], recentMeals = [], seenThisSession = [], dayPills = {}, forecast = {}, contacts = [], awayMemberHome = true) {
-  const pool = meals;
-  const recent = new Set(recentMeals);   // archived recent weeks → soft weight
-  const seen   = new Set(seenThisSession); // this session's rerolls → skip if possible
-  const plan = {};
-  const used = new Set(alreadyPlanned);
-
-  // Resolve semantic roles once, by name — never by position/initials.
-  // Fallbacks (seed/public safety): a missing role simply has no effect below.
-  const partner    = contacts.find(f => f.isPartner);
-  const awayMember = contacts.find(f => f.canBeAway);
-  const selfMember = contacts.find(f => f.isSelf);
-
-  for (const day of days.filter(d => !plan[d])) {
-    const effort        = (effortMap && effortMap[day]) || "medium";
-    // Presence-aware scoring (SPEC-family-roles.md): a member is absent for
-    // this day only if they're the Partner and today's pill marks them away,
-    // or they're the away-able member and the persistent toggle is off.
-    // Everyone else is always present. No hard gates — absence just drops a
-    // member's likes/dislikes out of the score for this day.
-    const partnerAway      = !!partner && awayHome[day] === false;
-    const awayMemberAbsent = !!awayMember && !awayMemberHome;
-    const isPresent = person => {
-      if (partner && person === partner.name && partnerAway) return false;
-      if (awayMember && person === awayMember.name && awayMemberAbsent) return false;
-      return true;
-    };
-    // Favorite weight from existing preferences: likes minus dislikes across
-    // the family members present today (household consensus). The self
-    // member's own like adds a small extra tiebreaker when present, since
-    // it's the deliberate thumb on the scale. All soft — nothing excludes.
-    const favScore = m => {
-      const prefs    = (m.preferences || []).filter(p => isPresent(p.person));
-      const likes    = prefs.filter(p => p.pref === "likes").length;
-      const dislikes = prefs.filter(p => p.pref === "dislikes").length;
-      const selfLike = selfMember && prefs.some(p => p.person === selfMember.name && p.pref === "likes") ? 0.5 : 0;
-      return (likes - dislikes) + selfLike;
-    };
-    // Per-day conditions (replaces the old week-level weather value): each day's
-    // own forecast drives the temperature nudge, and its own grill pill decides
-    // whether grillable meals are allowed.
-    const fc        = forecast[day];
-    const dayIsHot  = !!fc && fc.hi >= 82;
-    const dayIsCold = !!fc && fc.hi <= 55;
-    const grillOk   = hasPill(dayPills, day, "grill");
-    const isSpecial = hasPill(dayPills, day, "special");
-    const easyPill  = hasPill(dayPills, day, "easy") || effort === "easy";
-    const candidates    = pool.filter(m => {
-      if (used.has(m.name)) return false;
-      // Only main dinners are auto-suggested. Sides, batch, and takeout are
-      // excluded — they're chosen manually, not proposed as a night's meal.
-      if ((m.type || "dinner") !== "dinner") return false;
-      if (easyPill && m.effort === "involved") return false;
-      // GRILLABLE = conditional HARD gate, now PER DAY: grillable meals only
-      // appear on days flagged as grill days (warm + dry, auto-derived from the
-      // forecast, or set manually).
-      if (m.grillable && !grillOk) return false;
-      return true;
-    });
-    if (candidates.length > 0) {
-      // Reroll freshness: if we have options not yet surfaced this session, use
-      // only those (so consecutive rerolls show new meals). Fall back to all
-      // candidates once the pool is exhausted, so nothing hard-bans.
-      const unseen = candidates.filter(m => !seen.has(m.name));
-      const tier   = unseen.length > 0 ? unseen : candidates;
-
-      // WEIGHTED pick (not flat random). Each meal gets a weight from soft nudges;
-      // nothing is excluded here — weights only change how likely a meal is.
-      //  • recency: meals served in recent archived weeks are down-weighted (soft,
-      //    so they still can appear, but much less often — this replaces the old
-      //    hard "fresh tier" that collapsed and let recent meals back in at full
-      //    weight once history grew large)
-      //  • temperature: comfort floats up on cold days, sinks on hot; light the reverse
-      //  • grill day: grillable meals get a boost
-      //  • favorite: household likes-minus-dislikes (+ user's tiebreaker)
-      const weightFor = m => {
-        let w = 1;
-        if (recent.has(m.name)) w *= 0.15;   // strong soft penalty for recent meals
-        const aff = m.tempAffinity || "neutral";
-        if (dayIsCold) { if (aff === "comfort") w *= 2.2; if (aff === "light") w *= 0.4; }
-        if (dayIsHot)  { if (aff === "light")   w *= 2.2; if (aff === "comfort") w *= 0.4; }
-        if (grillOk && m.grillable) w *= 1.8;
-        // "special" nudges toward higher-effort and well-liked meals.
-        if (isSpecial) { if (m.effort === "involved") w *= 1.8; w *= 1 + Math.max(0, favScore(m)) * 0.2; }
-        w *= 1 + Math.max(0, favScore(m)) * 0.25;   // favorites lean up, never below base
-        return w;
-      };
-      const weights = tier.map(weightFor);
-      const total   = weights.reduce((s, x) => s + x, 0);
-      let r = Math.random() * total;
-      let pick = tier[0];
-      for (let i = 0; i < tier.length; i++) { r -= weights[i]; if (r <= 0) { pick = tier[i]; break; } }
-      plan[day] = pick.name;
-      used.add(pick.name);
-    } else {
-      plan[day] = "Choose your own night";
-    }
-  }
-  return plan;
 }
 
 // ── Styles ─────────────────────────────────────────────────────────────────────
@@ -1402,7 +1376,7 @@ function PlanTab({ db, persistDB, onGoToImport }) {
   // render so editing the date (see the date input in PlanWelcome) reorders
   // the days live. Falls back to the shoppingDay default only when there's no
   // active plan yet (very first load, before any plan exists).
-  const { days, daysFull, effortMap } = draft?.weekStartDate
+  const { days, daysFull } = draft?.weekStartDate
     ? getWeekFromDate(draft.weekStartDate)
     : getWeekFromDay(db.settings?.shoppingDay || "Wednesday");
 
@@ -1434,8 +1408,13 @@ function PlanTab({ db, persistDB, onGoToImport }) {
   // Initialize from saved draft if present, else fresh defaults.
   const [step, setStep]               = useState(initStep);
   const [maxStep, setMaxStep]         = useState(initMaxStep);
-  const [awayHome, setAwayHome]   = useState(draft?.awayHome || Object.fromEntries(days.map(d => [d, true])));
+  const [timeLevels, setTimeLevels]   = useState(draft?.timeLevels || seedTimeLevels());
+  const [presence, setPresence]       = useState(draft?.presence || {});
   const [mealPlan, setMealPlan]       = useState(draft?.mealPlan || Object.fromEntries(days.map(d => [d, []])));
+  // Plate annotations for mealPlan (REFACTOR C1): role, reason and leftovers snapshot
+  // per dish. Persisted on the plan so they survive every step transition; always
+  // rebuilt from mealPlan via reconcilePlates, never edited on their own.
+  const [plates, setPlates]           = useState(draft?.plates || {});
   const [checkedIds, setCheckedIds]   = useState(draft?.checkedIds || []);
   const [removedIds, setRemovedIds]   = useState(draft?.removedIds || []);
   const [addedItems, setAddedItems]   = useState(draft?.addedItems || []);
@@ -1458,7 +1437,7 @@ function PlanTab({ db, persistDB, onGoToImport }) {
   const saveDraft = (patch = {}, opts = {}) => {
     const next = {
       ...draft,
-      step, maxStep, awayHome, mealPlan, checkedIds, removedIds, addedItems, dayNotes, dayPills, stapleFlags, quantities, weather,
+      step, maxStep, timeLevels, presence, mealPlan, plates, checkedIds, removedIds, addedItems, dayNotes, dayPills, stapleFlags, quantities, weather,
       _stepsVer: 4,
       startedAt: draft?.startedAt || new Date().toISOString(),
       ...patch,
@@ -1478,13 +1457,19 @@ function PlanTab({ db, persistDB, onGoToImport }) {
   };
 
   // Wrapped setters: update local state AND persist the draft in one shot.
-  const setAwayHomeP  = v => { const nv = typeof v === "function" ? v(awayHome)  : v; setAwayHome(nv);  saveDraft({ awayHome: nv }); };
-  const setMealPlanP    = v => { const nv = typeof v === "function" ? v(mealPlan)    : v; setMealPlan(nv);    saveDraft({ mealPlan: nv }); };
+  const setTimeLevelsP  = v => { const nv = typeof v === "function" ? v(timeLevels)  : v; setTimeLevels(nv);  saveDraft({ timeLevels: nv }); };
+  const setPresenceP    = v => { const nv = typeof v === "function" ? v(presence)    : v; setPresence(nv);    saveDraft({ presence: nv }); };
+  // annotations: plate entries for engine-placed dishes (see platesFromCompose).
+  const setMealPlanP    = (v, annotations) => {
+    const nv = typeof v === "function" ? v(mealPlan) : v;
+    const np = reconcilePlates(mealPlan, nv, plates, db.meals || [], annotations);
+    setMealPlan(nv); setPlates(np); saveDraft({ mealPlan: nv, plates: np });
+  };
   const setCheckedIdsP  = v => { const nv = typeof v === "function" ? v(checkedIds)  : v; setCheckedIds(nv);  saveDraft({ checkedIds: nv }); };
   const setRemovedIdsP  = v => { const nv = typeof v === "function" ? v(removedIds)  : v; setRemovedIds(nv);  saveDraft({ removedIds: nv }); };
   const setAddedItemsP  = v => { const nv = typeof v === "function" ? v(addedItems)  : v; setAddedItems(nv);  saveDraft({ addedItems: nv }); };
   const setDayNotesP    = v => { const nv = typeof v === "function" ? v(dayNotes)    : v; setDayNotes(nv);    saveDraft({ dayNotes: nv }); };
-  const setDayPillsP    = (v, opts) => { const nv = typeof v === "function" ? v(dayPills)    : v; setDayPills(nv);    saveDraft({ dayPills: nv }, opts); };
+  const setDayPillsP    = v => { const nv = typeof v === "function" ? v(dayPills)    : v; setDayPills(nv);    saveDraft({ dayPills: nv }); };
   const setStapleFlagsP = v => { const nv = typeof v === "function" ? v(stapleFlags) : v; setStapleFlags(nv); saveDraft({ stapleFlags: nv }); };
   const setQuantitiesP  = v => { const nv = typeof v === "function" ? v(quantities)  : v; setQuantities(nv);  saveDraft({ quantities: nv }); };
   const setWeatherP     = v => { const nv = typeof v === "function" ? v(weather)     : v; setWeather(nv);     saveDraft({ weather: nv }); };
@@ -1501,7 +1486,9 @@ function PlanTab({ db, persistDB, onGoToImport }) {
     if (nm && !meals.some(m => m.name.toLowerCase() === nm.toLowerCase())) {
       meals = [...meals, { id:"m"+Date.now()+Math.random().toString(36).slice(2,5), createdAt:new Date().toISOString(), name:nm, effort:"medium", type:"dinner", weather:"any", tempAffinity:"neutral", grillable:false, leftovers:"none", preferences:[], notes:"", ingredients:[] }];
     }
-    const nextDraft = { ...draft, step, maxStep, awayHome, mealPlan:newMealPlan, checkedIds, removedIds, addedItems, dayNotes, stapleFlags, quantities, weather, startedAt: draft?.startedAt || new Date().toISOString() };
+    const nextPlates = reconcilePlates(mealPlan, newMealPlan, plates, meals);
+    setPlates(nextPlates);
+    const nextDraft = { ...draft, step, maxStep, timeLevels, presence, mealPlan:newMealPlan, plates:nextPlates, checkedIds, removedIds, addedItems, dayNotes, stapleFlags, quantities, weather, startedAt: draft?.startedAt || new Date().toISOString() };
     persistDB(writeActivePlan({ ...db, meals }, nextDraft));
   };
 
@@ -1513,9 +1500,11 @@ function PlanTab({ db, persistDB, onGoToImport }) {
   // after the first plan, so the archive-before-clear step below is a safety
   // net for that edge case rather than the everyday path.
   const startFresh = () => {
-    const freshAway = Object.fromEntries(days.map(d => [d, true]));
+    const freshLevels = seedTimeLevels();
     const freshMeals  = Object.fromEntries(days.map(d => [d, []]));
-    setAwayHome(freshAway);
+    setTimeLevels(freshLevels);
+    setPresence({});
+    setPlates({});
     setMealPlan(freshMeals);
     setCheckedIds([]);
     setRemovedIds([]);
@@ -1543,7 +1532,7 @@ function PlanTab({ db, persistDB, onGoToImport }) {
       // Auto-populate day notes from this week's baked-in schedule so a new plan
       // never starts blank. notesTouched tracks manual edits so a later refresh
       // can tell "never edited" from "deliberately changed".
-      step:1, maxStep:1, awayHome:freshAway, mealPlan:freshMeals, checkedIds:[], removedIds:[], addedItems:[], dayNotes:{ ...defaultNotes }, dayPills:{}, notesTouched:false, _stepsVer:4, stapleFlags:{}, quantities:{}, weather:"hot", startedAt:new Date().toISOString(),
+      step:1, maxStep:1, timeLevels:freshLevels, presence:{}, mealPlan:freshMeals, plates:{}, checkedIds:[], removedIds:[], addedItems:[], dayNotes:{ ...defaultNotes }, dayPills:{}, notesTouched:false, _stepsVer:4, stapleFlags:{}, quantities:{}, weather:"hot", startedAt:new Date().toISOString(),
     };
 
     persistDB(writeActivePlan({ ...db, mealHistory }, freshPlan));
@@ -1562,14 +1551,13 @@ function PlanTab({ db, persistDB, onGoToImport }) {
   // defensive backstop rather than silently overwriting.
   const startNextWeek = () => {
     if (db.plans?.next) return;
-    const freshAway  = Object.fromEntries(days.map(d => [d, true]));
     const freshMeals = Object.fromEntries(days.map(d => [d, []]));
     const anchor     = draft?.weekStartDate || new Date().toISOString().split("T")[0];
     const nextStart  = addDaysISO(anchor, 7);
     const freshPlan = {
       weekStartDate: nextStart, notes:"", meals:{}, items:[],
       cartItems:[], cartIngredientIds:[], dismissedShared:[],
-      step:1, maxStep:1, awayHome:freshAway, mealPlan:freshMeals, checkedIds:[], removedIds:[], addedItems:[], dayNotes:{ ...defaultNotes }, dayPills:{}, notesTouched:false, _stepsVer:4, stapleFlags:{}, quantities:{}, weather:"hot", startedAt:new Date().toISOString(),
+      step:1, maxStep:1, timeLevels:seedTimeLevels(), presence:{}, mealPlan:freshMeals, plates:{}, checkedIds:[], removedIds:[], addedItems:[], dayNotes:{ ...defaultNotes }, dayPills:{}, notesTouched:false, _stepsVer:4, stapleFlags:{}, quantities:{}, weather:"hot", startedAt:new Date().toISOString(),
     };
     persistDB({ ...db, plans: { ...db.plans, next: freshPlan }, activePlan: "next" });
   };
@@ -1640,7 +1628,7 @@ function PlanTab({ db, persistDB, onGoToImport }) {
       <WeekSelector db={db} persistDB={persistDB} />
       <StepNav />
       <div style={S.body}>
-        {step === 1 && <PlanMeals   mealPlan={mealPlan} setMealPlan={setMealPlanP} commitMealToPlan={commitMealToPlan} awayHome={awayHome} setAwayHome={setAwayHomeP} meals={meals} onNext={() => goToStep(2)} days={days} daysFull={daysFull} effortMap={effortMap} dayNotes={dayNotes} setDayNotes={setDayNotesP} dayPills={dayPills} setDayPills={setDayPillsP} db={db} persistDB={persistDB} />}
+        {step === 1 && <PlanMeals   mealPlan={mealPlan} plates={plates} setMealPlan={setMealPlanP} commitMealToPlan={commitMealToPlan} timeLevels={timeLevels} setTimeLevels={setTimeLevelsP} presence={presence} setPresence={setPresenceP} weekStartDate={draft?.weekStartDate} adventurousWeek={!!draft?.adventurousWeek} setAdventurousWeek={v => saveDraft({ adventurousWeek: v })} meals={meals} onNext={() => goToStep(2)} days={days} daysFull={daysFull} dayNotes={dayNotes} setDayNotes={setDayNotesP} dayPills={dayPills} setDayPills={setDayPillsP} db={db} persistDB={persistDB} />}
         {step === 2 && <PlanInventory checkedIds={checkedIds} setCheckedIds={setCheckedIdsP} stapleFlags={stapleFlags} setStapleFlags={setStapleFlagsP} quantities={quantities} setQuantities={setQuantitiesP} mealPlan={mealPlan} meals={meals} ingredients={ingredients} onNext={() => goToStep(3)} days={days} cartIngredientIds={draft?.cartIngredientIds || []} onChangeItemTier={(id, tier, subtype) => persistDB({ ...db, ingredients: db.ingredients.map(i => i.id === id ? { ...i, tier, stapleType: subtype || undefined } : i) })} />}
         {step === 3 && <PlanConfirm mode="confirm" checkedIds={checkedIds} removedIds={removedIds} setRemovedIds={setRemovedIdsP} addedItems={addedItems} setAddedItems={setAddedItemsP} stapleFlags={stapleFlags} quantities={quantities} setQuantities={setQuantitiesP} mealPlan={mealPlan} meals={meals} ingredients={ingredients} onNext={() => goToStep(4)} db={db} persistDB={persistDB} days={days} daysFull={daysFull} />}
         {step === 4 && <PlanConfirm mode="sparky" checkedIds={checkedIds} removedIds={removedIds} setRemovedIds={setRemovedIdsP} addedItems={addedItems} setAddedItems={setAddedItemsP} stapleFlags={stapleFlags} quantities={quantities} setQuantities={setQuantitiesP} mealPlan={mealPlan} meals={meals} ingredients={ingredients} onFinish={finishPlan} db={db} persistDB={persistDB} days={days} daysFull={daysFull} />}
@@ -1675,7 +1663,7 @@ function PlanWelcome({ onStart, onStartNext, onResume, draft, persistDB, db, onG
       <div style={{ ...S.card, background:C.primary, color:"#E8F5EE" }}>
         <div style={{ fontSize:28, marginBottom:8 }}>🛒</div>
         <div style={{ fontSize:22, fontWeight:700, marginBottom:6 }}>Weekly Grocery Planner</div>
-        <div style={{ fontSize:14, opacity:0.8, lineHeight:1.5 }}>Middletown DE</div>
+        <div style={{ fontSize:14, opacity:0.8, lineHeight:1.5 }}>Plan the week's dinners, then the grocery order</div>
       </div>
 
       <RefreshReminder dayNotes={draft?.dayNotes} />
@@ -1802,7 +1790,74 @@ function AutoGrowTextarea({ value, onChange, placeholder, style }) {
   );
 }
 
-function PlanMeals({ mealPlan, setMealPlan, commitMealToPlan, awayHome, setAwayHome, meals, onNext, days, daysFull, effortMap, dayNotes, setDayNotes, dayPills, setDayPills, db, persistDB }) {
+// Carried-leftover notes arrive one per person ("Partner is covered by Chili carried from
+// 2026-09-26"). Display-only: group the people held by the same dish on the same night
+// into one line. Anything not in that exact form is shown as the engine wrote it.
+function groupLeftoverNotes(texts) {
+  const groups = new Map(), loose = [];
+  for (const t of texts || []) {
+    const m = /^(.+?) is covered by (.+) carried from (\d{4}-\d{2}-\d{2})$/.exec(t);
+    if (!m) { loose.push(t); continue; }
+    const key = `${m[2]}|${m[3]}`;
+    if (!groups.has(key)) groups.set(key, { dish: m[2], from: m[3], people: [] });
+    groups.get(key).people.push(m[1]);
+  }
+  const names = xs => (xs.length < 3 ? xs.join(" and ") : `${xs.slice(0, -1).join(", ")} and ${xs[xs.length - 1]}`);
+  return [...[...groups.values()].map(g => prettyDates(`${names(g.people)}: ${g.dish} leftovers (from ${g.from})`)), ...loose.map(prettyDates)];
+}
+
+// Engine text names dates as ISO ("carried from 2026-09-26"); show them as "Sat 9/26".
+const prettyDates = text => String(text || "").replace(/\b(\d{4})-(\d{2})-(\d{2})\b/g,
+  (iso, y, m, d) => `${abbrOfISO(iso)} ${Number(m)}/${Number(d)}`);
+
+// WEEK CHECK panel (REFACTOR C2). The engine rates each observation; this maps severity
+// to presentation, quiet by default: concerns always shown, "ok" as a short check line,
+// info folded away behind a count. Learn mode ("Show reasoning") turns on the full
+// per-dish rationale on the day cards.
+function WeekCheckPanel({ check, total, showInfo, setShowInfo, learnMode, setLearnMode, onFix, fixLabel }) {
+  const obs      = check?.observations || [];
+  const concerns = obs.filter(o => o.severity === "concern");
+  const oks      = obs.filter(o => o.severity === "ok");
+  const infos    = obs.filter(o => o.severity === "info");
+  const line = (bg, color) => ({ fontSize:12, lineHeight:1.45, padding:"6px 8px", marginTop:4, borderRadius:6, background:bg, color });
+  return (
+    <div style={S.card}>
+      <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", gap:8, flexWrap:"wrap" }}>
+        <div style={{ ...S.sectionLabel, marginBottom:0 }}>Week check · {check?.planned || 0} of {total} days planned</div>
+        <button style={{ ...S.btnSm, padding:"2px 10px", fontSize:11, background:learnMode?C.primaryLight:"#FFF", color:learnMode?C.primary:C.muted, border:`1px solid ${learnMode?C.primary:C.border}`, fontWeight:learnMode?700:500 }}
+          onClick={() => setLearnMode(!learnMode)} title="Show why each meal and side is where it is">{learnMode ? "✓ Show reasoning" : "Show reasoning"}</button>
+      </div>
+      {concerns.map((o, k) => (
+        <div key={"c"+k} style={{ ...line(C.warningLight, C.warning), display:"flex", alignItems:"center", justifyContent:"space-between", gap:8 }}>
+          <span>⚠ {prettyDates(o.text)}</span>
+          {o.day && onFix && (
+            <button style={{ ...S.btnSm, flex:"0 0 auto", fontSize:11, padding:"3px 8px", background:"#FFF", color:C.warning, border:`1px solid ${C.warning}` }} onClick={() => onFix(o.day)}>{fixLabel(o.day)}</button>
+          )}
+        </div>
+      ))}
+      {oks.map((o, k) => <div key={"o"+k} style={line("#F0FAF4", C.primary)}>✓ {prettyDates(o.text)}</div>)}
+      {infos.length > 0 && (
+        <button style={{ background:"none", border:"none", color:C.muted, fontSize:12, cursor:"pointer", padding:"6px 0 0", textAlign:"left" }} onClick={() => setShowInfo(!showInfo)}>
+          {showInfo ? "▾" : "▸"} {infos.length} more {infos.length === 1 ? "note" : "notes"} about this week
+        </button>
+      )}
+      {showInfo && infos.map((o, k) => <div key={"i"+k} style={line("#F9FAFB", C.muted)}>ℹ {prettyDates(o.text)}</div>)}
+    </div>
+  );
+}
+
+// A side's job on the plate, labelled distinctly (REFACTOR C1): a FLOOR-FILL side is
+// there because someone present won't eat the main; an ACCOMPANIMENT goes with the
+// main. A side placed by hand just says "side". The engine's own sentence for why it
+// is there is shown under the name.
+function sideBadge(dish) {
+  if (!dish || dish.role !== "side") return null;
+  if (dish.source === "floor-fill")    return <span style={S.tag(C.warning, C.warningLight)} title="Covers someone who won't eat the main">covers</span>;
+  if (dish.source === "accompaniment") return <span style={S.tag(C.primary, C.primaryLight)} title="Goes with the main">goes with</span>;
+  return <span style={S.tag(C.muted, "#F3F4F6")}>side</span>;
+}
+
+function PlanMeals({ mealPlan, plates, setMealPlan, commitMealToPlan, timeLevels, setTimeLevels, presence, setPresence, weekStartDate, adventurousWeek, setAdventurousWeek, meals, onNext, days, daysFull, dayNotes, setDayNotes, dayPills, setDayPills, db, persistDB }) {
   const [editing, setEditing] = useState(null);
   const [moving,  setMoving]  = useState(null);
   const [search,  setSearch]  = useState("");
@@ -1811,6 +1866,18 @@ function PlanMeals({ mealPlan, setMealPlan, commitMealToPlan, awayHome, setAwayH
   // Resolved by role flag, never by hardcoded name — see SPEC-family-roles.md.
   const partner     = (db.settings?.familyContacts || []).find(f => f.isPartner);
   const partnerName = partner?.name || "Partner";
+
+  // Presence (REFACTOR B2): everyone on the roster, every day. A day's date is
+  // its offset from weekStartDate (days[] is ordered from that weekday), which
+  // is what away periods are matched against.
+  const roster     = (db.settings?.familyContacts || []).map(f => f.name);
+  const awayRanges = db.settings?.awayRanges || [];
+  const dateOfDay  = Object.fromEntries(days.map((d, i) => [d, weekStartDate ? addDaysISO(weekStartDate, i) : null]));
+  const isPresentOn = (name, day) => presentOn(presence, awayRanges, name, day, dateOfDay[day]);
+  const togglePresence = (day, name) => {
+    const here = isPresentOn(name, day);
+    setPresence(prev => ({ ...prev, [day]: { ...((prev || {})[day] || {}), [name]: !here } }));
+  };
 
   // When browsing (empty search box), order intentionally to aid discovery:
   //   sides (A–Z) → mains/dinners (least-recently-used first) → remix/batch/takeout.
@@ -1848,28 +1915,27 @@ function PlanMeals({ mealPlan, setMealPlan, commitMealToPlan, awayHome, setAwayH
     : browseSorted;
   const totalMeals = Object.values(mealPlan).flat().length;
 
-  const [seenSuggestions, setSeenSuggestions] = useState([]);
+  // The engine's session state (REFACTOR S1). Only seenThisSession is carried: the
+  // caller rebuilds alreadyPlaced from the plan on every call. Session-local BY DESIGN
+  // — the model resets session-seen per planning sitting, so this is the one piece of
+  // Meals-step state that deliberately is NOT lifted into the persisted plan.
+  const [seenThisSession, setSeenThisSession] = useState([]);
+  // Problems from the last FILL itself (bad inputs, an engine error). Everything else
+  // the engine says about the week comes from the live week check below (REFACTOR C2).
+  const [fillNotes, setFillNotes] = useState([]);
+  const [showWeekInfo, setShowWeekInfo] = useState(false);
+  const learnMode = !!db.settings?.learnMode;
+  const setLearnMode = v => persistDB({ ...db, settings: { ...db.settings, learnMode: v } });
   // Live weather: fetch once on mount (cached 6h). Falls back to {} when blocked
   // or offline, which every consumer treats as neutral. See fetchLiveForecast.
-  // NOTE: declared BEFORE the pill-derive effect below, which reads them — const
-  // has no hoisting, so using them earlier throws a temporal-dead-zone ReferenceError.
+  // NOTE: declared BEFORE regenerate and the day cards, which read them — const has
+  // no hoisting, so using them earlier throws a temporal-dead-zone ReferenceError.
   const [forecast, setForecast] = useState({});
-  const [forecastLoaded, setForecastLoaded] = useState(false);
   useEffect(() => {
     let cancelled = false;
-    fetchLiveForecast().then(f => { if (!cancelled) { setForecast(f); setForecastLoaded(true); } });
+    fetchLiveForecast().then(f => { if (!cancelled) setForecast(f); });
     return () => { cancelled = true; };
   }, []);
-  // Auto-derive pills ONCE if this plan has none yet. Gated on forecastLoaded so a
-  // slow/blocked weather fetch can't cause this plan to miss its one shot at
-  // auto-flagging grill days. After that, the user's edits always win.
-  useEffect(() => {
-    if (!forecastLoaded) return;
-    const anySet = days.some(d => (dayPills?.[d] || []).length > 0);
-    // background:true — this is an automatic weather-driven write, not a user
-    // edit, so it must not bump dataChangedAt (see SPEC-data-provenance.md).
-    if (!anySet) setDayPills(derivePills(days, effortMap, forecast), { background: true });
-  }, [forecastLoaded]);
   // Notes safety net (carried over from the old Partner step): if this step opens
   // with every day note blank, fill from the baked schedule once. Fires only when
   // ALL are empty, so it never clobbers edits. New plans seed notes in startFresh;
@@ -1893,27 +1959,157 @@ function PlanMeals({ mealPlan, setMealPlan, commitMealToPlan, awayHome, setAwayH
     setNewPillLabel("");
   };
 
+  // The forecast covers the current shopping week (see getShoppingWeekDates), keyed
+  // by day name; the engine and the grill indicator only use a day's forecast when
+  // its DATE is this plan's date, so a next-week plan never borrows this week's weather.
+  const forecastDates = getShoppingWeekDates().dates;
+  const forecastByDate = Object.fromEntries(Object.entries(forecast || {})
+    .filter(([abbr]) => forecastDates[abbr]).map(([abbr, fc]) => [forecastDates[abbr], fc]));
+  const grillOpen = db.settings?.grillOpen !== false;
+
+  // WEEK CHECK (REFACTOR C2): observations for the plan as it stands — hand-placed and
+  // recommended together — recomputed whenever anything it reads changes. Declared
+  // after forecastByDate/dateOfDay, which it reads (TDZ).
+  const forecastKey = JSON.stringify(forecastByDate);
+  const weekCheck = useMemo(() => {
+    const planKey = db.activePlan || "current";
+    const plan = { ...(db.plans?.[planKey] || {}), weekStartDate, mealPlan, plates, timeLevels, presence, adventurousWeek };
+    if (!weekStartDate) return { planned: 0, observations: [], leftovers: {} };
+    return checkWeek(evaluateWeek, { db, planKey, plan, forecastByDate, today: todayLocalISO(), days });
+  }, [mealPlan, plates, timeLevels, presence, adventurousWeek, forecastKey, db.meals, db.settings, db.planTail, db.mealHistory, weekStartDate]);
+
+  // Fill every EMPTY day with a composed plate (REFACTOR S1 — composeWeek replaces the
+  // old weighted-random getMealSuggestions). Days that already have anything on them are
+  // never touched: they go to the engine as fixed context (alreadyPlaced), so spacing,
+  // leftovers and the floor are worked out around them.
   const regenerate = async () => {
     setLoading(true);
-    await new Promise(r => setTimeout(r, 400));
-    const alreadyPlanned = Object.values(mealPlan).flat();
-    // Soft variety: meals served in the last 3 archived weeks get deprioritized.
-    const recentMeals = (db.mealHistory || []).slice(-3).flatMap(h => h.meals || []);
-    // #3: also skip meals already surfaced in THIS session's rerolls, so each
-    // regenerate shows fresh options instead of re-landing on the same few.
-    // Once we'd have nothing new to show, reset the seen set and start over.
-    const eligibleCount = allMeals.filter(m => !alreadyPlanned.includes(m.name)).length;
-    let seen = seenSuggestions;
-    if (seen.length >= eligibleCount) seen = [];   // exhausted the pool → reset
-    const suggestions = getMealSuggestions(awayHome, allMeals, days, effortMap, alreadyPlanned, recentMeals, seen, dayPills, forecast, db.settings?.familyContacts || [], db.settings?.awayMemberHome !== false);
-    const freshlySuggested = days.map(d => suggestions[d]).filter(Boolean);
-    setSeenSuggestions([...new Set([...seen, ...freshlySuggested])]);
+    await new Promise(r => setTimeout(r, 30));   // let "Thinking..." paint
+    const planKey = db.activePlan || "current";
+    const plan = { ...(db.plans?.[planKey] || {}), weekStartDate, mealPlan, plates, timeLevels, presence };
+    let out;
+    try {
+      const { args, notes } = assembleComposeInputs({ db, planKey, plan, forecastByDate, seenThisSession, today: todayLocalISO(), days });
+      out = runComposeWeek(composeWeek, args, notes);
+    } catch (e) {
+      out = { week: {}, sessionState: { seenThisSession }, rationale: [],
+        observations: [{ property: "input", severity: "concern", text: `Couldn't prepare the planner's inputs: ${e.message}` }] };
+    }
+    // Only empty days take the engine's plate; each placed dish carries its reason and
+    // a leftovers snapshot (platesFromCompose → reconcilePlates, REFACTOR C1).
+    const emptyDates = Object.fromEntries(days.filter(d => !(mealPlan[d] || []).length).map(d => [d, dateOfDay[d]]));
+    const annotations = platesFromCompose(out, emptyDates, db.meals || []);
     setMealPlan(prev => {
       const next = { ...prev };
-      days.forEach(d => { if (!prev[d] || !prev[d].length) next[d] = suggestions[d] ? [suggestions[d]] : []; });
+      Object.entries(annotations).forEach(([d, a]) => { if (!(prev[d] || []).length) next[d] = a.dishes.map(x => x.name); });
       return next;
-    });
+    }, annotations);
+    setSeenThisSession(out.sessionState?.seenThisSession || seenThisSession);
+    setFillNotes(out.observations.filter(o => o.severity === "concern" && (o.property === "engine" || o.property === "input" || o.property === "pool")));
     setLoading(false);
+  };
+
+  // ── Plate-granular reroll (REFACTOR C3) ──────────────────────────────────────
+  // The global fill above touches only empty days; anything already on a day is edited
+  // here, one part at a time, so a fill can never clobber a plate James has tuned.
+  //
+  // Each action composes ONE target day: the day is scheduled with whatever it keeps,
+  // every other PLANNED day is fixed context (spacing, leftovers, the floor), and empty
+  // days are left out so the engine doesn't fill them first and use up candidates.
+  // composeWeek only suggests sides for a day that has none, so actions that want the
+  // engine's sides pass the day with its main alone.
+  const mealRec   = name => (db.meals || []).find(m => m.name.trim() === String(name).trim());
+  const dishesOf  = day => (mealPlan[day] || []).map((n, i) => {
+    const p = plates?.[day]?.dishes?.[i];
+    const d = p && p.name === n ? p : null;
+    return { name: n, mealId: d?.mealId || mealRec(n)?.id, role: d?.role || (mealRec(n)?.type === "side" ? "side" : "main"), source: d?.source || "manual" };
+  });
+  const composeOneDay = (day, keep, extraSeen = []) => {
+    const planKey = db.activePlan || "current";
+    const mp = { ...mealPlan, [day]: keep };
+    const onlyDays = days.filter(d => d === day || (mp[d] || []).length);
+    const plan = { ...(db.plans?.[planKey] || {}), weekStartDate, mealPlan: mp, plates, timeLevels, presence, adventurousWeek };
+    const seen = [...new Set([...seenThisSession, ...extraSeen.filter(Boolean)])];
+    let out;
+    try {
+      const { args, notes } = assembleComposeInputs({ db, planKey, plan, forecastByDate, seenThisSession: seen, today: todayLocalISO(), days, onlyDays });
+      out = runComposeWeek(composeWeek, args, notes);
+    } catch (e) {
+      out = { week: {}, sessionState: { seenThisSession: seen }, rationale: [], observations: [{ property: "input", severity: "concern", text: `Couldn't prepare the planner's inputs: ${e.message}` }] };
+    }
+    setSeenThisSession(out.sessionState?.seenThisSession || seen);
+    const errs = out.observations.filter(o => o.severity === "concern" && (o.property === "engine" || o.property === "input" || o.property === "pool"));
+    const ann = platesFromCompose(out, { [day]: dateOfDay[day] }, db.meals || [])[day] || { dishes: [], leftovers: [] };
+    return { ann, errs };
+  };
+  const dayNote = (day, text) => setFillNotes([{ property: "plate", severity: "concern", text: `${abbrOfISO(dateOfDay[day])} ${Number(dateOfDay[day].slice(5, 7))}/${Number(dateOfDay[day].slice(8))}: ${text}` }]);
+  // Apply new names for a day, carrying annotations only for the dishes the engine just
+  // placed; kept dishes keep their existing plate entries (reconcilePlates).
+  const applyDay = (day, names, newDishes, leftovers) => {
+    setFillNotes([]);
+    setMealPlan(prev => ({ ...prev, [day]: names }),
+      { [day]: { dishes: newDishes, leftovers: leftovers || [] } });
+  };
+
+  // Empty day → compose a fresh plate for it alone.
+  const fillDay = day => {
+    const { ann, errs } = composeOneDay(day, []);
+    if (!ann.dishes.length) { setFillNotes(errs.length ? errs : []); if (!errs.length) dayNote(day, "nothing eligible could be placed"); return; }
+    applyDay(day, ann.dishes.map(d => d.name), ann.dishes, ann.leftovers);
+  };
+
+  // ⟳ main → a different main; the engine's sides re-follow it. Sides placed by hand
+  // stay (they're James's), and with any kept the engine adds no sides of its own.
+  const rerollMain = day => {
+    const cur = dishesOf(day);
+    const main = cur.find(d => d.role === "main");
+    const keptSides = cur.filter(d => d.role === "side" && d.source === "manual");
+    const { ann, errs } = composeOneDay(day, keptSides.map(d => d.name), [main?.mealId]);
+    const newMain = ann.dishes.find(d => d.role === "main" && d.mealId !== main?.mealId);
+    if (!newMain) { if (errs.length) setFillNotes(errs); else dayNote(day, "no other main fits this day"); return; }
+    const newSides = ann.dishes.filter(d => d.role === "side" && !keptSides.some(k => k.name === d.name));
+    applyDay(day, [newMain.name, ...keptSides.map(d => d.name), ...newSides.map(d => d.name)], [newMain, ...newSides], ann.leftovers);
+  };
+
+  // ⟳ side → swap just that side for another the engine would put with this main.
+  const rerollSide = (day, idx) => {
+    const cur = dishesOf(day);
+    const main = cur.find(d => d.role === "main");
+    const side = cur[idx];
+    if (!main || !side) return;
+    const { ann } = composeOneDay(day, [main.name], [side.mealId]);
+    const onPlate = new Set(cur.map(d => d.name.trim()));
+    const pick = ann.dishes.find(d => d.role === "side" && !onPlate.has(d.name.trim()));
+    if (!pick) { dayNote(day, `no other side fits with ${main.name.trim()}`); return; }
+    const names = cur.map(d => d.name); names[idx] = pick.name;
+    applyDay(day, names, [pick], null);
+  };
+
+  // Suggest sides: the engine's sides for this day's main, adding only ones not already
+  // on the plate. The fix a floor concern offers (RULING 12), so it also works on a day
+  // that already has sides (e.g. only a non-substantial one). A day with sides but no
+  // main gets a main instead, keeping its sides.
+  const suggestSides = day => {
+    const cur = dishesOf(day);
+    const main = cur.find(d => d.role === "main");
+    if (!main) { suggestMain(day); return; }
+    const { ann } = composeOneDay(day, [main.name]);
+    const onPlate = new Set(cur.map(d => d.name.trim()));
+    const sides = ann.dishes.filter(d => d.role === "side" && !onPlate.has(d.name.trim()));
+    if (!sides.length) {
+      dayNote(day, cur.length > 1
+        ? `no other side would help with ${main.name.trim()} — try ⟳ for a different main`
+        : `${main.name.trim()} needs no sides — it covers everyone present and nothing pairs with it`);
+      return;
+    }
+    applyDay(day, [...cur.map(d => d.name), ...sides.map(d => d.name)], sides, ann.leftovers);
+  };
+  const suggestMain = day => {
+    const cur = dishesOf(day);
+    const { ann, errs } = composeOneDay(day, cur.map(d => d.name));
+    const newMain = ann.dishes.find(d => d.role === "main");
+    if (!newMain) { if (errs.length) setFillNotes(errs); else dayNote(day, "no main fits this day"); return; }
+    applyDay(day, [newMain.name, ...cur.map(d => d.name)], [newMain], ann.leftovers);
   };
 
   const [draftSms, setDraftSms] = useState(null);
@@ -1992,30 +2188,66 @@ function PlanMeals({ mealPlan, setMealPlan, commitMealToPlan, awayHome, setAwayH
         <div style={S.h2}>This week's dinners</div>
         <div style={{ marginBottom:12 }}>
           <div style={{ fontSize:12, color:C.faint, lineHeight:1.5 }}>
-            Each day uses its own forecast and pills. Grill days are auto-detected from the weather; tap a day's pills to adjust.
+            Each day uses its own forecast, time to cook, and who's home. Only "much" time allows involved meals. Tap a name to mark them away for that night; longer away periods live in Manage → Config. Grilling needs grill weather and grill season open (Manage → Config). Filling only touches empty days.
           </div>
         </div>
-        <button style={{ ...S.btn, ...S.btnS, marginBottom:0 }} onClick={regenerate} disabled={loading}>{loading?"Thinking...":"Regenerate empty days"}</button>
+        <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", gap:10, padding:"8px 0", marginBottom:8, borderTop:`1px solid ${C.border}` }}>
+          <div><div style={{ fontWeight:600, fontSize:14 }}>Adventurous week</div><div style={{ fontSize:12, color:C.faint }}>Place one meal you haven't tried yet</div></div>
+          <Toggle value={!!adventurousWeek} onChange={v => setAdventurousWeek(v)} />
+        </div>
+        <button style={{ ...S.btn, ...S.btnS, marginBottom:0 }} onClick={regenerate} disabled={loading}>{loading?"Thinking...":"Fill empty days"}</button>
+        {fillNotes.map((n, k) => (
+          <div key={k} style={{ fontSize:12, lineHeight:1.45, padding:"6px 8px", marginTop:8, borderRadius:6, color:C.warning, background:C.warningLight }}>⚠ {prettyDates(n.text)}</div>
+        ))}
       </div>
+      <WeekCheckPanel check={weekCheck} total={days.length} onFix={suggestSides} fixLabel={d => (dishesOf(d).some(x => x.role === "main") ? "Suggest a side" : "Suggest a main")} showInfo={showWeekInfo} setShowInfo={setShowWeekInfo} learnMode={learnMode} setLearnMode={setLearnMode} />
       {totalMeals === 0 && <button style={{ ...S.btn, ...S.btnP }} onClick={regenerate}>Generate meal plan</button>}
       {days.map((day, i) => {
         const dayMeals      = mealPlan[day] || [];
-        const pills         = dayPills?.[day] || [];
-        const isEasy        = pills.some(p => p.label === "easy");
-        const memberAway    = !awayHome[day];
+        // Stored "grill" pills are from before grill became engine-derived; not shown.
+        const pills         = (dayPills?.[day] || []).filter(p => p.label !== "grill");
+        const grillOk       = engineGrillOk(grillOpen, forecastByDate[dateOfDay[day]]);
+        const timeLevel     = (timeLevels || {})[day] || seedTimeLevel(day);
         const isEditingNew  = editing?.day === day && editing?.mealIdx == null;
         const editingPills  = pillEditDay === day;
+        // The day as a PLATE (REFACTOR C1): the plate entry for each listed meal, when
+        // the day has one (days untouched since before plates existed don't).
+        const plate         = plates?.[day];
+        const dishAt        = idx => (plate?.dishes?.[idx]?.name === dayMeals[idx] ? plate.dishes[idx] : null);
+        const isSide        = idx => (dishAt(idx)?.role || (allMeals.find(m => m.name === dayMeals[idx])?.type === "side" ? "side" : "main")) === "side";
+        // Why each dish is here (REFACTOR C2), from the reasons saved when it was placed.
+        // A side's headline reason is its floor-fill/affinity sentence. Other reasons the
+        // engine marked "always" show by default; learn mode shows every reason.
+        const reasons       = idx => reasonsOf(dishAt(idx));
+        const headline      = idx => isSide(idx) ? (reasons(idx).find(r => r.factor === "floor-fill" || r.factor === "affinity") || reasons(idx)[0]) : null;
+        const extraReasons  = idx => reasons(idx).filter(r => r !== headline(idx) && (learnMode || r.visibility === "always"));
+        const dayLeftovers  = weekCheck.leftovers?.[day] || [];
         return (
-          <div key={day} style={S.mealCard(isEasy)}>
+          <div key={day} style={S.mealCard(timeLevel === "none" ? "easy" : "medium")}>
             <div style={{ fontSize:11, fontWeight:700, color:C.accentMuted, letterSpacing:"0.06em", textTransform:"uppercase", marginBottom:4 }}>
               {daysFull[i]}
               {forecast[day] && <span style={{ marginLeft:8, fontWeight:600, color:C.muted, textTransform:"none", letterSpacing:0 }}>{forecast[day].icon} {forecast[day].hi}° · {forecast[day].pop}% rain</span>}
-              <span onClick={() => setAwayHome(prev => ({ ...prev, [day]: !(prev[day] !== false) }))}
-                style={{ marginLeft:8, cursor:"pointer", ...S.tag(memberAway ? C.warning : C.faint, memberAway ? C.warningLight : "#F1F1F1") }}>
-                {memberAway ? `${partnerName} away` : `${partnerName} home`}
-              </span>
             </div>
+            <div style={{ display:"flex", alignItems:"center", gap:4, flexWrap:"wrap", marginBottom:6 }}>
+              <span style={{ fontSize:11, color:C.faint, fontWeight:600, marginRight:2 }}>Time to cook</span>
+              {TIME_LEVELS.map(l => {
+                const on = timeLevel === l;
+                return <button key={l} style={{ ...S.btnSm, padding:"2px 10px", fontSize:11, background:on?C.primaryLight:"#FFF", color:on?C.primary:C.muted, border:`1px solid ${on?C.primary:C.border}`, fontWeight:on?700:500 }}
+                  onClick={() => setTimeLevels(prev => ({ ...prev, [day]: l }))}>{l}</button>;
+              })}
+            </div>
+            {roster.length > 0 && (
+              <div style={{ display:"flex", alignItems:"center", gap:4, flexWrap:"wrap", marginBottom:6 }}>
+                <span style={{ fontSize:11, color:C.faint, fontWeight:600, marginRight:2 }}>Home</span>
+                {roster.map(name => {
+                  const here = isPresentOn(name, day);
+                  return <span key={name} title={here ? "Tap to mark away tonight" : "Away — tap to mark home tonight"} onClick={() => togglePresence(day, name)}
+                    style={{ cursor:"pointer", ...S.tag(here ? C.muted : C.warning, here ? "#F1F1F1" : C.warningLight), textDecoration: here ? "none" : "line-through" }}>{name}</span>;
+                })}
+              </div>
+            )}
             <div style={{ display:"flex", flexWrap:"wrap", gap:4, alignItems:"center", marginBottom:6 }}>
+              {grillOk && <span title="Grill weather and grill season open — grillable meals can be suggested" style={S.tag(PILL_STYLE.grill.c, PILL_STYLE.grill.bg)}>🔥 grill ok</span>}
               {pills.map(p => {
                 const st = PILL_STYLE[p.label] || { c:C.muted, bg:"#F3F4F6" };
                 return (
@@ -2044,7 +2276,7 @@ function PlanMeals({ mealPlan, setMealPlan, commitMealToPlan, awayHome, setAwayH
                     onChange={e => setNewPillLabel(e.target.value)} onKeyDown={e => { if (e.key === "Enter") addCustomPill(day); }} />
                   <button style={{ ...S.btnSm, background:C.primary, color:"#fff" }} onClick={() => addCustomPill(day)}>Add</button>
                 </div>
-                <div style={{ fontSize:10, color:C.faint, marginTop:6 }}>easy / grill / special affect suggestions. Custom labels are visual only.</div>
+                <div style={{ fontSize:10, color:C.faint, marginTop:6 }}>Labels are visual only. "grill ok" is worked out from the forecast and grill season.</div>
               </div>
             )}
             <input
@@ -2069,8 +2301,20 @@ function PlanMeals({ mealPlan, setMealPlan, commitMealToPlan, awayHome, setAwayH
                   ) : isChanging ? (
                     <MealSearch day={day} mealIdx={mealIdx} />
                   ) : (
-                    <div style={{ display:"flex", alignItems:"center", gap:8 }}>
-                      <div style={{ flex:1, fontWeight:600, fontSize:15 }}>{meal}</div>
+                    <div style={{ display:"flex", alignItems:"center", gap:8, ...(isSide(mealIdx) ? { paddingLeft:14 } : {}) }}>
+                      <div style={{ flex:1, minWidth:0 }}>
+                        <div style={{ fontWeight: isSide(mealIdx) ? 500 : 600, fontSize: isSide(mealIdx) ? 14 : 15, display:"flex", alignItems:"center", gap:6, flexWrap:"wrap" }}>
+                          {meal}
+                          {sideBadge(dishAt(mealIdx))}
+                        </div>
+                        {headline(mealIdx) && <div style={{ fontSize:11, color:C.faint, lineHeight:1.35 }}>{prettyDates(headline(mealIdx).text)}</div>}
+                        {extraReasons(mealIdx).map((r, k) => (
+                          <div key={k} style={{ fontSize:11, lineHeight:1.35, color: r.visibility === "always" ? C.muted : C.faint }}>
+                            {learnMode && r.tier ? <span style={{ fontWeight:600 }}>{r.tier} · {r.role}: </span> : "• "}{prettyDates(r.text)}
+                          </div>
+                        ))}
+                      </div>
+                      <button title={isSide(mealIdx) ? "Swap this side for another" : "Try a different main (its sides follow)"} style={{ ...S.btnSm, background:"none", border:`1px solid ${C.border}`, color:C.muted, fontSize:12, padding:"4px 8px" }} onClick={() => (isSide(mealIdx) ? rerollSide(day, mealIdx) : rerollMain(day))}>⟳</button>
                       <button style={{ ...S.btnSm, background:"none", border:`1px solid ${C.border}`, color:C.muted, fontSize:11 }} onClick={() => setMoving({day,mealIdx})}>Move</button>
                       <button style={{ ...S.btnSm, background:"none", border:`1px solid ${C.border}`, color:C.muted, fontSize:11 }} onClick={() => setEditing({day,mealIdx})}>Change</button>
                       <button style={{ background:"none", border:"none", color:C.faint, fontSize:18, cursor:"pointer", padding:"0 4px" }} onClick={() => removeMeal(day,mealIdx)}>×</button>
@@ -2079,10 +2323,27 @@ function PlanMeals({ mealPlan, setMealPlan, commitMealToPlan, awayHome, setAwayH
                 </div>
               );
             })}
-            {isEditingNew ? <MealSearch day={day} /> : (
-              <button style={{ background:"none", border:`1.5px dashed ${C.border}`, borderRadius:8, padding:"6px 12px", fontSize:13, cursor:"pointer", color:C.faint, marginTop:8, width:"100%" }} onClick={() => setEditing({day, mealIdx:null})}>
-                + Add meal
+            {dayLeftovers.length > 0 && (
+              <div style={{ marginTop:6 }}>
+                {groupLeftoverNotes(dayLeftovers).map((t, k) => (
+                  <div key={"l"+k} style={{ fontSize:11, color:C.muted, lineHeight:1.4 }}>🥡 {t}</div>
+                ))}
+              </div>
+            )}
+            {!isEditingNew && dayMeals.length > 0 && ((weekCheck.floorConcernDays || []).includes(day) || !dayMeals.some((_, k) => isSide(k))) && (
+              <button style={{ background:"none", border:"none", color:(weekCheck.floorConcernDays || []).includes(day) ? C.warning : C.primary, fontSize:12, fontWeight:600, cursor:"pointer", padding:"6px 0 0" }} onClick={() => suggestSides(day)}>
+                {(weekCheck.floorConcernDays || []).includes(day) ? "⚠ " : "+ "}{dayMeals.some((_, k) => !isSide(k)) ? "Suggest sides" : "Suggest a main"}
               </button>
+            )}
+            {isEditingNew ? <MealSearch day={day} /> : (
+              <div style={{ display:"flex", gap:8, marginTop:8 }}>
+                {dayMeals.length === 0 && (
+                  <button style={{ background:C.primaryLight, border:`1.5px solid ${C.primaryLight}`, borderRadius:8, padding:"6px 12px", fontSize:13, cursor:"pointer", color:C.primary, fontWeight:600, flex:"0 0 auto" }} onClick={() => fillDay(day)}>⟳ Fill this day</button>
+                )}
+                <button style={{ background:"none", border:`1.5px dashed ${C.border}`, borderRadius:8, padding:"6px 12px", fontSize:13, cursor:"pointer", color:C.faint, flex:1 }} onClick={() => setEditing({day, mealIdx:null})}>
+                  + Add meal
+                </button>
+              </div>
             )}
           </div>
         );
@@ -2862,6 +3123,49 @@ function ManageHelp() {
 }
 
 // ── Meal editor ────────────────────────────────────────────────────────────────
+
+// Date-range away periods (REFACTOR B2's bulk-set convenience): "Kid 3 at college
+// Sep 1 – Dec 15". Either end may be left blank (open). A per-night toggle on
+// the Meals day card overrides a period for that one night. Module-level with
+// its own state so typing into the date fields keeps focus (see AutoGrowTextarea).
+function AwayPeriods({ contacts, ranges, onChange }) {
+  const [name, setName] = useState(contacts[0]?.name || "");
+  const [from, setFrom] = useState("");
+  const [to, setTo]     = useState("");
+  const fmt = iso => new Date(iso + "T00:00:00").toLocaleDateString("en-US", { month:"short", day:"numeric", year:"numeric" });
+  const describe = r => r.from && r.to ? `${fmt(r.from)} – ${fmt(r.to)}`
+    : r.from ? `from ${fmt(r.from)} until further notice`
+    : r.to   ? `until ${fmt(r.to)}`
+    : "until further notice";
+  const invalid = !name || (from && to && to < from);
+  const add = () => {
+    if (invalid) return;
+    onChange([...ranges, { id:"r"+Date.now(), name, from: from || null, to: to || null }]);
+    setFrom(""); setTo("");
+  };
+  return (
+    <div style={{ padding:"10px 0", borderBottom:`1px solid ${C.border}` }}>
+      <div style={{ fontWeight:600 }}>Away periods</div>
+      <div style={{ fontSize:12, color:C.faint, marginBottom:8 }}>Who's away for meal planning, by date. Leave a date blank for open-ended.</div>
+      {ranges.length === 0 && <div style={{ fontSize:13, color:C.faint, marginBottom:8 }}>None — everyone is home unless marked away on a day.</div>}
+      {ranges.map(r => (
+        <div key={r.id} style={{ display:"flex", alignItems:"center", gap:8, padding:"6px 0" }}>
+          <div style={{ flex:1, fontSize:14 }}><span style={{ fontWeight:600 }}>{r.name}</span> <span style={{ color:C.muted }}>{describe(r)}</span></div>
+          <button style={{ background:"none", border:"none", color:C.faint, fontSize:18, cursor:"pointer", padding:"0 4px" }} title="Remove" onClick={() => onChange(ranges.filter(x => x.id !== r.id))}>×</button>
+        </div>
+      ))}
+      <div style={{ display:"flex", gap:6, flexWrap:"wrap", alignItems:"center", marginTop:6 }}>
+        <select style={{ ...S.select, flex:"1 1 110px", marginBottom:0 }} value={name} onChange={e => setName(e.target.value)}>
+          {contacts.map(f => <option key={f.name} value={f.name}>{f.name}</option>)}
+        </select>
+        <input type="date" aria-label="Away from" style={{ ...S.input, flex:"1 1 130px", marginBottom:0 }} value={from} onChange={e => setFrom(e.target.value)} />
+        <input type="date" aria-label="Away until" style={{ ...S.input, flex:"1 1 130px", marginBottom:0 }} value={to} onChange={e => setTo(e.target.value)} />
+        <button style={{ ...S.btnSm, background:invalid?"#F3F4F6":C.primary, color:invalid?C.muted:"#fff" }} disabled={invalid} onClick={add}>Add</button>
+      </div>
+      {from && to && to < from && <div style={{ fontSize:11, color:C.danger, marginTop:4 }}>"Until" is before "from".</div>}
+    </div>
+  );
+}
 
 function MealEditor({ meal, ingredients, onSave, onCancel, onDelete, onAddIngredient, initialName, familyContacts }) {
   const [form, setForm] = useState(meal || { id:"m"+Date.now(), createdAt:new Date().toISOString(), name:toSentenceCase(initialName||""), effort:"medium", type:"dinner", weather:"any", tempAffinity:"neutral", grillable:false, leftovers:"none", preferences:[], notes:"", ingredients:[] });
@@ -3799,11 +4103,20 @@ function ManageConfig({ db, persistDB }) {
       </div>
 
       <div style={S.card}>
+        <div style={S.sectionLabel}>Cooking</div>
+        <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"10px 0" }}>
+          <div><div style={{ fontWeight:600 }}>Grill season open</div><div style={{ fontSize:12, color:C.faint }}>Turn off when you close the grill for the year. Grillable meals need this and grill weather.</div></div>
+          <Toggle value={db.settings.grillOpen !== false} onChange={v => upd("grillOpen",v)} />
+        </div>
+      </div>
+
+      <div style={S.card}>
         <div style={S.sectionLabel}>Family</div>
         <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"10px 0", borderBottom:`1px solid ${C.border}` }}>
-          <div><div style={{ fontWeight:600 }}>{(db.settings.familyContacts||[]).find(f=>f.canBeAway)?.name || "Away member"} is home</div><div style={{ fontSize:12, color:C.faint }}>Toggle off when away (e.g. at college)</div></div>
+          <div><div style={{ fontWeight:600 }}>{(db.settings.familyContacts||[]).find(f=>f.canBeAway)?.name || "Away member"} gets family texts</div><div style={{ fontSize:12, color:C.faint }}>Off leaves them out of family texts (e.g. at college). Meal planning uses Away periods below.</div></div>
           <Toggle value={db.settings.awayMemberHome} onChange={v => upd("awayMemberHome",v)} />
         </div>
+        <AwayPeriods contacts={db.settings.familyContacts || []} ranges={db.settings.awayRanges || []} onChange={r => upd("awayRanges", r)} />
         {(db.settings.familyContacts||[]).map((f,i,arr) => (
           <div key={f.name} style={{ ...S.row, padding:"10px 0", ...(i===arr.length-1?S.rowLast:{}) }}>
             <div style={{ flex:1 }}><div style={{ fontWeight:600 }}>{f.name}</div><div style={{ fontSize:12, color:C.faint }}>{f.phone||"No number set"}</div></div>
@@ -4366,6 +4679,16 @@ export default function App() {
   return (
     <ErrorBoundary>
       <div style={S.app}>
+        {IS_PREVIEW && (
+          <div style={{ background:"#7A4DFF", color:"#fff", fontSize:12, fontWeight:700, padding:"6px 12px", display:"flex", alignItems:"center", justifyContent:"space-between", gap:10 }}>
+            <span>PREVIEW — separate data; your live app is untouched</span>
+            <button
+              style={{ background:"rgba(255,255,255,0.2)", color:"#fff", border:"1px solid rgba(255,255,255,0.5)", borderRadius:6, fontSize:11, fontWeight:700, padding:"3px 8px", cursor:"pointer" }}
+              onClick={() => { if (window.confirm("Discard preview data and re-copy your live data?") && seedPreviewFromLive(true)) window.location.reload(); }}
+              title="Discard preview data and re-copy your live data (live data is only read)"
+            >Reset from live</button>
+          </div>
+        )}
         <div style={S.header}>
           <div style={S.headerTop}>
             <div style={S.headerTitle}>Grocery Planner</div>
