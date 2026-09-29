@@ -460,12 +460,23 @@ export function checkWeek(evaluateWeek, { db, planKey, plan, forecastByDate = {}
     out = { rationale: [], observations: [{ property: 'engine', severity: 'concern', text: `The week check hit an error: ${e && e.message ? e.message : e}` }] };
   }
   const abbrOf = Object.fromEntries(Object.entries(weekDates(plan.weekStartDate)).map(([abbr, iso]) => [iso, abbr]));
+  // Ruling 12: a floor concern offers the fix (suggest-sides) for its day. The engine's
+  // Observation has no day field, so the day is read from the date in its text; this
+  // copy gains a `day` (abbr) the UI uses for the fix button. The concern itself names
+  // no dish — the suggest-sides action does the recommending.
+  const tagDay = (o) => {
+    if (o.property !== 'floor' || o.severity !== 'concern') return o;
+    const iso = (/\b\d{4}-\d{2}-\d{2}\b/.exec(o.text) || [])[0];
+    return iso && abbrOf[iso] ? { ...o, day: abbrOf[iso] } : o;
+  };
   const leftovers = {};
   for (const r of out.rationale || []) {
     if (r.factor !== 'carried-leftover-fill' || !abbrOf[r.day]) continue;
     (leftovers[abbrOf[r.day]] = leftovers[abbrOf[r.day]] || []).push(r.text);
   }
-  return { planned, observations: [...notes, ...(out.observations || [])], leftovers };
+  const observations = [...notes, ...(out.observations || [])].map(tagDay);
+  const floorConcernDays = [...new Set(observations.filter((o) => o.day).map((o) => o.day))];
+  return { planned, observations, leftovers, floorConcernDays };
 }
 
 /**

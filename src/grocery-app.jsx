@@ -1663,7 +1663,7 @@ function PlanWelcome({ onStart, onStartNext, onResume, draft, persistDB, db, onG
       <div style={{ ...S.card, background:C.primary, color:"#E8F5EE" }}>
         <div style={{ fontSize:28, marginBottom:8 }}>🛒</div>
         <div style={{ fontSize:22, fontWeight:700, marginBottom:6 }}>Weekly Grocery Planner</div>
-        <div style={{ fontSize:14, opacity:0.8, lineHeight:1.5 }}>Middletown DE</div>
+        <div style={{ fontSize:14, opacity:0.8, lineHeight:1.5 }}>Plan the week's dinners, then the grocery order</div>
       </div>
 
       <RefreshReminder dayNotes={draft?.dayNotes} />
@@ -1814,7 +1814,7 @@ const prettyDates = text => String(text || "").replace(/\b(\d{4})-(\d{2})-(\d{2}
 // to presentation, quiet by default: concerns always shown, "ok" as a short check line,
 // info folded away behind a count. Learn mode ("Show reasoning") turns on the full
 // per-dish rationale on the day cards.
-function WeekCheckPanel({ check, total, showInfo, setShowInfo, learnMode, setLearnMode }) {
+function WeekCheckPanel({ check, total, showInfo, setShowInfo, learnMode, setLearnMode, onFix, fixLabel }) {
   const obs      = check?.observations || [];
   const concerns = obs.filter(o => o.severity === "concern");
   const oks      = obs.filter(o => o.severity === "ok");
@@ -1827,7 +1827,14 @@ function WeekCheckPanel({ check, total, showInfo, setShowInfo, learnMode, setLea
         <button style={{ ...S.btnSm, padding:"2px 10px", fontSize:11, background:learnMode?C.primaryLight:"#FFF", color:learnMode?C.primary:C.muted, border:`1px solid ${learnMode?C.primary:C.border}`, fontWeight:learnMode?700:500 }}
           onClick={() => setLearnMode(!learnMode)} title="Show why each meal and side is where it is">{learnMode ? "✓ Show reasoning" : "Show reasoning"}</button>
       </div>
-      {concerns.map((o, k) => <div key={"c"+k} style={line(C.warningLight, C.warning)}>⚠ {prettyDates(o.text)}</div>)}
+      {concerns.map((o, k) => (
+        <div key={"c"+k} style={{ ...line(C.warningLight, C.warning), display:"flex", alignItems:"center", justifyContent:"space-between", gap:8 }}>
+          <span>⚠ {prettyDates(o.text)}</span>
+          {o.day && onFix && (
+            <button style={{ ...S.btnSm, flex:"0 0 auto", fontSize:11, padding:"3px 8px", background:"#FFF", color:C.warning, border:`1px solid ${C.warning}` }} onClick={() => onFix(o.day)}>{fixLabel(o.day)}</button>
+          )}
+        </div>
+      ))}
       {oks.map((o, k) => <div key={"o"+k} style={line("#F0FAF4", C.primary)}>✓ {prettyDates(o.text)}</div>)}
       {infos.length > 0 && (
         <button style={{ background:"none", border:"none", color:C.muted, fontSize:12, cursor:"pointer", padding:"6px 0 0", textAlign:"left" }} onClick={() => setShowInfo(!showInfo)}>
@@ -2078,15 +2085,31 @@ function PlanMeals({ mealPlan, plates, setMealPlan, commitMealToPlan, timeLevels
     applyDay(day, names, [pick], null);
   };
 
-  // Main present, no sides → complete the plate with the engine's sides for that main.
+  // Suggest sides: the engine's sides for this day's main, adding only ones not already
+  // on the plate. The fix a floor concern offers (RULING 12), so it also works on a day
+  // that already has sides (e.g. only a non-substantial one). A day with sides but no
+  // main gets a main instead, keeping its sides.
   const suggestSides = day => {
     const cur = dishesOf(day);
     const main = cur.find(d => d.role === "main");
-    if (!main) return;
+    if (!main) { suggestMain(day); return; }
     const { ann } = composeOneDay(day, [main.name]);
-    const sides = ann.dishes.filter(d => d.role === "side");
-    if (!sides.length) { dayNote(day, `${main.name.trim()} needs no sides — it covers everyone present and nothing pairs with it`); return; }
+    const onPlate = new Set(cur.map(d => d.name.trim()));
+    const sides = ann.dishes.filter(d => d.role === "side" && !onPlate.has(d.name.trim()));
+    if (!sides.length) {
+      dayNote(day, cur.length > 1
+        ? `no other side would help with ${main.name.trim()} — try ⟳ for a different main`
+        : `${main.name.trim()} needs no sides — it covers everyone present and nothing pairs with it`);
+      return;
+    }
     applyDay(day, [...cur.map(d => d.name), ...sides.map(d => d.name)], sides, ann.leftovers);
+  };
+  const suggestMain = day => {
+    const cur = dishesOf(day);
+    const { ann, errs } = composeOneDay(day, cur.map(d => d.name));
+    const newMain = ann.dishes.find(d => d.role === "main");
+    if (!newMain) { if (errs.length) setFillNotes(errs); else dayNote(day, "no main fits this day"); return; }
+    applyDay(day, [newMain.name, ...cur.map(d => d.name)], [newMain], ann.leftovers);
   };
 
   const [draftSms, setDraftSms] = useState(null);
@@ -2177,7 +2200,7 @@ function PlanMeals({ mealPlan, plates, setMealPlan, commitMealToPlan, timeLevels
           <div key={k} style={{ fontSize:12, lineHeight:1.45, padding:"6px 8px", marginTop:8, borderRadius:6, color:C.warning, background:C.warningLight }}>⚠ {prettyDates(n.text)}</div>
         ))}
       </div>
-      <WeekCheckPanel check={weekCheck} total={days.length} showInfo={showWeekInfo} setShowInfo={setShowWeekInfo} learnMode={learnMode} setLearnMode={setLearnMode} />
+      <WeekCheckPanel check={weekCheck} total={days.length} onFix={suggestSides} fixLabel={d => (dishesOf(d).some(x => x.role === "main") ? "Suggest a side" : "Suggest a main")} showInfo={showWeekInfo} setShowInfo={setShowWeekInfo} learnMode={learnMode} setLearnMode={setLearnMode} />
       {totalMeals === 0 && <button style={{ ...S.btn, ...S.btnP }} onClick={regenerate}>Generate meal plan</button>}
       {days.map((day, i) => {
         const dayMeals      = mealPlan[day] || [];
@@ -2307,8 +2330,10 @@ function PlanMeals({ mealPlan, plates, setMealPlan, commitMealToPlan, timeLevels
                 ))}
               </div>
             )}
-            {!isEditingNew && dayMeals.length > 0 && !dayMeals.some((_, k) => isSide(k)) && (
-              <button style={{ background:"none", border:"none", color:C.primary, fontSize:12, fontWeight:600, cursor:"pointer", padding:"6px 0 0" }} onClick={() => suggestSides(day)}>+ Suggest sides</button>
+            {!isEditingNew && dayMeals.length > 0 && ((weekCheck.floorConcernDays || []).includes(day) || !dayMeals.some((_, k) => isSide(k))) && (
+              <button style={{ background:"none", border:"none", color:(weekCheck.floorConcernDays || []).includes(day) ? C.warning : C.primary, fontSize:12, fontWeight:600, cursor:"pointer", padding:"6px 0 0" }} onClick={() => suggestSides(day)}>
+                {(weekCheck.floorConcernDays || []).includes(day) ? "⚠ " : "+ "}{dayMeals.some((_, k) => !isSide(k)) ? "Suggest sides" : "Suggest a main"}
+              </button>
             )}
             {isEditingNew ? <MealSearch day={day} /> : (
               <div style={{ display:"flex", gap:8, marginTop:8 }}>
