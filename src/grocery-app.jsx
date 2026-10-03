@@ -951,41 +951,44 @@ const FORECAST_LON = -75.71768;
 const FORECAST_CACHE_KEY = "grocery_forecast_cache" + KEY_SUFFIX;
 const FORECAST_CACHE_TTL_MS = 6 * 60 * 60 * 1000; // 6 hours
 
-// The shopping week runs Tue → Mon. Given "today", find this cycle's Tuesday and
-// return the 7 dates keyed by day abbr, plus ISO bounds for the API date range.
-function getShoppingWeekDates(today = new Date()) {
-  const d = new Date(today); d.setHours(0, 0, 0, 0);
-  const daysSinceTue = (d.getDay() - 2 + 7) % 7;
-  const tue = new Date(d); tue.setDate(d.getDate() - daysSinceTue);
-  const abbrs = ["Tue", "Wed", "Thu", "Fri", "Sat", "Sun", "Mon"];
-  const iso = x => x.toISOString().slice(0, 10);
-  const dates = {};
-  abbrs.forEach((abbr, i) => { const dt = new Date(tue); dt.setDate(tue.getDate() + i); dates[abbr] = iso(dt); });
-  return { start: dates.Tue, end: dates.Mon, dates };
-}
+// The forecast is fetched for the PLAN's own dates, keyed by ISO date, so the
+// week being planned gets its weather whether it is this week or next. Open-Meteo
+// forecasts today + 15 days and serves recent past days too; dates outside that
+// window are left out (no forecast = neutral, same as offline).
+const FORECAST_AHEAD_DAYS = 15;
+const FORECAST_BACK_DAYS  = 7;
 
 const iconForPop = pop => pop >= 50 ? "⛈️" : pop >= 20 ? "🌤️" : "☀️";
 
-function readForecastCache(weekStart) {
+// Cache: { "start|end": { fetchedAt, forecast } }, expired ranges pruned on write.
+function readForecastCache(range) {
   try {
-    const raw = localStorage.getItem(FORECAST_CACHE_KEY);
-    if (!raw) return null;
-    const cached = JSON.parse(raw);
-    if (cached.weekStart !== weekStart) return null;
-    if (Date.now() - cached.fetchedAt > FORECAST_CACHE_TTL_MS) return null;
-    return cached.forecast;
+    const hit = JSON.parse(localStorage.getItem(FORECAST_CACHE_KEY) || "{}")[range];
+    if (!hit || Date.now() - hit.fetchedAt > FORECAST_CACHE_TTL_MS) return null;
+    return hit.forecast;
   } catch { return null; }
 }
-function writeForecastCache(weekStart, forecast) {
-  try { localStorage.setItem(FORECAST_CACHE_KEY, JSON.stringify({ weekStart, fetchedAt: Date.now(), forecast })); } catch {}
+function writeForecastCache(range, forecast) {
+  try {
+    let all = {};
+    try { all = JSON.parse(localStorage.getItem(FORECAST_CACHE_KEY) || "{}"); } catch {}
+    if (!all || typeof all !== "object" || "weekStart" in all) all = {}; // old single-week shape
+    for (const k of Object.keys(all)) if (Date.now() - (all[k]?.fetchedAt || 0) > FORECAST_CACHE_TTL_MS) delete all[k];
+    all[range] = { fetchedAt: Date.now(), forecast };
+    localStorage.setItem(FORECAST_CACHE_KEY, JSON.stringify(all));
+  } catch {}
 }
 
-// Fetches the live 7-day forecast for the current shopping week. Returns an object
-// keyed by day abbr ({ hi, pop, icon }), or {} on any failure (offline, blocked,
-// API hiccup) — callers treat missing days as neutral, so {} is safe, not an error.
-async function fetchLiveForecast() {
-  const { start, end, dates } = getShoppingWeekDates();
-  const cached = readForecastCache(start);
+// Fetches the live forecast for the given ISO dates. Returns { iso: { hi, pop, icon } }
+// for the dates the API covers, or {} on any failure (offline, blocked, API hiccup) —
+// callers treat missing dates as neutral, so {} is safe, not an error.
+async function fetchLiveForecast(dates) {
+  const today = todayLocalISO();
+  const lo = addDaysISO(today, -FORECAST_BACK_DAYS), hi = addDaysISO(today, FORECAST_AHEAD_DAYS);
+  const want = [...new Set((dates || []).filter(d => d && d >= lo && d <= hi))].sort();
+  if (!want.length) return {};
+  const start = want[0], end = want[want.length - 1], range = `${start}|${end}`;
+  const cached = readForecastCache(range);
   if (cached) return cached;
   try {
     const controller = new AbortController();
@@ -998,14 +1001,13 @@ async function fetchLiveForecast() {
     const days = data?.daily?.time || [];
     const highs = data?.daily?.temperature_2m_max || [];
     const pops  = data?.daily?.precipitation_probability_max || [];
-    const byDate = {};
-    days.forEach((iso, i) => { byDate[iso] = { hi: Math.round(highs[i]), pop: Math.round(pops[i] ?? 0) }; });
     const forecast = {};
-    Object.entries(dates).forEach(([abbr, iso]) => {
-      const d = byDate[iso];
-      if (d) forecast[abbr] = { ...d, icon: iconForPop(d.pop) };
+    days.forEach((iso, i) => {
+      if (!want.includes(iso) || highs[i] == null) return;
+      const pop = Math.round(pops[i] ?? 0);
+      forecast[iso] = { hi: Math.round(highs[i]), pop, icon: iconForPop(pop) };
     });
-    writeForecastCache(start, forecast);
+    writeForecastCache(range, forecast);
     return forecast;
   } catch { return {}; }
 }
@@ -1926,16 +1928,20 @@ function PlanMeals({ mealPlan, plates, setMealPlan, commitMealToPlan, timeLevels
   const [showWeekInfo, setShowWeekInfo] = useState(false);
   const learnMode = !!db.settings?.learnMode;
   const setLearnMode = v => persistDB({ ...db, settings: { ...db.settings, learnMode: v } });
-  // Live weather: fetch once on mount (cached 6h). Falls back to {} when blocked
-  // or offline, which every consumer treats as neutral. See fetchLiveForecast.
+  // Live weather for THIS plan's dates (cached 6h), keyed by ISO date. Refetched when
+  // the plan's dates change. Falls back to {} when blocked or offline, which every
+  // consumer treats as neutral. See fetchLiveForecast.
   // NOTE: declared BEFORE regenerate and the day cards, which read them — const has
   // no hoisting, so using them earlier throws a temporal-dead-zone ReferenceError.
-  const [forecast, setForecast] = useState({});
+  // dateOfDay (above) must stay declared before this.
+  const [forecastByDate, setForecastByDate] = useState({});
+  const planDatesKey = days.map(d => dateOfDay[d] || "").join(",");
   useEffect(() => {
     let cancelled = false;
-    fetchLiveForecast().then(f => { if (!cancelled) setForecast(f); });
+    setForecastByDate({});
+    fetchLiveForecast(Object.values(dateOfDay)).then(f => { if (!cancelled) setForecastByDate(f); });
     return () => { cancelled = true; };
-  }, []);
+  }, [planDatesKey]);
   // Notes safety net (carried over from the old Partner step): if this step opens
   // with every day note blank, fill from the baked schedule once. Fires only when
   // ALL are empty, so it never clobbers edits. New plans seed notes in startFresh;
@@ -1959,12 +1965,6 @@ function PlanMeals({ mealPlan, plates, setMealPlan, commitMealToPlan, timeLevels
     setNewPillLabel("");
   };
 
-  // The forecast covers the current shopping week (see getShoppingWeekDates), keyed
-  // by day name; the engine and the grill indicator only use a day's forecast when
-  // its DATE is this plan's date, so a next-week plan never borrows this week's weather.
-  const forecastDates = getShoppingWeekDates().dates;
-  const forecastByDate = Object.fromEntries(Object.entries(forecast || {})
-    .filter(([abbr]) => forecastDates[abbr]).map(([abbr, fc]) => [forecastDates[abbr], fc]));
   const grillOpen = db.settings?.grillOpen !== false;
 
   // WEEK CHECK (REFACTOR C2): observations for the plan as it stands — hand-placed and
@@ -2206,7 +2206,8 @@ function PlanMeals({ mealPlan, plates, setMealPlan, commitMealToPlan, timeLevels
         const dayMeals      = mealPlan[day] || [];
         // Stored "grill" pills are from before grill became engine-derived; not shown.
         const pills         = (dayPills?.[day] || []).filter(p => p.label !== "grill");
-        const grillOk       = engineGrillOk(grillOpen, forecastByDate[dateOfDay[day]]);
+        const dayFc         = forecastByDate[dateOfDay[day]];
+        const grillOk       = engineGrillOk(grillOpen, dayFc);
         const timeLevel     = (timeLevels || {})[day] || seedTimeLevel(day);
         const isEditingNew  = editing?.day === day && editing?.mealIdx == null;
         const editingPills  = pillEditDay === day;
@@ -2226,7 +2227,7 @@ function PlanMeals({ mealPlan, plates, setMealPlan, commitMealToPlan, timeLevels
           <div key={day} style={S.mealCard(timeLevel === "none" ? "easy" : "medium")}>
             <div style={{ fontSize:11, fontWeight:700, color:C.accentMuted, letterSpacing:"0.06em", textTransform:"uppercase", marginBottom:4 }}>
               {daysFull[i]}
-              {forecast[day] && <span style={{ marginLeft:8, fontWeight:600, color:C.muted, textTransform:"none", letterSpacing:0 }}>{forecast[day].icon} {forecast[day].hi}° · {forecast[day].pop}% rain</span>}
+              {dayFc && <span style={{ marginLeft:8, fontWeight:600, color:C.muted, textTransform:"none", letterSpacing:0 }}>{dayFc.icon} {dayFc.hi}° · {dayFc.pop}% rain</span>}
             </div>
             <div style={{ display:"flex", alignItems:"center", gap:4, flexWrap:"wrap", marginBottom:6 }}>
               <span style={{ fontSize:11, color:C.faint, fontWeight:600, marginRight:2 }}>Time to cook</span>
@@ -3062,7 +3063,7 @@ const HELP_SECTIONS = [
     "**Prep \"already in cart\" box**: matches your text to a real ingredient. If it matches, the item leaves your list. If not, it's kept as a note only — read the confirmation to see which happened.",
   ]},
   { t:"Weekly refresh", body:[
-    "The forecast is fetched **live** (Open-Meteo) for the current shopping week — nothing to refresh by hand.",
+    "The forecast is fetched **live** (Open-Meteo) for the dates of the week you are planning, up to about two weeks ahead — nothing to refresh by hand.",
     "Day notes auto-fill from defaults when a plan starts, so a plan never begins blank.",
     "Calendar events come in by importing an updated DB export — edit the exported JSON, then import it back.",
   ]},
