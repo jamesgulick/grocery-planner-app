@@ -2279,11 +2279,12 @@ function PlanMeals({ mealPlan, plates, setMealPlan, commitMealToPlan, timeLevels
                 <div style={{ fontSize:10, color:C.faint, marginTop:6 }}>Labels are visual only. "grill ok" is worked out from the forecast and grill season.</div>
               </div>
             )}
-            <input
-              style={{ fontSize:12, border:"none", borderBottom:`1px dashed ${C.border}`, outline:"none", background:"transparent", color:(dayNotes||{})[day]?C.warning:C.faint, width:"100%", padding:"2px 0", marginBottom:6, fontStyle:(dayNotes||{})[day]?"normal":"italic" }}
+            {/* Wraps and grows so a long note reads in full; newlines are dropped to keep notes one line, as before. */}
+            <AutoGrowTextarea
+              style={{ display:"block", boxSizing:"border-box", fontSize:12, fontFamily:"inherit", lineHeight:1.4, resize:"none", overflow:"hidden", border:"none", borderBottom:`1px dashed ${C.border}`, outline:"none", background:"transparent", color:(dayNotes||{})[day]?C.warning:C.faint, width:"100%", padding:"2px 0", marginBottom:6, fontStyle:(dayNotes||{})[day]?"normal":"italic" }}
               placeholder="📝 Note for this day (e.g. business trip — takeout)"
               value={(dayNotes||{})[day]||""}
-              onChange={e => setDayNotes(prev => ({ ...prev, [day]:e.target.value }))}
+              onChange={v => setDayNotes(prev => ({ ...prev, [day]:v.replace(/[\r\n]+/g, " ") }))}
             />
             {dayMeals.map((meal, mealIdx) => {
               const isMoving   = moving?.day===day && moving?.mealIdx===mealIdx;
