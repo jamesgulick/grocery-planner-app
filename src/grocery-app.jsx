@@ -2216,6 +2216,12 @@ function PlanMeals({ mealPlan, plates, setMealPlan, commitMealToPlan, timeLevels
         const plate         = plates?.[day];
         const dishAt        = idx => (plate?.dishes?.[idx]?.name === dayMeals[idx] ? plate.dishes[idx] : null);
         const isSide        = idx => (dishAt(idx)?.role || (allMeals.find(m => m.name === dayMeals[idx])?.type === "side" ? "side" : "main")) === "side";
+        // A main tagged noSidesUnlessNeeded is complete on its own (sides built in, or
+        // takeout): the engine adds a side only to cover someone who won't eat it, so the
+        // day shows "no sides needed" and offers "Suggest sides" only for a floor concern.
+        const noSidesMain   = idx => !isSide(idx) && allMeals.find(m => m.name === dayMeals[idx])?.noSidesUnlessNeeded === true;
+        const floorConcern  = (weekCheck.floorConcernDays || []).includes(day);
+        const offerSides    = floorConcern || (!dayMeals.some((_, k) => isSide(k)) && !dayMeals.some((_, k) => noSidesMain(k)));
         // Why each dish is here (REFACTOR C2), from the reasons saved when it was placed.
         // A side's headline reason is its floor-fill/affinity sentence. Other reasons the
         // engine marked "always" show by default; learn mode shows every reason.
@@ -2308,6 +2314,7 @@ function PlanMeals({ mealPlan, plates, setMealPlan, commitMealToPlan, timeLevels
                         <div style={{ fontWeight: isSide(mealIdx) ? 500 : 600, fontSize: isSide(mealIdx) ? 14 : 15, display:"flex", alignItems:"center", gap:6, flexWrap:"wrap" }}>
                           {meal}
                           {sideBadge(dishAt(mealIdx))}
+                          {noSidesMain(mealIdx) && <span style={S.tag(C.muted, "#F3F4F6")} title="Complete on its own. A side is added only to cover someone who won't eat it.">no sides needed</span>}
                         </div>
                         {headline(mealIdx) && <div style={{ fontSize:11, color:C.faint, lineHeight:1.35 }}>{prettyDates(headline(mealIdx).text)}</div>}
                         {extraReasons(mealIdx).map((r, k) => (
@@ -2332,9 +2339,9 @@ function PlanMeals({ mealPlan, plates, setMealPlan, commitMealToPlan, timeLevels
                 ))}
               </div>
             )}
-            {!isEditingNew && dayMeals.length > 0 && ((weekCheck.floorConcernDays || []).includes(day) || !dayMeals.some((_, k) => isSide(k))) && (
-              <button style={{ background:"none", border:"none", color:(weekCheck.floorConcernDays || []).includes(day) ? C.warning : C.primary, fontSize:12, fontWeight:600, cursor:"pointer", padding:"6px 0 0" }} onClick={() => suggestSides(day)}>
-                {(weekCheck.floorConcernDays || []).includes(day) ? "⚠ " : "+ "}{dayMeals.some((_, k) => !isSide(k)) ? "Suggest sides" : "Suggest a main"}
+            {!isEditingNew && dayMeals.length > 0 && offerSides && (
+              <button style={{ background:"none", border:"none", color:floorConcern ? C.warning : C.primary, fontSize:12, fontWeight:600, cursor:"pointer", padding:"6px 0 0" }} onClick={() => suggestSides(day)}>
+                {floorConcern ? "⚠ " : "+ "}{dayMeals.some((_, k) => !isSide(k)) ? "Suggest sides" : "Suggest a main"}
               </button>
             )}
             {isEditingNew ? <MealSearch day={day} /> : (
