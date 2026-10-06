@@ -746,9 +746,14 @@ export function timeLevelOf(day) {
   return day.time ? 'much' : 'none';
 }
 
-/** Rotation pool eligibility. `manual` is never auto-drawn; `soon` bypasses adventurousWeek. */
+/**
+ * Rotation pool eligibility. `manual` is never auto-drawn; `soon` bypasses adventurousWeek.
+ * MODEL RULING 13 (10/06): `soon` overrides WHATEVER holds a meal out of the auto-pool, so
+ * it also lifts the `manual` exclusion (the external trigger has fired). The meal stays
+ * `manual`; it is drawable only while the flag is set.
+ */
 function rotationEligible(meal, config) {
-  if (meal.rotation === 'manual') return false;
+  if (meal.rotation === 'manual') return !!meal.soon;
   if (meal.rotation === 'experimental') return !!config.adventurousWeek || !!meal.soon;
   return true;
 }
