@@ -49,8 +49,6 @@ const tierValueOf = ing => {
   return subs && subs.length ? `${ing.tier}:${ing.stapleType || subs[0]}` : ing.tier;
 };
 const EFFORTS = ["easy","medium","involved"];
-const WEATHER_OPTIONS  = ["any","hot","cold","grill"];
-const LEFTOVER_OPTIONS = ["none","yes"];
 // Day-fit affinity: how a meal matches the day's feel. Drives soft suggestion
 // nudges (comfort on cold days, light on hot). Separate from grillable (a hard
 // gate on bad-grill weather). See the meal-suggestion weighting.
@@ -3176,8 +3174,171 @@ function AwayPeriods({ contacts, ranges, onChange }) {
   );
 }
 
-function MealEditor({ meal, ingredients, onSave, onCancel, onDelete, onAddIngredient, initialName, familyContacts }) {
-  const [form, setForm] = useState(meal || { id:"m"+Date.now(), createdAt:new Date().toISOString(), name:toSentenceCase(initialName||""), effort:"medium", type:"dinner", weather:"any", tempAffinity:"neutral", grillable:false, leftovers:"none", preferences:[], notes:"", ingredients:[] });
+// ── ENGINE FACETS (SPEC-engine-facet-editor) ─────────────────────────────────
+// The fields composeWeek reads that the rest of the editor doesn't cover. Facet values
+// are the controlled vocabulary (FACET-VOCABULARY.md, live values only); adding a value
+// is a deliberate act there, never free text here. A value a meal already carries that
+// isn't listed is shown struck through so it can be removed, never dropped silently.
+const FACET_VOCAB = {
+  form:       ["casserole","component","stew","plated-entree","finger-food","pasta","sandwich","soup","salad","sauce","bowl","custard-pie"],
+  service:    ["home-cooked","takeout","choose-your-own","dine-out"],
+  experience: ["hearty","light","picnicky","pubfood","fancy"],
+  plate:      ["meaty","starchy","cheesy","bread-based","vegetable-forward","fried","brothy","creamy","salty","seafood","rich","deli-salad","chilled","eggy"],
+};
+const ROTATION_OPTIONS = ["in","manual","experimental"];
+const ROTATION_HELP = {
+  in: "In rotation: the engine picks it.",
+  manual: "Only when you place it, or while it's flagged soon.",
+  experimental: "Untried: placed on an adventurous week, or when flagged soon.",
+};
+const CADENCE_OPTIONS = ["none","weekly","biweekly"];
+const COST_OPTIONS    = ["none","low","moderate","high"];
+const CARRY_DAYS      = [1,2,3,4,5,6,7];
+
+function MultiPick({ options, value, onChange }) {
+  const cur = value || [];
+  const toggle = o => onChange(cur.includes(o) ? cur.filter(x => x !== o) : [...cur, o]);
+  const unknown = cur.filter(v => !options.includes(v));
+  return (
+    <div style={{ display:"flex", flexWrap:"wrap", gap:6, marginTop:4 }}>
+      {options.map(o => <button key={o} style={S.pill(cur.includes(o))} onClick={() => toggle(o)}>{o}</button>)}
+      {unknown.map(v => (
+        <button key={v} title="Not in the vocabulary, so the engine ignores it. Tap to remove." style={{ ...S.pill(false), textDecoration:"line-through", color:C.faint }} onClick={() => toggle(v)}>{v} ×</button>
+      ))}
+    </div>
+  );
+}
+
+// A searchable checklist of meals (a main's sides, or a side's mains).
+function MealChecklist({ meals, selected, onToggle }) {
+  const [q, setQ] = useState("");
+  const shown = meals.filter(m => m.name.toLowerCase().includes(q.toLowerCase()))
+    .sort((a, b) => (selected.has(b.id) - selected.has(a.id)) || a.name.localeCompare(b.name));
+  return (
+    <div>
+      <SearchBar value={q} onChange={setQ} placeholder="Search..." />
+      <div style={{ maxHeight:220, overflowY:"auto" }}>
+        {shown.map(m => {
+          const sel = selected.has(m.id);
+          return (
+            <div key={m.id} style={{ display:"flex", alignItems:"center", gap:10, padding:"8px 0", borderBottom:`1px solid ${C.border}`, cursor:"pointer" }} onClick={() => onToggle(m.id)}>
+              <div style={{ width:20, height:20, borderRadius:6, border:sel?"none":`2px solid ${C.border}`, background:sel?C.primary:"#fff", display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0, color:"#fff", fontSize:12 }}>{sel && "✓"}</div>
+              <div style={{ fontSize:14 }}>{m.name}</div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+// Collapsed by default (the editor's everyday view stays as it was); open for a new or
+// untagged meal so it is tagged at entry. `pairIds` is the meal's side links either way:
+// for a main, the sides whose pairsWith hold it (saved back onto those sides); for a
+// side, its own pairsWith.
+function EngineFacetsCard({ form, setField, isMain, pairCandidates, pairIds, togglePair, familyMembers, startOpen }) {
+  const [open, setOpen] = useState(startOpen);
+  const carries = form.carries;
+  const carryMode = !carries ? "none" : Array.isArray(carries.forWhom) ? "people" : carries.forWhom;
+  const setCarries = c => setField("carries", c);
+  const pickMode = mode => {
+    if (mode === "none") return setCarries(undefined);
+    const lastsDays = carries?.lastsDays || 2;
+    setCarries({ forWhom: mode === "people" ? (Array.isArray(carries?.forWhom) ? carries.forWhom : []) : mode, lastsDays });
+  };
+  const togglePerson = p => {
+    const who = Array.isArray(carries?.forWhom) ? carries.forWhom : [];
+    setCarries({ ...carries, forWhom: who.includes(p) ? who.filter(x => x !== p) : [...who, p] });
+  };
+  const summary = [
+    form.rotation || "untagged",
+    form.soon ? "soon" : null,
+    (form.form || []).join("/") || null,
+    (form.plate || []).join("/") || null,
+    `${pairIds.size} ${isMain ? "side" : "main"}${pairIds.size === 1 ? "" : "s"}`,
+  ].filter(Boolean).join(" · ");
+  const hint = t => <div style={{ fontSize:11, color:C.faint, marginTop:4 }}>{t}</div>;
+
+  return (
+    <div style={S.card}>
+      <div style={{ display:"flex", alignItems:"center", cursor:"pointer" }} onClick={() => setOpen(o => !o)}>
+        <div style={{ flex:1 }}>
+          <div style={S.sectionLabel}>Engine</div>
+          {!open && <div style={{ fontSize:12, color:C.muted, marginTop:2 }}>{summary}</div>}
+        </div>
+        <div style={{ color:C.faint, fontSize:14 }}>{open ? "▾" : "▸"}</div>
+      </div>
+      {open && (
+        <div style={{ marginTop:12 }}>
+          <FieldGroup label="Rotation">
+            <PillSelect options={ROTATION_OPTIONS} value={form.rotation || "in"} onChange={v => setField("rotation", v)} />
+            {hint(ROTATION_HELP[form.rotation || "in"])}
+          </FieldGroup>
+          <FieldGroup label="Wanted soon">
+            <PillSelect options={["off","on"]} value={form.soon ? "on" : "off"} onChange={v => setField("soon", v === "on" || undefined)} />
+            {hint("Puts it forward for the next plan. Cleared by hand: it stays on until you turn it off.")}
+          </FieldGroup>
+          <FieldGroup label="Cadence">
+            <PillSelect options={CADENCE_OPTIONS} value={form.cadence || "none"} onChange={v => setField("cadence", v === "none" ? undefined : v)} />
+            {form.rotation === "manual" && hint("Ignored while manual.")}
+          </FieldGroup>
+          <FieldGroup label="Form"><MultiPick options={FACET_VOCAB.form} value={form.form} onChange={v => setField("form", v)} /></FieldGroup>
+          <FieldGroup label="Service"><MultiPick options={FACET_VOCAB.service} value={form.service} onChange={v => setField("service", v)} /></FieldGroup>
+          <FieldGroup label="Experience"><MultiPick options={FACET_VOCAB.experience} value={form.experience} onChange={v => setField("experience", v)} /></FieldGroup>
+          <FieldGroup label="Plate"><MultiPick options={FACET_VOCAB.plate} value={form.plate} onChange={v => setField("plate", v)} /></FieldGroup>
+          <FieldGroup label="Leftovers">
+            <PillSelect options={["none","followLikes","all","people"]} value={carryMode} onChange={pickMode} />
+            {hint(carryMode === "followLikes" ? "Whoever likes it eats the leftovers." : carryMode === "all" ? "Everyone eats the leftovers." : carryMode === "people" ? "Only the people picked below." : "No leftovers.")}
+            {carryMode === "people" && (
+              <div style={{ display:"flex", flexWrap:"wrap", gap:6, marginTop:6 }}>
+                {familyMembers.map(p => <button key={p} style={S.pill(carries.forWhom.includes(p))} onClick={() => togglePerson(p)}>{p}</button>)}
+              </div>
+            )}
+            {carries && (
+              <div style={{ marginTop:8 }}>
+                <div style={{ fontSize:12, color:C.muted }}>Lasts (days)</div>
+                <PillSelect options={CARRY_DAYS.map(String)} value={String(carries.lastsDays)} onChange={v => setCarries({ ...carries, lastsDays: Number(v) })} />
+              </div>
+            )}
+            {!carries && form.leftovers && form.leftovers !== "none" && hint("This meal is marked as having leftovers, but the engine doesn't know who eats them. Pick an option above.")}
+          </FieldGroup>
+          <FieldGroup label="Cost">
+            <PillSelect options={COST_OPTIONS} value={form.cost || "none"} onChange={v => setField("cost", v === "none" ? undefined : v)} />
+            {hint('"none" = part of the normal grocery bill.')}
+          </FieldGroup>
+          {isMain ? (
+            <>
+              <FieldGroup label="No sides needed">
+                <PillSelect options={["off","on"]} value={form.noSidesUnlessNeeded ? "on" : "off"} onChange={v => setField("noSidesUnlessNeeded", v === "on" || undefined)} />
+                {hint("Complete on its own. A side is added only to cover someone who won't eat it.")}
+              </FieldGroup>
+              <FieldGroup label={`Sides that go with it (${pairIds.size})`}>
+                <MealChecklist meals={pairCandidates} selected={pairIds} onToggle={togglePair} />
+              </FieldGroup>
+            </>
+          ) : (
+            <>
+              <FieldGroup label={`Goes with (${pairIds.size})`}>
+                <MealChecklist meals={pairCandidates} selected={pairIds} onToggle={togglePair} />
+              </FieldGroup>
+              <FieldGroup label="Avoid on the plate">
+                <MultiPick options={FACET_VOCAB.plate} value={form.avoidPlate} onChange={v => setField("avoidPlate", v.length ? v : undefined)} />
+                {hint("Not offered as a goes-with side when the plate already has any of these.")}
+              </FieldGroup>
+              <FieldGroup label="Can be someone's dinner">
+                <PillSelect options={["off","on"]} value={form.substantial ? "on" : "off"} onChange={v => setField("substantial", v === "on" || undefined)} />
+                {hint("Counts as a covers side for someone who won't eat the main.")}
+              </FieldGroup>
+            </>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function MealEditor({ meal, allMeals, ingredients, onSave, onCancel, onDelete, onAddIngredient, initialName, familyContacts }) {
+  const [form, setForm] = useState(meal || { id:"m"+Date.now(), createdAt:new Date().toISOString(), name:toSentenceCase(initialName||""), effort:"medium", type:"dinner", tempAffinity:"neutral", grillable:false, leftovers:"none", rotation:"in", preferences:[], notes:"", ingredients:[] });
   // Real family names live in settings (self included, via role-flag
   // migration — see SPEC-family-roles.md); fall back to the generic constant
   // only when settings hasn't been customized at all.
@@ -3188,6 +3349,29 @@ function MealEditor({ meal, ingredients, onSave, onCancel, onDelete, onAddIngred
   const [quickAdd, setQuickAdd]     = useState(false);
   const [quickName, setQuickName]   = useState("");
   const set = (k, v) => setForm(p => ({...p, [k]:v}));
+  // Engine fields are optional: an "off"/"none" choice removes the key rather than
+  // storing a default, so a meal saved without changes stays as it was.
+  const setField = (k, v) => setForm(p => { const n = { ...p }; if (v === undefined) delete n[k]; else n[k] = v; return n; });
+
+  // Side links. pairsWith lives on each SIDE (main ids). For a main, the editable set is
+  // the sides that name it, written back onto those sides at save; for a side, its own list.
+  const isMain   = form.type !== "side";
+  const others   = (allMeals || []).filter(m => m.id !== form.id);
+  const [mainSides, setMainSides] = useState(() => new Set(others.filter(m => m.type === "side" && (m.pairsWith || []).includes(form.id)).map(m => m.id)));
+  const pairIds  = isMain ? mainSides : new Set(form.pairsWith || []);
+  const togglePair = id => {
+    if (isMain) setMainSides(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
+    else { const cur = form.pairsWith || []; setField("pairsWith", cur.includes(id) ? cur.filter(x => x !== id) : [...cur, id]); }
+  };
+  const pairCandidates = others.filter(m => isMain ? m.type === "side" : m.type !== "side");
+  const save = () => {
+    // The legacy leftovers field still drives the card badge and the fridge report; keep
+    // it from contradicting carries (the engine's field): leftovers set → not "none".
+    const out = { ...form };
+    if (out.carries && (!out.leftovers || out.leftovers === "none")) out.leftovers = "yes";
+    if (!out.carries && meal?.carries && out.leftovers === "yes") out.leftovers = "none";   // carries just cleared
+    onSave(out, isMain ? mainSides : null);
+  };
 
   const toggleIng = id => {
     const adding = !form.ingredients.includes(id);
@@ -3227,7 +3411,6 @@ function MealEditor({ meal, ingredients, onSave, onCancel, onDelete, onAddIngred
         <FieldGroup label="Meal name"><input style={S.input} value={form.name} onChange={e => set("name", toSentenceCase(e.target.value))} placeholder="e.g. Mexican nite" /></FieldGroup>
         <FieldGroup label="Type"><PillSelect options={MEAL_TYPES} value={form.type} onChange={v => set("type",v)} /></FieldGroup>
         <FieldGroup label="Effort"><PillSelect options={EFFORTS} value={form.effort} onChange={v => set("effort",v)} /></FieldGroup>
-        <FieldGroup label="Weather"><PillSelect options={WEATHER_OPTIONS} value={form.weather} onChange={v => set("weather",v)} /></FieldGroup>
         <FieldGroup label="Day feel (affinity)"><PillSelect options={TEMP_AFFINITY_OPTIONS} value={form.tempAffinity || "neutral"} onChange={v => set("tempAffinity",v)} /></FieldGroup>
         <FieldGroup label="Grillable">
           <div style={{ display:"flex", gap:8 }}>
@@ -3235,7 +3418,6 @@ function MealEditor({ meal, ingredients, onSave, onCancel, onDelete, onAddIngred
             <button style={{ ...S.btnSm, background:!form.grillable?C.dangerLight:"#F3F4F6", color:!form.grillable?C.danger:C.muted, fontWeight:!form.grillable?700:500 }} onClick={() => set("grillable",false)}>No</button>
           </div>
         </FieldGroup>
-        <FieldGroup label="Leftovers"><PillSelect options={LEFTOVER_OPTIONS} value={form.leftovers} onChange={v => set("leftovers",v)} /></FieldGroup>
         <FieldGroup label="Notes"><input style={S.input} value={form.notes} onChange={e => set("notes",e.target.value)} placeholder="Cooking notes..." /></FieldGroup>
       </div>
       <div style={S.card}>
@@ -3253,6 +3435,7 @@ function MealEditor({ meal, ingredients, onSave, onCancel, onDelete, onAddIngred
           </div>
         ))}
       </div>
+      <EngineFacetsCard form={form} setField={setField} isMain={isMain} pairCandidates={pairCandidates} pairIds={pairIds} togglePair={togglePair} familyMembers={familyMembers} startOpen={!meal || !ROTATION_OPTIONS.includes(meal.rotation)} />
       <div style={S.card}>
         <div style={S.sectionLabel}>Ingredients ({form.ingredients.length} selected)</div>
         <SearchBar value={ingSearch} onChange={setIngSearch} placeholder="Search ingredients..." />
@@ -3289,7 +3472,7 @@ function MealEditor({ meal, ingredients, onSave, onCancel, onDelete, onAddIngred
           )}
         </div>
       </div>
-      <button style={{ ...S.btn, ...S.btnP }} onClick={() => onSave(form)}>Save meal</button>
+      <button style={{ ...S.btn, ...S.btnP }} onClick={save}>Save meal</button>
       <button style={{ ...S.btn, ...S.btnS }} onClick={onCancel}>Cancel</button>
       {meal && <div style={{ ...S.btn, ...S.btnD, cursor:"pointer" }} onClick={() => onDelete(meal.id)}>Delete meal</div>}
     </div>
@@ -3309,12 +3492,27 @@ function ManageMeals({ db, persistDB }) {
   const filtered = db.meals.filter(m => (filter==="all"||m.type===filter) && m.name.toLowerCase().includes(search.toLowerCase()))
     .sort((a, b) => new Date(b.createdAt||SEED_TS) - new Date(a.createdAt||SEED_TS));
 
-  const saveMeal = form => { persistDB({...db, meals:editing==="new"?[...db.meals,form]:db.meals.map(m=>m.id===form.id?form:m)}); setEditing(null); };
+  // One write for the meal and every side whose link to it changed (a main's sides are
+  // stored on the sides). `sides` is null when the saved meal is itself a side.
+  const saveMeal = (form, sides) => {
+    let meals = editing==="new" ? [...db.meals, form] : db.meals.map(m => m.id===form.id ? form : m);
+    if (sides) meals = meals.map(m => {
+      if (m.type !== "side" || m.id === form.id) return m;
+      const has = (m.pairsWith || []).includes(form.id), want = sides.has(m.id);
+      if (has === want) return m;
+      if (want) return { ...m, pairsWith: [...(m.pairsWith || []), form.id] };
+      const { pairsWith, ...rest } = m;
+      const left = pairsWith.filter(x => x !== form.id);
+      return left.length ? { ...rest, pairsWith: left } : rest;   // an emptied list goes, as it was before
+    });
+    persistDB({...db, meals}); setEditing(null);
+  };
   const deleteMeal = id => {
     const meal = db.meals.find(m => m.id === id);
     setConfirmDelete({
       message: `Delete "${meal?.name}"?`,
-      onConfirm: () => { persistDB({...db, meals:db.meals.filter(m=>m.id!==id)}); setEditing(null); setConfirmDelete(null); }
+      // Also drop the deleted meal from every side's pairsWith, so no link dangles.
+      onConfirm: () => { persistDB({...db, meals:db.meals.filter(m=>m.id!==id).map(m => (m.pairsWith||[]).includes(id) ? { ...m, pairsWith: m.pairsWith.filter(x => x !== id) } : m)}); setEditing(null); setConfirmDelete(null); }
     });
   };
   const saveMealName = (id, name) => { persistDB({...db, meals:db.meals.map(m=>m.id===id?{...m,name}:m)}); setInlineEdit(null); };
@@ -3331,7 +3529,7 @@ function ManageMeals({ db, persistDB }) {
           </div>
         </div>
       )}
-      <MealEditor meal={editing==="new"?null:editing} initialName={editing==="new"?newMealName:""} ingredients={db.ingredients} familyContacts={db.settings?.familyContacts} onSave={saveMeal} onCancel={() => { setEditing(null); setConfirmDelete(null); setNewMealName(""); }} onDelete={deleteMeal} onAddIngredient={addIngredient} />
+      <MealEditor meal={editing==="new"?null:editing} allMeals={db.meals} initialName={editing==="new"?newMealName:""} ingredients={db.ingredients} familyContacts={db.settings?.familyContacts} onSave={saveMeal} onCancel={() => { setEditing(null); setConfirmDelete(null); setNewMealName(""); }} onDelete={deleteMeal} onAddIngredient={addIngredient} />
     </div>
   );
 
@@ -3411,6 +3609,7 @@ function ManageMeals({ db, persistDB }) {
                   {meal.tempAffinity==="comfort" && <span style={S.badge("#B45309","#FEF3C7")}>comfort</span>}
                   {meal.tempAffinity==="light"   && <span style={S.badge("#0369A1","#E0F2FE")}>light</span>}
                   {meal.grillable && <span style={S.badge("#9A3412","#FFEDD5")}>grill</span>}
+                  {meal.soon && <span style={S.badge("#6D28D9","#EDE9FE")} title="Wanted soon: put forward for the next plan until you turn it off">soon</span>}
                   {meal.leftovers!=="none" && <span style={S.badge("#374151","#F3F4F6")}>leftovers</span>}
                   {meal.type!=="dinner"    && <span style={S.badge(C.primary,C.primaryLight)}>{meal.type}</span>}
                   {dislikes.length>0 && <span style={S.badge(C.danger,C.dangerLight)}>👎 {dislikes.join(", ")}</span>}

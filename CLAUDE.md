@@ -300,8 +300,17 @@ garbage-collect the unreferenced objects. Far cheaper never to commit it.
 ## Typical tasks
 
 - **A suggestion looks wrong:** usually a meal's TAGS are wrong, not the engine — check
-  its reasons with "Show reasoning" and fix the meal's data. If the engine's behavior
-  itself seems wrong, write it up for the design chat; don't patch `composeWeek`.
+  its reasons with "Show reasoning" and fix the meal's data in the meal editor's
+  collapsible **Engine** section (`EngineFacetsCard`). If the engine's behavior itself
+  seems wrong, write it up for the design chat; don't patch `composeWeek`.
+- **Engine-section gotchas.** Facet pick lists are `FACET_VOCABULARY` values copied into
+  `FACET_VOCAB`; add a value to the vocabulary doc first, then the constant. A main's
+  sides are stored on the SIDES (`pairsWith` holds main ids), so saving a main can rewrite
+  several side records: `ManageMeals.saveMeal(form, sides)` does it in ONE `persistDB`, and
+  deleting a meal strips its id from every `pairsWith`. Optional engine fields are removed,
+  not stored as defaults, when set to off/none, so an unchanged save leaves the record as
+  it was. The legacy `leftovers` field (card badge, fridge report) is kept in step with
+  `carries` at save.
 - **Change what the engine is given** (a new input from app state): edit
   `assembleInputs.js`; the contract says what each input may contain.
 - **Change the Meals-step display or actions:** `PlanMeals` in `grocery-app.jsx`; keep
