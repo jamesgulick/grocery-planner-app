@@ -3258,6 +3258,12 @@ function EngineFacetsCard({ form, setField, isMain, pairCandidates, pairIds, tog
     `${pairIds.size} ${isMain ? "side" : "main"}${pairIds.size === 1 ? "" : "s"}`,
   ].filter(Boolean).join(" · ");
   const hint = t => <div style={{ fontSize:11, color:C.faint, marginTop:4 }}>{t}</div>;
+  // What the engine does while a field is empty or off. Shown only in that state, and
+  // built from the engine's own constants so the numbers can't drift from its behaviour.
+  const ifEmpty = (empty, t, lead = "If left empty") => empty && <div style={{ fontSize:11, color:C.muted, marginTop:4, fontStyle:"italic" }}>{lead}: {t}</div>;
+  const ifOff = (off, t) => ifEmpty(off, t, "While off");
+  const manual = form.rotation === "manual";
+  const sidesCap = form.effort === "involved" ? `${ENGINE.MAX_ACCOMPANIMENT_SIDES_INVOLVED_MAIN} easy side (it's an involved meal)` : `${ENGINE.MAX_ACCOMPANIMENT_SIDES} sides`;
 
   return (
     <div style={S.card}>
@@ -3273,22 +3279,27 @@ function EngineFacetsCard({ form, setField, isMain, pairCandidates, pairIds, tog
           <FieldGroup label="Rotation">
             <PillSelect options={ROTATION_OPTIONS} value={form.rotation || "in"} onChange={v => setField("rotation", v)} />
             {hint(ROTATION_HELP[form.rotation || "in"])}
+            {ifEmpty(!form.rotation, "not set yet, so the engine treats it as in rotation.")}
           </FieldGroup>
           <FieldGroup label="Wanted soon">
             <PillSelect options={["off","on"]} value={form.soon ? "on" : "off"} onChange={v => setField("soon", v === "on" || undefined)} />
             {hint("Puts it forward for the next plan. Cleared by hand: it stays on until you turn it off.")}
+            {ifOff(!form.soon, manual ? "a manual meal is used only when you place it." : form.rotation === "experimental" ? "it comes up only on an adventurous week." : "no extra push; it comes up when it fits.")}
           </FieldGroup>
           <FieldGroup label="Cadence">
             <PillSelect options={CADENCE_OPTIONS} value={form.cadence || "none"} onChange={v => setField("cadence", v === "none" ? undefined : v)} />
-            {form.rotation === "manual" && hint("Ignored while manual.")}
+            {manual ? hint("Ignored while manual.") : form.cadence === "weekly" ? hint(`Wants to come back about weekly; never within ${ENGINE.CADENCE_WEEKLY_MIN_GAP_DAYS} days.`) : form.cadence === "biweekly" ? hint(`Wants to come back about every two weeks; never within ${ENGINE.CADENCE_BIWEEKLY_MIN_GAP_DAYS} days.`) : null}
+            {!manual && ifEmpty(!form.cadence, `no pull to come back on a schedule; it just won't repeat within ${ENGINE.UNTAGGED_ANTI_REPEAT_DAYS} days.`)}
           </FieldGroup>
-          <FieldGroup label="Form"><MultiPick options={FACET_VOCAB.form} value={form.form} onChange={v => setField("form", v)} /></FieldGroup>
-          <FieldGroup label="Service"><MultiPick options={FACET_VOCAB.service} value={form.service} onChange={v => setField("service", v)} /></FieldGroup>
-          <FieldGroup label="Experience"><MultiPick options={FACET_VOCAB.experience} value={form.experience} onChange={v => setField("experience", v)} /></FieldGroup>
-          <FieldGroup label="Plate"><MultiPick options={FACET_VOCAB.plate} value={form.plate} onChange={v => setField("plate", v)} /></FieldGroup>
+          <FieldGroup label="Form"><MultiPick options={FACET_VOCAB.form} value={form.form} onChange={v => setField("form", v)} />{ifEmpty(!(form.form || []).length, "it is never kept apart from similar meals on nearby nights.")}</FieldGroup>
+          <FieldGroup label="Service"><MultiPick options={FACET_VOCAB.service} value={form.service} onChange={v => setField("service", v)} />{ifEmpty(!(form.service || []).length, "treated like home-cooked: not spaced from takeout nights, and sides can be added.")}</FieldGroup>
+          <FieldGroup label="Experience"><MultiPick options={FACET_VOCAB.experience} value={form.experience} onChange={v => setField("experience", v)} />{hint("Description only: the engine doesn't use this yet.")}</FieldGroup>
+          <FieldGroup label="Plate"><MultiPick options={FACET_VOCAB.plate} value={form.plate} onChange={v => setField("plate", v)} />{ifEmpty(!(form.plate || []).length, isMain ? "no side's \"avoid on the plate\" can rule anything out, so any linked side can go with it." : "it never keeps another side off the plate.")}</FieldGroup>
           <FieldGroup label="Leftovers">
             <PillSelect options={["none","followLikes","all","people"]} value={carryMode} onChange={pickMode} />
-            {hint(carryMode === "followLikes" ? "Whoever likes it eats the leftovers." : carryMode === "all" ? "Everyone eats the leftovers." : carryMode === "people" ? "Only the people picked below." : "No leftovers.")}
+            {carryMode !== "none" && hint(carryMode === "followLikes" ? "Whoever likes it eats the leftovers." : carryMode === "all" ? "Everyone eats the leftovers." : "Only the people picked below.")}
+            {ifEmpty(carryMode === "none", "the engine won't count on leftovers from this meal to feed anyone on later nights.")}
+            {carryMode === "people" && !carries.forWhom.length && hint("Pick at least one person, or the leftovers reach no one.")}
             {carryMode === "people" && (
               <div style={{ display:"flex", flexWrap:"wrap", gap:6, marginTop:6 }}>
                 {familyMembers.map(p => <button key={p} style={S.pill(carries.forWhom.includes(p))} onClick={() => togglePerson(p)}>{p}</button>)}
@@ -3304,30 +3315,34 @@ function EngineFacetsCard({ form, setField, isMain, pairCandidates, pairIds, tog
           </FieldGroup>
           <FieldGroup label="Cost">
             <PillSelect options={COST_OPTIONS} value={form.cost || "none"} onChange={v => setField("cost", v === "none" ? undefined : v)} />
-            {hint('"none" = part of the normal grocery bill.')}
+            {ifEmpty(!form.cost, "part of the normal grocery bill; it doesn't count toward keeping a week's spending balanced.")}
           </FieldGroup>
           {isMain ? (
             <>
               <FieldGroup label="No sides needed">
                 <PillSelect options={["off","on"]} value={form.noSidesUnlessNeeded ? "on" : "off"} onChange={v => setField("noSidesUnlessNeeded", v === "on" || undefined)} />
-                {hint("Complete on its own. A side is added only to cover someone who won't eat it.")}
+                {form.noSidesUnlessNeeded ? hint("Complete on its own. A side is added only to cover someone who won't eat it.") : ifOff(true, `the engine may add up to ${sidesCap} from the sides ticked below.`)}
               </FieldGroup>
               <FieldGroup label={`Sides that go with it (${pairIds.size})`}>
+                {ifEmpty(!pairIds.size, "no side is added just to go with it. Someone who won't eat it still gets a covers side they'll eat.")}
                 <MealChecklist meals={pairCandidates} selected={pairIds} onToggle={togglePair} />
               </FieldGroup>
             </>
           ) : (
             <>
               <FieldGroup label={`Goes with (${pairIds.size})`}>
+                {ifEmpty(!pairIds.size, form.substantial ? "never offered as a goes-with side, but it can still cover someone who won't eat the main." : "never offered as a goes-with side.")}
+                {manual && hint("This side is manual: the engine never offers it on its own. Set rotation to \"in\" to have it suggested.")}
                 <MealChecklist meals={pairCandidates} selected={pairIds} onToggle={togglePair} />
               </FieldGroup>
               <FieldGroup label="Avoid on the plate">
                 <MultiPick options={FACET_VOCAB.plate} value={form.avoidPlate} onChange={v => setField("avoidPlate", v.length ? v : undefined)} />
                 {hint("Not offered as a goes-with side when the plate already has any of these.")}
+                {ifEmpty(!(form.avoidPlate || []).length, "offered with any main it goes with, whatever else is on the plate.")}
               </FieldGroup>
               <FieldGroup label="Can be someone's dinner">
                 <PillSelect options={["off","on"]} value={form.substantial ? "on" : "off"} onChange={v => setField("substantial", v === "on" || undefined)} />
-                {hint("Counts as a covers side for someone who won't eat the main.")}
+                {form.substantial ? hint("Counts as a covers side for someone who won't eat the main.") : ifOff(true, "it can't cover someone who won't eat the main.")}
               </FieldGroup>
             </>
           )}
@@ -3422,6 +3437,7 @@ function MealEditor({ meal, allMeals, ingredients, onSave, onCancel, onDelete, o
       </div>
       <div style={S.card}>
         <div style={S.sectionLabel}>Family preferences</div>
+        <div style={{ fontSize:11, color:C.muted, fontStyle:"italic", marginTop:2 }}>If left empty for someone: the engine counts them as willing to eat it. Only 👎 makes it plan around them; 👍 nudges the meal up a little.</div>
         {familyMembers.map(person => (
           <div key={person} style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"8px 0", borderBottom:`1px solid ${C.border}` }}>
             <div style={{ fontWeight:600, fontSize:14 }}>{person}</div>
