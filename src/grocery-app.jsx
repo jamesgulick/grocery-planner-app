@@ -2040,11 +2040,16 @@ function PlanMeals({ mealPlan, plates, setMealPlan, commitMealToPlan, timeLevels
     const ann = platesFromCompose(out, { [day]: dateOfDay[day] }, db.meals || [])[day] || { dishes: [], leftovers: [] };
     return { ann, errs };
   };
-  const dayNote = (day, text) => setFillNotes([{ property: "plate", severity: "concern", text: `${abbrOfISO(dateOfDay[day])} ${Number(dateOfDay[day].slice(5, 7))}/${Number(dateOfDay[day].slice(8))}: ${text}` }]);
+  // A per-day action that finds nothing to add says so ON that day's card, where the tap
+  // was, not in the notes box at the top of the step (usually off-screen). It lasts until
+  // the plan changes, so the button it replaces comes back once there's something new.
+  const [dayMsg, setDayMsg] = useState(null);   // { day, text }
+  useEffect(() => { setDayMsg(null); }, [mealPlan]);
+  const dayNote = (day, text) => { setFillNotes([]); setDayMsg({ day, text }); };
   // Apply new names for a day, carrying annotations only for the dishes the engine just
   // placed; kept dishes keep their existing plate entries (reconcilePlates).
   const applyDay = (day, names, newDishes, leftovers) => {
-    setFillNotes([]);
+    setFillNotes([]); setDayMsg(null);
     setMealPlan(prev => ({ ...prev, [day]: names }),
       { [day]: { dishes: newDishes, leftovers: leftovers || [] } });
   };
@@ -2052,7 +2057,7 @@ function PlanMeals({ mealPlan, plates, setMealPlan, commitMealToPlan, timeLevels
   // Empty day → compose a fresh plate for it alone.
   const fillDay = day => {
     const { ann, errs } = composeOneDay(day, []);
-    if (!ann.dishes.length) { setFillNotes(errs.length ? errs : []); if (!errs.length) dayNote(day, "nothing eligible could be placed"); return; }
+    if (!ann.dishes.length) { setFillNotes(errs.length ? errs : []); if (!errs.length) dayNote(day, "Nothing eligible could be placed on this day."); return; }
     applyDay(day, ann.dishes.map(d => d.name), ann.dishes, ann.leftovers);
   };
 
@@ -2107,7 +2112,7 @@ function PlanMeals({ mealPlan, plates, setMealPlan, commitMealToPlan, timeLevels
     const { ann } = composeOneDay(day, [main.name], [side.mealId]);
     const onPlate = new Set(cur.map(d => d.name.trim()));
     const pick = ann.dishes.find(d => d.role === "side" && !onPlate.has(d.name.trim()));
-    if (!pick) { dayNote(day, `no other side fits with ${main.name.trim()}`); return; }
+    if (!pick) { dayNote(day, `No other side fits with ${main.name.trim()}.`); return; }
     const names = cur.map(d => d.name); names[idx] = pick.name;
     applyDay(day, names, [pick], null);
   };
@@ -2127,8 +2132,8 @@ function PlanMeals({ mealPlan, plates, setMealPlan, commitMealToPlan, timeLevels
     const sides = ann.dishes.filter(d => d.role === "side" && !onPlate.has(d.name.trim()));
     if (!sides.length) {
       dayNote(day, cur.length > 1
-        ? `no other side would help with ${main.name.trim()} — try ⟳ for a different main`
-        : `${main.name.trim()} needs no sides — it covers everyone present and nothing pairs with it`);
+        ? `No more sides go with ${main.name.trim()}. Use + Add meal to pick one yourself.`
+        : `${main.name.trim()} needs no sides: it covers everyone present and nothing is linked to go with it.`);
       return;
     }
     applyDay(day, [...cur.map(d => d.name), ...sides.map(d => d.name)], sides, ann.leftovers);
@@ -2137,7 +2142,7 @@ function PlanMeals({ mealPlan, plates, setMealPlan, commitMealToPlan, timeLevels
     const cur = dishesOf(day);
     const { ann, errs } = composeOneDay(day, cur.map(d => d.name));
     const newMain = ann.dishes.find(d => d.role === "main");
-    if (!newMain) { if (errs.length) setFillNotes(errs); else dayNote(day, "no main fits this day"); return; }
+    if (!newMain) { if (errs.length) setFillNotes(errs); else dayNote(day, "No main fits this day."); return; }
     applyDay(day, [newMain.name, ...cur.map(d => d.name)], [newMain], ann.leftovers);
   };
 
@@ -2403,7 +2408,10 @@ function PlanMeals({ mealPlan, plates, setMealPlan, commitMealToPlan, timeLevels
                 ))}
               </div>
             )}
-            {!isEditingNew && dayMeals.length > 0 && offerSides && (
+            {dayMsg?.day === day && (
+              <div style={{ fontSize:12, lineHeight:1.4, color:C.muted, fontStyle:"italic", padding:"6px 0 0" }}>{dayMsg.text}</div>
+            )}
+            {!isEditingNew && dayMeals.length > 0 && offerSides && dayMsg?.day !== day && (
               <button style={{ background:"none", border:"none", color:floorConcern ? C.warning : C.primary, fontSize:12, fontWeight:600, cursor:"pointer", padding:"6px 0 0" }} onClick={() => suggestSides(day)}>
                 {floorConcern ? "⚠ " : "+ "}{sidesLabel}
               </button>
