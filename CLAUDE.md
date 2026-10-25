@@ -118,9 +118,15 @@ Welcome → Meals → Inventory → Confirm → Sparky
   meals; seeded Sat/Sun much, Mon/Tue none, Wed–Fri some), a **Home** row with a
   chip per family member (tap = away that night), day notes, a read-only "grill ok"
   tag, the live forecast, and carried-leftover notes. Actions: **Fill empty days**
-  (global; empty days only), **Fill this day**, **⟳** on a main (sides follow; sides
-  placed by hand stay) or on a side (swap just it), **Suggest sides** (main with no
-  sides). An **Adventurous week** toggle asks the engine to place one untried meal.
+  (global; empty days only), **Fill this day**, **⟳** on a main (opens a shortlist of the
+  next 3 mains in the engine's ranking, best first, each with its sides; "More options"
+  continues down the ranking; built by re-asking with each pick marked seen, so showing
+  them marks them seen; sides placed by hand stay) or on a side (swap just it),
+  **Suggest sides** / **More sides** (repeatable: sides already on the plate go in as
+  seen, so each tap brings the next ones). The manual pick list (Change / + Add meal)
+  shows each meal's last-served or planned date (`mealRecency`), sorts by it, and lists
+  mains or sides first by context; meal search also matches facets, type and notes
+  (`mealMatches`). An **Adventurous week** toggle asks the engine to place one untried meal.
   A **Week check** panel shows the engine's observations for the plan as built
   (concerns always, "ok" briefly, the rest folded), and **Show reasoning** (learn
   mode) shows every reason with its tier and role.

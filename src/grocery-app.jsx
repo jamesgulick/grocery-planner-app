@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useMemo } from "react";
 // Engine input assembly (REFACTOR B3). The time-level and presence rules live there so
 // the app's UI and the engine's inputs can never disagree about them.
-import { TIME_LEVELS, seedTimeLevel, presentOn, abbrOfISO, assembleComposeInputs, runComposeWeek, reconcilePlates, platesFromCompose, checkWeek, reasonsOf } from "./engine/assembleInputs.js";
+import { TIME_LEVELS, seedTimeLevel, presentOn, abbrOfISO, mealRecency, assembleComposeInputs, runComposeWeek, reconcilePlates, platesFromCompose, checkWeek, reasonsOf } from "./engine/assembleInputs.js";
 // The validated week-composition engine (REFACTOR S1). Shipped unchanged; called only
 // through runComposeWeek, which assembles and guards its inputs.
 import { composeWeek, evaluateWeek, CONSTANTS as ENGINE } from "./engine/composeWeek.js";
@@ -1879,40 +1879,40 @@ function PlanMeals({ mealPlan, plates, setMealPlan, commitMealToPlan, timeLevels
     setPresence(prev => ({ ...prev, [day]: { ...((prev || {})[day] || {}), [name]: !here } }));
   };
 
-  // When browsing (empty search box), order intentionally to aid discovery:
-  //   sides (A–Z) → mains/dinners (least-recently-used first) → remix/batch/takeout.
-  // When typing, keep the plain filtered list so matches are predictable.
-  // Recency comes from mealHistory (archived weeks); a meal never served sorts
-  // as "least recent" so fresh options rise to the top of the mains group.
-  const lastUsedIndex = (() => {
-    const hist = db?.mealHistory || [];
-    const idx = {};                       // meal name → weeks-ago of last use (0 = most recent week)
-    hist.slice().reverse().forEach((h, ago) => {
-      (h.meals || []).forEach(n => { if (idx[n] === undefined) idx[n] = ago; });
-    });
-    return idx;
-  })();
-  const typeRank = m => {
-    const t = m.type || "dinner";
-    if (t === "side")   return 0;
-    if (t === "dinner") return 1;
-    return 2;                             // remix / batch / takeout last
+  // Manual pick list (Week 5): recency is the axis memory works on, so every row says
+  // when the meal was last on the table (or that it's already planned) and the list sorts
+  // by it. Picking a main lists mains first; adding to a day that has a main, or replacing
+  // a side, lists sides first. Built from what was served or planned only (mealRecency).
+  const recency = useMemo(() => mealRecency({ planTail: db.planTail || [], mealHistory: db.mealHistory || [], plans: db.plans || {}, today: todayLocalISO() }), [db.planTail, db.mealHistory, db.plans]);
+  const [pickSort, setPickSort] = useState("oldest");   // oldest | newest
+  const recKey = m => (m.name || "").trim().toLowerCase();
+  // Sortable value: "" = never had (the oldest); a planned date sorts after any past one.
+  const recencyValue = m => recency.planned[recKey(m)] ? "~" + recency.planned[recKey(m)] : (recency.last[recKey(m)] || "");
+  const recencyLabel = m => {
+    const p = recency.planned[recKey(m)];
+    if (p) return `planned ${abbrOfISO(p)} ${Number(p.slice(5, 7))}/${Number(p.slice(8))}`;
+    const l = recency.last[recKey(m)];
+    if (!l) return "never had";
+    const d = Math.round((Date.parse(todayLocalISO()) - Date.parse(l)) / 86400000);
+    if (d <= 0) return "today";
+    if (d === 1) return "yesterday";
+    if (d < 7) return `${d} days ago`;
+    const w = Math.round(d / 7);
+    return w === 1 ? "1 week ago" : `${w} weeks ago`;
   };
-  const browseSorted = [...allMeals].sort((a, b) => {
-    const ra = typeRank(a), rb = typeRank(b);
-    if (ra !== rb) return ra - rb;
-    if (ra === 0) return a.name.localeCompare(b.name);            // sides: A–Z
-    if (ra === 1) {                                               // mains: least-recently-used first
-      const ua = lastUsedIndex[a.name] ?? 999;                   // never-used → most "stale" → top
-      const ub = lastUsedIndex[b.name] ?? 999;
-      if (ua !== ub) return ub - ua;                             // higher weeks-ago first
+  const isSideName = n => allMeals.find(x => x.name === n)?.type === "side";
+  const pickList = (day, mealIdx) => {
+    const cur = mealPlan[day] || [];
+    const wantSide = mealIdx !== undefined ? isSideName(cur[mealIdx]) : cur.some(n => !isSideName(n));
+    const base = search.trim() ? allMeals.filter(m => mealMatches(m, search)) : allMeals;
+    return [...base].sort((a, b) => {
+      const ga = (a.type === "side") === wantSide ? 0 : 1, gb = (b.type === "side") === wantSide ? 0 : 1;
+      if (ga !== gb) return ga - gb;
+      const va = recencyValue(a), vb = recencyValue(b);
+      if (va !== vb) return (va < vb ? -1 : 1) * (pickSort === "oldest" ? 1 : -1);
       return a.name.localeCompare(b.name);
-    }
-    return a.name.localeCompare(b.name);                         // tail group: A–Z
-  });
-  const filtered   = search.trim()
-    ? allMeals.filter(m => m.name.toLowerCase().includes(search.toLowerCase()))
-    : browseSorted;
+    });
+  };
   const totalMeals = Object.values(mealPlan).flat().length;
 
   // The engine's session state (REFACTOR S1). Only seenThisSession is carried: the
@@ -2056,17 +2056,46 @@ function PlanMeals({ mealPlan, plates, setMealPlan, commitMealToPlan, timeLevels
     applyDay(day, ann.dishes.map(d => d.name), ann.dishes, ann.leftovers);
   };
 
-  // ⟳ main → a different main; the engine's sides re-follow it. Sides placed by hand
-  // stay (they're James's), and with any kept the engine adds no sides of its own.
-  const rerollMain = day => {
+  // ⟳ main → a SHORTLIST (Week 5): the next few mains in the engine's own ranking for the
+  // day, best first, each with the sides it brings. Built the way reroll always worked,
+  // by asking again with each pick marked seen, so showing the options marks them seen
+  // and "More" moves on down the same ranking. Seen-scope is the session's, unchanged.
+  // When the engine starts handing back meals already seen, the pool is exhausted and the
+  // list says so. Sides placed by hand stay with whichever main is taken.
+  const SHORTLIST_SIZE = 3;
+  const [shortlist, setShortlist] = useState(null);   // { day, options, exhausted, errs }
+  // Options are for the plate they were built against: any change to the plan closes them.
+  useEffect(() => { setShortlist(null); }, [mealPlan]);
+  const nextOptions = (day, shown) => {
     const cur = dishesOf(day);
     const main = cur.find(d => d.role === "main");
     const keptSides = cur.filter(d => d.role === "side" && d.source === "manual");
-    const { ann, errs } = composeOneDay(day, keptSides.map(d => d.name), [main?.mealId]);
-    const newMain = ann.dishes.find(d => d.role === "main" && d.mealId !== main?.mealId);
-    if (!newMain) { if (errs.length) setFillNotes(errs); else dayNote(day, "no other main fits this day"); return; }
-    const newSides = ann.dishes.filter(d => d.role === "side" && !keptSides.some(k => k.name === d.name));
-    applyDay(day, [newMain.name, ...keptSides.map(d => d.name), ...newSides.map(d => d.name)], [newMain, ...newSides], ann.leftovers);
+    const extra = [main?.mealId, ...shown].filter(Boolean);
+    const already = new Set([...seenThisSession, ...extra]);
+    const options = [];
+    let exhausted = false, errs = [];
+    for (let i = 0; i < SHORTLIST_SIZE; i++) {
+      const r = composeOneDay(day, keptSides.map(d => d.name), extra);
+      const m = r.ann.dishes.find(d => d.role === "main");
+      if (!m || !m.mealId || already.has(m.mealId)) { exhausted = true; if (!options.length) errs = r.errs; break; }
+      already.add(m.mealId); extra.push(m.mealId);
+      options.push({ main: m, sides: r.ann.dishes.filter(d => d.role === "side" && !keptSides.some(k => k.name === d.name)), leftovers: r.ann.leftovers, kept: keptSides.map(d => d.name) });
+    }
+    return { options, exhausted, errs };
+  };
+  const openShortlist = day => {
+    const { options, exhausted, errs } = nextOptions(day, []);
+    setFillNotes(errs);
+    setShortlist({ day, options, exhausted });
+  };
+  const moreOptions = () => {
+    if (!shortlist) return;
+    const { options, exhausted } = nextOptions(shortlist.day, shortlist.options.map(o => o.main.mealId));
+    setShortlist({ ...shortlist, options: [...shortlist.options, ...options], exhausted });
+  };
+  const takeOption = o => {
+    applyDay(shortlist.day, [o.main.name, ...o.kept, ...o.sides.map(d => d.name)], [o.main, ...o.sides], o.leftovers);
+    setShortlist(null);
   };
 
   // ⟳ side → swap just that side for another the engine would put with this main.
@@ -2086,12 +2115,14 @@ function PlanMeals({ mealPlan, plates, setMealPlan, commitMealToPlan, timeLevels
   // Suggest sides: the engine's sides for this day's main, adding only ones not already
   // on the plate. The fix a floor concern offers (RULING 12), so it also works on a day
   // that already has sides (e.g. only a non-substantial one). A day with sides but no
-  // main gets a main instead, keeping its sides.
+  // main gets a main instead, keeping its sides. REPEATABLE (the model's "ask for more"):
+  // the sides already on the plate go in as seen, so each tap brings the next best ones
+  // rather than the same ones again.
   const suggestSides = day => {
     const cur = dishesOf(day);
     const main = cur.find(d => d.role === "main");
     if (!main) { suggestMain(day); return; }
-    const { ann } = composeOneDay(day, [main.name]);
+    const { ann } = composeOneDay(day, [main.name], cur.filter(d => d.role === "side").map(d => d.mealId));
     const onPlate = new Set(cur.map(d => d.name.trim()));
     const sides = ann.dishes.filter(d => d.role === "side" && !onPlate.has(d.name.trim()));
     if (!sides.length) {
@@ -2150,15 +2181,21 @@ function PlanMeals({ mealPlan, plates, setMealPlan, commitMealToPlan, timeLevels
 
   const MealSearch = ({ day, mealIdx }) => (
     <div style={{ marginTop:8 }}>
-      <input style={{ ...S.input, marginBottom:8 }} placeholder="Search meals..." value={search} onChange={e => setSearch(e.target.value)} autoFocus />
-      <div style={{ maxHeight:180, overflowY:"auto" }}>
-        {filtered.map(m => (
+      <input style={{ ...S.input, marginBottom:8 }} placeholder="Search meals or tags (e.g. pasta, meaty)..." value={search} onChange={e => setSearch(e.target.value)} autoFocus />
+      <div style={{ display:"flex", gap:6, alignItems:"center", fontSize:11, color:C.faint, marginBottom:6 }}>
+        Sort:
+        {[["oldest","longest since"],["newest","most recent"]].map(([k, l]) => (
+          <button key={k} style={{ ...S.pill(pickSort === k), fontSize:11, padding:"2px 8px" }} onClick={() => setPickSort(k)}>{l}</button>
+        ))}
+      </div>
+      <div style={{ maxHeight:220, overflowY:"auto" }}>
+        {pickList(day, mealIdx).map(m => (
           <div key={m.id} style={{ padding:"10px 4px", borderBottom:`1px solid ${C.border}`, fontSize:14, cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"space-between" }}
             onClick={() => {
               if (mealIdx !== undefined) replaceMeal(day, mealIdx, m.name, false);
               else addMeal(day, m.name, false);
             }}>
-            <span>{m.name}</span>
+            <span>{m.name} <span style={{ fontSize:11, color:C.faint, marginLeft:4 }}>{recencyLabel(m)}</span></span>
             <span style={{ display:"flex", gap:4, alignItems:"center" }}>
               {m.type === "side"    && <span style={S.tag(C.accent,  C.primaryLight)}>side</span>}
               {m.type === "remix"   && <span style={S.tag("#7C3AED", "#EDE9FE")}>remix</span>}
@@ -2219,7 +2256,8 @@ function PlanMeals({ mealPlan, plates, setMealPlan, commitMealToPlan, timeLevels
         // day shows "no sides needed" and offers "Suggest sides" only for a floor concern.
         const noSidesMain   = idx => !isSide(idx) && allMeals.find(m => m.name === dayMeals[idx])?.noSidesUnlessNeeded === true;
         const floorConcern  = (weekCheck.floorConcernDays || []).includes(day);
-        const offerSides    = floorConcern || (!dayMeals.some((_, k) => isSide(k)) && !dayMeals.some((_, k) => noSidesMain(k)));
+        const offerSides    = floorConcern || !dayMeals.some((_, k) => noSidesMain(k));
+        const sidesLabel    = !dayMeals.some((_, k) => !isSide(k)) ? "Suggest a main" : dayMeals.some((_, k) => isSide(k)) ? "More sides" : "Suggest sides";
         // Why each dish is here (REFACTOR C2), from the reasons saved when it was placed.
         // A side's headline reason is its floor-fill/affinity sentence. Other reasons the
         // engine marked "always" show by default; learn mode shows every reason.
@@ -2321,7 +2359,7 @@ function PlanMeals({ mealPlan, plates, setMealPlan, commitMealToPlan, timeLevels
                           </div>
                         ))}
                       </div>
-                      <button title={isSide(mealIdx) ? "Swap this side for another" : "Try a different main (its sides follow)"} style={{ ...S.btnSm, background:"none", border:`1px solid ${C.border}`, color:C.muted, fontSize:12, padding:"4px 8px" }} onClick={() => (isSide(mealIdx) ? rerollSide(day, mealIdx) : rerollMain(day))}>⟳</button>
+                      <button title={isSide(mealIdx) ? "Swap this side for another" : "See other mains for this day (their sides follow)"} style={{ ...S.btnSm, background:"none", border:`1px solid ${C.border}`, color:C.muted, fontSize:12, padding:"4px 8px" }} onClick={() => (isSide(mealIdx) ? rerollSide(day, mealIdx) : (shortlist?.day === day ? setShortlist(null) : openShortlist(day)))}>⟳</button>
                       <button style={{ ...S.btnSm, background:"none", border:`1px solid ${C.border}`, color:C.muted, fontSize:11 }} onClick={() => setMoving({day,mealIdx})}>Move</button>
                       <button style={{ ...S.btnSm, background:"none", border:`1px solid ${C.border}`, color:C.muted, fontSize:11 }} onClick={() => setEditing({day,mealIdx})}>Change</button>
                       <button style={{ background:"none", border:"none", color:C.faint, fontSize:18, cursor:"pointer", padding:"0 4px" }} onClick={() => removeMeal(day,mealIdx)}>×</button>
@@ -2330,6 +2368,34 @@ function PlanMeals({ mealPlan, plates, setMealPlan, commitMealToPlan, timeLevels
                 </div>
               );
             })}
+            {shortlist?.day === day && (
+              <div style={{ marginTop:8, border:`1px solid ${C.border}`, borderRadius:8, padding:"8px 10px", background:"#FAFAFA" }}>
+                <div style={{ display:"flex", alignItems:"center", marginBottom:4 }}>
+                  <div style={{ flex:1, fontSize:11, fontWeight:700, color:C.muted, textTransform:"uppercase", letterSpacing:0.4 }}>Other mains for this day</div>
+                  <button style={{ background:"none", border:"none", color:C.faint, fontSize:16, cursor:"pointer", padding:"0 4px" }} title="Keep the current main" onClick={() => setShortlist(null)}>×</button>
+                </div>
+                {shortlist.options.map((o, k) => {
+                  const why = reasonsOf(o.main).find(r => r.visibility === "always") || reasonsOf(o.main)[0];
+                  return (
+                    <div key={o.main.mealId} style={{ display:"flex", alignItems:"center", gap:8, padding:"7px 0", borderTop: k ? `1px solid ${C.border}` : "none", cursor:"pointer" }} onClick={() => takeOption(o)}>
+                      <div style={{ flex:1, minWidth:0 }}>
+                        <div style={{ fontSize:14, fontWeight:600 }}>{o.main.name}{k === 0 && <span style={{ ...S.tag(C.primary, C.primaryLight), marginLeft:6 }}>best fit</span>}</div>
+                        {o.sides.length > 0 && <div style={{ fontSize:12, color:C.muted }}>with {o.sides.map(d => d.name.trim()).join(", ")}</div>}
+                        {why && <div style={{ fontSize:11, color:C.faint, lineHeight:1.35 }}>{prettyDates(why.text)}</div>}
+                      </div>
+                      <span style={{ fontSize:12, fontWeight:600, color:C.primary }}>Use</span>
+                    </div>
+                  );
+                })}
+                {shortlist.exhausted ? (
+                  <div style={{ fontSize:11, color:C.muted, fontStyle:"italic", paddingTop:6 }}>
+                    {shortlist.options.length ? "That's every main that fits this day this session." : "No other main fits this day this session."} To pick any meal yourself, use Change.
+                  </div>
+                ) : (
+                  <button style={{ background:"none", border:"none", color:C.primary, fontSize:12, fontWeight:600, cursor:"pointer", padding:"6px 0 0" }} onClick={moreOptions}>+ More options</button>
+                )}
+              </div>
+            )}
             {dayLeftovers.length > 0 && (
               <div style={{ marginTop:6 }}>
                 {groupLeftoverNotes(dayLeftovers).map((t, k) => (
@@ -2339,7 +2405,7 @@ function PlanMeals({ mealPlan, plates, setMealPlan, commitMealToPlan, timeLevels
             )}
             {!isEditingNew && dayMeals.length > 0 && offerSides && (
               <button style={{ background:"none", border:"none", color:floorConcern ? C.warning : C.primary, fontSize:12, fontWeight:600, cursor:"pointer", padding:"6px 0 0" }} onClick={() => suggestSides(day)}>
-                {floorConcern ? "⚠ " : "+ "}{dayMeals.some((_, k) => !isSide(k)) ? "Suggest sides" : "Suggest a main"}
+                {floorConcern ? "⚠ " : "+ "}{sidesLabel}
               </button>
             )}
             {isEditingNew ? <MealSearch day={day} /> : (
@@ -3054,8 +3120,9 @@ const HELP_SECTIONS = [
     "**Leftovers** means the meal *produces* extra. A meal *made from* leftovers is type **remix**.",
   ]},
   { t:"Meal list order", body:[
-    "Browsing (empty search): sides A–Z, then mains you've cooked least recently, then remix/batch/takeout.",
-    "Typing: plain filtered list, so matches stay predictable.",
+    "Picking a meal for a day: mains first when you're choosing a main, sides first when the day already has one. Each row says when you last had it (or that it's already planned).",
+    "Sort by **longest since** (meals you haven't had in a while rise to the top) or **most recent**.",
+    "Search matches tags too: type \"pasta\", \"meaty\" or \"soup\" to find meals tagged that way.",
   ]},
   { t:"Uploading an order to Prep (\"already in cart\")", body:[
     "This reads your placed Walmart order and marks any **matching known ingredients** as already-in-cart, so they drop off the shopping list you're about to make.",
@@ -3194,6 +3261,15 @@ const ROTATION_HELP = {
 const CADENCE_OPTIONS = ["none","weekly","biweekly"];
 const COST_OPTIONS    = ["none","low","moderate","high"];
 const CARRY_DAYS      = [1,2,3,4,5,6,7];
+
+// Meal search matches descriptors as well as names: the four engine facets (so "pasta",
+// "meaty", "soup" find meals tagged that way), the meal type, and the notes.
+function mealMatches(m, q) {
+  const t = (q || "").trim().toLowerCase();
+  if (!t) return true;
+  const hay = [m.name, m.type, m.notes, ...(m.form || []), ...(m.service || []), ...(m.experience || []), ...(m.plate || [])];
+  return hay.some(v => typeof v === "string" && v.toLowerCase().includes(t));
+}
 
 function MultiPick({ options, value, onChange }) {
   const cur = value || [];
@@ -3505,7 +3581,7 @@ function ManageMeals({ db, persistDB }) {
   const [viewMode, setViewMode] = useState("cards");   // cards | table
   const setMealField = (id, field, value) => persistDB({ ...db, meals: db.meals.map(m => m.id===id ? { ...m, [field]:value } : m) });
 
-  const filtered = db.meals.filter(m => (filter==="all"||m.type===filter) && m.name.toLowerCase().includes(search.toLowerCase()))
+  const filtered = db.meals.filter(m => (filter==="all"||m.type===filter) && mealMatches(m, search))
     .sort((a, b) => new Date(b.createdAt||SEED_TS) - new Date(a.createdAt||SEED_TS));
 
   // One write for the meal and every side whose link to it changed (a main's sides are

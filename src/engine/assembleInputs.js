@@ -139,6 +139,44 @@ export function toEngineMeals(dbMeals) {
   return { meals, notes };
 }
 
+/**
+ * Recency for the manual pick list: per meal name (trimmed, lower-cased), the last date it
+ * was on the table (`last`, on or before today) and the next date it's planned (`planned`,
+ * after today). Day-level dates come from the day tail and the current/next plans;
+ * archived weeks with no day tail (`mealHistory`, from before the tail existed) count by
+ * archive date, and only for names the day-level record never mentions. Built only from
+ * what was SERVED or PLANNED: offer history is session state the model keeps ephemeral,
+ * so nothing about what was merely offered is read or stored here.
+ */
+export function mealRecency({ planTail = [], mealHistory = [], plans = {}, today }) {
+  const last = {}, planned = {};
+  const weeks = [...planTail, plans.current, plans.next].filter((w) => w && w.weekStartDate);
+  for (const w of weeks) {
+    const dates = weekDates(w.weekStartDate);
+    for (const [abbr, names] of Object.entries(w.mealPlan || {})) {
+      const iso = dates[abbr];
+      if (!iso) continue;
+      for (const n of names || []) {
+        const k = nameKey(n);
+        if (!k) continue;
+        if (iso <= today) { if (!last[k] || iso > last[k]) last[k] = iso; }
+        else if (!planned[k] || iso < planned[k]) planned[k] = iso;
+      }
+    }
+  }
+  const seenInDays = new Set([...Object.keys(last), ...Object.keys(planned)]);
+  for (const h of mealHistory) {
+    const iso = typeof h?.archivedAt === 'string' ? h.archivedAt.slice(0, 10) : null;
+    if (!iso) continue;
+    for (const n of h.meals || []) {
+      const k = nameKey(n);
+      if (!k || seenInDays.has(k)) continue;
+      if (!last[k] || iso > last[k]) last[k] = iso;
+    }
+  }
+  return { last, planned };
+}
+
 /** name → engine meal, for mapping the app's name-keyed plans onto ids. */
 export const indexByName = (meals) => new Map(meals.map((m) => [nameKey(m.name), m]));
 
