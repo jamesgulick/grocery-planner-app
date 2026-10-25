@@ -34,6 +34,71 @@ reach `main`, because `main` auto-deploys to the live site. The bundler does NOT
 catch every error — see "cross-component scope errors" below — so a clean build is
 necessary but not sufficient; sanity-check runtime behavior for anything non-trivial.
 
+## When to consult the design chat (and when NOT to)
+
+The engine's behavior and the *meaning* of its tags are owned by the design chat
+(via `MODEL-week-composition.md`); everything else is yours to build without
+consulting. Default to PROCEEDING. The design chat is now a rare consult, not a
+gate — the engine is validated and live; most work is app/UI/capture polish.
+
+**The litmus test for any change:** *Am I changing how the engine THINKS, or just
+how James SEES and FEEDS it?* See-and-feed → build it. How-it-thinks → design chat.
+
+**Proceed on your own (NO design chat):**
+- UI, layout, display, interaction, or a bug fix that doesn't change what the
+  engine computes.
+- Changing how inputs are gathered or outputs are displayed, while the engine's
+  logic is untouched (e.g. surfacing the engine's existing ranking as a shortlist —
+  the ranking itself is unchanged).
+- Any item already spec'd and signed off in `VALIDATION-LOG.md`. Just build it.
+- Anything `CLAUDE.md` or the validation log already records a decision for.
+
+**STOP and route to the design chat (through James) ONLY when you would:**
+1. Change what `composeWeek` / `evaluateWeek` computes — the floor, spacing,
+   cadence, soft leans, the priority stack, what counts as covering whom.
+2. Change what a tag or field MEANS to the engine, or add / remove / rename a
+   facet value, rotation value, or any engine-read field. (Shape changes also
+   loop the contract chat.)
+3. Hit a real ambiguity you can't resolve from the docs — the tell is that you're
+   about to INTERPRET model intent rather than APPLY a recorded decision.
+
+**Size is not the trigger — what it touches is.** A big UI feature that leaves the
+engine untouched is yours to build solo. A one-line change that alters what the
+floor counts needs the design chat. Resist both over-consulting (asking about pure
+UI) and under-consulting (quietly tweaking engine logic because it's "just one line").
+
+**Safety valve:** when genuinely unsure which side of the line a change is on, don't
+run a full design-chat round-trip — give James a one-line heads-up ("looks
+app-scope, building it, flag if you disagree") and proceed. Same spirit as "flag
+bugs, don't silently fix."
+
+## Your design lane and doc authority (app chat)
+
+The engine is validated and LIVE and the work is now app/UX/capture polish — which
+is YOUR lane to drive, not just execute. The design chat owns engine *behavior* and
+tag *meaning*; everything above the engine's inputs and outputs — layout, interaction,
+flow, information hierarchy, how a surface feels to use — is design you should PROPOSE
+and OWN, not wait to be handed. Bring James strong UX calls to react to; don't route a
+layout or interaction question to the design chat (it has no special claim there — you
+do). Default to a confident proposal over a deferential question.
+
+**The one thing that stays James's even in your lane:** the acceptance bar — "does
+this feel like something I'd have made." Wider lane means *propose boldly, he still
+approves the feel* — show him the call, don't ship user-facing UX unilaterally without
+a look.
+
+**You may write your own STATUS into the shared docs.** When you ship an app item,
+record it yourself in `VALIDATION-LOG.md` — what shipped, the commit, what changed,
+what you verified (the STATUS-block format you've used before is the template). This
+keeps the log current without routing status through James. This is NOT a breach of
+the one-writer discipline:
+- **STATUS — what you built / shipped / verified → you write it.** Your domain.
+- **DECISIONS — what the engine should do, what a tag means → still route to the
+  design chat (behavior) or contract chat (shape); you do NOT write or edit those.**
+The tell: recording *what happened* is yours; recording *what was decided about engine
+behavior* is theirs. When in doubt, you can always write the status and flag the
+decision for James to route.
+
 ## What this is
 
 A single-file React grocery-planning web app for coordinating weekly grocery pickup

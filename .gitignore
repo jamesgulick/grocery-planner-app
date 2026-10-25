@@ -52,3 +52,6 @@ grocery_db*.json
 
 # validation-window log (real-use findings with real names) — a working file
 VALIDATION-LOG*.md
+
+# collaboration handoff brief (working notes about the owner) — a working file
+WORKING-WITH-JAMES.md
