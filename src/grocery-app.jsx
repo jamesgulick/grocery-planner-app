@@ -1881,8 +1881,9 @@ function PlanMeals({ mealPlan, plates, setMealPlan, commitMealToPlan, timeLevels
 
   // Manual pick list (Week 5): recency is the axis memory works on, so every row says
   // when the meal was last on the table (or that it's already planned) and the list sorts
-  // by it. Picking a main lists mains first; adding to a day that has a main, or replacing
-  // a side, lists sides first. Built from what was served or planned only (mealRecency).
+  // by it. Sides sit at the bottom (mains first, each group by recency) unless the pick is
+  // replacing a side, the one case where a side is clearly what's wanted; adding a side is
+  // usually More sides' job. Built from what was served or planned only (mealRecency).
   const recency = useMemo(() => mealRecency({ planTail: db.planTail || [], mealHistory: db.mealHistory || [], plans: db.plans || {}, today: todayLocalISO() }), [db.planTail, db.mealHistory, db.plans]);
   const [pickSort, setPickSort] = useState("oldest");   // oldest | newest
   const recKey = m => (m.name || "").trim().toLowerCase();
@@ -1903,7 +1904,7 @@ function PlanMeals({ mealPlan, plates, setMealPlan, commitMealToPlan, timeLevels
   const isSideName = n => allMeals.find(x => x.name === n)?.type === "side";
   const pickList = (day, mealIdx) => {
     const cur = mealPlan[day] || [];
-    const wantSide = mealIdx !== undefined ? isSideName(cur[mealIdx]) : cur.some(n => !isSideName(n));
+    const wantSide = mealIdx !== undefined && isSideName(cur[mealIdx]);
     const base = search.trim() ? allMeals.filter(m => mealMatches(m, search)) : allMeals;
     return [...base].sort((a, b) => {
       const ga = (a.type === "side") === wantSide ? 0 : 1, gb = (b.type === "side") === wantSide ? 0 : 1;
@@ -3128,7 +3129,7 @@ const HELP_SECTIONS = [
     "**Leftovers** means the meal *produces* extra. A meal *made from* leftovers is type **remix**.",
   ]},
   { t:"Meal list order", body:[
-    "Picking a meal for a day: mains first when you're choosing a main, sides first when the day already has one. Each row says when you last had it (or that it's already planned).",
+    "Picking a meal for a day: mains first and sides at the bottom, except when you're replacing a side. Each row says when you last had it (or that it's already planned).",
     "Sort by **longest since** (meals you haven't had in a while rise to the top) or **most recent**.",
     "Search matches tags too: type \"pasta\", \"meaty\" or \"soup\" to find meals tagged that way.",
   ]},
