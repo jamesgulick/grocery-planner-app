@@ -98,7 +98,7 @@ vite.config.js               ← React plugin + relative base
 ```
 
 The engine's offline validation harness lives in the untracked `engine/` workspace
-(`node engine/harness/run.js`, 48 assertions in 7 modes) and runs against
+(`node engine/harness/run.js`, 51 assertions in 7 modes) and runs against
 `src/engine/composeWeek.js`. It is a working file: never commit it.
 
 ## The app's workflow
@@ -184,14 +184,14 @@ Settings added for the engine: `grillOpen` (grill season, Manage → Config → 
   suffices — that judgment stays with the user. The "shared across meals" checklist
   deliberately includes in-stock and in-cart items, because "I already have it" is
   exactly when people under-buy a multi-meal ingredient.
-- **Live weather** — `fetchLiveForecast()` calls the free Open-Meteo API (no key,
-  CORS-enabled) for the current shopping week, cached 6h in localStorage. On any
-  failure it returns `{}`, which every consumer treats as neutral. Configure
-  location via `FORECAST_LAT` / `FORECAST_LON` near the top of the file. The forecast
-  is keyed by day name for the CURRENT shopping week (Tue–Mon); the engine inputs and
-  the grill tag match it to plan days by DATE, so a next-week plan never borrows this
-  week's weather. (The day-card header still shows it by day name — a known display
-  mismatch, flagged and not yet fixed.)
+- **Live weather** — `fetchLiveForecast(dates)` calls the free Open-Meteo API (no key,
+  CORS-enabled) for the DATES OF THE PLAN being shown, keyed by ISO date. `PlanMeals`
+  refetches when the plan's dates change, so a next-week plan gets its own weather.
+  The API covers today + 15 days (and recent past days); dates outside that window get
+  no forecast, which every consumer treats as neutral, as it does the `{}` returned on
+  any failure. Cached 6h in localStorage, one entry per date range. The day-card
+  header, the "grill ok" tag and the engine inputs all read it by date. Configure
+  location via `FORECAST_LAT` / `FORECAST_LON` near the top of the file.
 
 ## Conventions & gotchas
 
