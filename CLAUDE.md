@@ -213,6 +213,15 @@ Pre-migration DBs carry two older single-slot concepts (db.planDraft live-editin
 - `plates` — annotates `mealPlan` per day: each dish's meal id, role, `source` (engine / floor-fill / accompaniment / manual), the engine's reasons (`why`), and a **leftovers (`carries`) snapshot taken when the dish was placed**. Never edit it directly: `reconcilePlates` rebuilds it from every `mealPlan` change (unchanged days keep their plate; a day untouched since before plates existed stays unplated). `autoRetirePlans` keeps `plates` in `planTail`, because history reads leftovers ONLY from these snapshots — an unplated past day counts for recency but carries no leftovers.
 - `timeLevels` — day abbr → none/some/much. `presence` — per-night overrides only, `{day: {name: bool}}`; the rest comes from `settings.awayRanges` (date-range away periods, open ends allowed, edited in Manage → Config), else present. `presentOn` resolves it.
 - `adventurousWeek` — per-plan switch.
+- `extraDays` — 0–2 EXTRA days after the week's seven (shopping a day or two later than
+  usual). Stored under keys `X1`/`X2`, never a weekday name, so an 8th day can't overwrite
+  the first one with the same name; each is dated `weekStartDate + 6 + n`. Every surface
+  walks a plan's days through `planDays(plan)` (app) and `weekDates(start, extraDays)` /
+  `dayKeyForDate` (assembleInputs), so extra days appear wherever normal ones do, and the
+  engine composes them on the same timeline. **Only the LATEST week can add or remove
+  them** (the plan is "next", or no next week exists), so a week boundary never moves
+  once a following week exists; a new next week starts after the extra days.
+  `autoRetirePlans` keeps `extraDays` in `planTail` so history dates them.
 - The plan-inputs migration (easy pills → timeLevels, the Partner away map and the away-member toggle → presence / an open-ended away period) is stamped by `_planInputsVer`.
 
 Settings added for the engine: `grillOpen` (grill season, Manage → Config → Cooking), `awayRanges`, `learnMode`. `awayMemberHome` survives, relabelled, and now ONLY decides who gets family texts.

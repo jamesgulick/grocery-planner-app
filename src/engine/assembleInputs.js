@@ -23,10 +23,26 @@ export const addDaysISO = (iso, n) => new Date(parseISO(iso) + n * 86400000).toI
 export const abbrOfISO = (iso) => DAY_ABBRS[new Date(parseISO(iso)).getUTCDay()];
 
 /** The 7 dates of a plan's week, keyed by day abbr. A week runs from its weekStartDate. */
-export function weekDates(weekStartDate) {
+// A week is its seven weekday-keyed days plus up to MAX_EXTRA_DAYS "extra" days after
+// them (shopping a day or two later than usual). Extra days are keyed X1, X2, never by a
+// weekday name, so an 8th day can't overwrite the first one with the same name; each
+// still has its own real date (weekStartDate + 7, + 8).
+export const MAX_EXTRA_DAYS = 2;
+export const isExtraDay = (key) => /^X\d$/.test(key);
+export const extraDaysOf = (plan) => Math.max(0, Math.min(MAX_EXTRA_DAYS, Number(plan && plan.extraDays) || 0));
+
+export function weekDates(weekStartDate, extraDays = 0) {
   const out = {};
   for (let i = 0; i < 7; i++) { const iso = addDaysISO(weekStartDate, i); out[abbrOfISO(iso)] = iso; }
+  for (let n = 1; n <= extraDays; n++) out[`X${n}`] = addDaysISO(weekStartDate, 6 + n);
   return out;
+}
+
+/** The plan's day key for a date (a weekday abbr, or X1/X2), or null if outside the plan. */
+export function dayKeyForDate(plan, iso) {
+  if (!plan || !plan.weekStartDate || !iso) return null;
+  for (const [k, d] of Object.entries(weekDates(plan.weekStartDate, extraDaysOf(plan)))) if (d === iso) return k;
+  return null;
 }
 
 // ── Time to cook (B1) ─────────────────────────────────────────────────────────────
@@ -152,7 +168,7 @@ export function mealRecency({ planTail = [], mealHistory = [], plans = {}, today
   const last = {}, planned = {};
   const weeks = [...planTail, plans.current, plans.next].filter((w) => w && w.weekStartDate);
   for (const w of weeks) {
-    const dates = weekDates(w.weekStartDate);
+    const dates = weekDates(w.weekStartDate, extraDaysOf(w));
     for (const [abbr, names] of Object.entries(w.mealPlan || {})) {
       const iso = dates[abbr];
       if (!iso) continue;
@@ -321,7 +337,7 @@ export function buildHistory({ planTail = [], mealHistory = [], extraWeeks = [],
 
   const tailWeek = (w) => {
     if (!w || !w.weekStartDate) return null;
-    const dates = weekDates(w.weekStartDate);
+    const dates = weekDates(w.weekStartDate, extraDaysOf(w));
     const days = {};
     for (const [abbr, names] of Object.entries(w.mealPlan || {})) {
       const iso = dates[abbr];
@@ -367,16 +383,16 @@ export function buildHistory({ planTail = [], mealHistory = [], extraWeeks = [],
  * weather-neutral and grilling is held back — the fail-safe. (null would NOT be safe:
  * it coerces to 0 and would read as a cold day.)
  */
-export function buildSchedule({ weekStartDate, days, timeLevels = {}, presence = {}, awayRanges = [], roster = [], forecastByDate = {} }) {
+export function buildSchedule({ weekStartDate, extraDays = 0, days, timeLevels = {}, presence = {}, awayRanges = [], roster = [], forecastByDate = {} }) {
   const notes = [];
-  const dates = weekDates(weekStartDate);
+  const dates = weekDates(weekStartDate, extraDays);
   const noForecast = [];
   const out = days.map((abbr) => {
     const date = dates[abbr];
     const fc = forecastByDate[date];
     const hasFc = fc && Number.isFinite(fc.hi) && Number.isFinite(fc.pop);
-    if (!hasFc) noForecast.push(abbr);
-    const level = TIME_LEVELS.includes(timeLevels[abbr]) ? timeLevels[abbr] : seedTimeLevel(abbr);
+    if (!hasFc) noForecast.push(isExtraDay(abbr) ? `extra ${abbrOfISO(date)}` : abbr);
+    const level = TIME_LEVELS.includes(timeLevels[abbr]) ? timeLevels[abbr] : seedTimeLevel(abbrOfISO(date));
     return {
       date,
       timeLevel: level,
@@ -402,8 +418,8 @@ export function buildSchedule({ weekStartDate, days, timeLevels = {}, presence =
  * planner) carries its meal's current tags, since this is the week being served now
  * (integration ruling 6). seenThisSession is carried unchanged (session-local by design).
  */
-export function buildSessionState({ mealPlan = {}, plates = {}, weekStartDate, byName, seenThisSession = [] }) {
-  const dates = weekDates(weekStartDate);
+export function buildSessionState({ mealPlan = {}, plates = {}, weekStartDate, extraDays = 0, byName, seenThisSession = [] }) {
+  const dates = weekDates(weekStartDate, extraDays);
   const unknown = new Set();
   const alreadyPlaced = {};
   for (const [abbr, names] of Object.entries(mealPlan)) {
@@ -445,7 +461,8 @@ export function assembleComposeInputs({ db, planKey, plan, forecastByDate = {}, 
   const byName = indexByName(m.meals);
   // onlyDays restricts the schedule (the week CHECK passes just the planned days, so the
   // engine never invents plates for empty ones).
-  const order = (days || Object.keys(weekDates(target.weekStartDate))).filter((d) => !onlyDays || onlyDays.includes(d));
+  const extraDays = extraDaysOf(target);
+  const order = (days || Object.keys(weekDates(target.weekStartDate, extraDays))).filter((d) => !onlyDays || onlyDays.includes(d));
 
   // Any other plan that starts BEFORE the target is still-unarchived recent history.
   const other = planKey === 'next' ? db.plans?.current : null;
@@ -453,12 +470,12 @@ export function assembleComposeInputs({ db, planKey, plan, forecastByDate = {}, 
 
   const h = buildHistory({ planTail: db.planTail || [], mealHistory: db.mealHistory || [], extraWeeks, byName, targetWeekStart: target.weekStartDate });
   const s = buildSchedule({
-    weekStartDate: target.weekStartDate, days: order,
+    weekStartDate: target.weekStartDate, extraDays, days: order,
     timeLevels: target.timeLevels, presence: target.presence,
     awayRanges: settings.awayRanges, roster: (settings.familyContacts || []).map((f) => f.name),
     forecastByDate,
   });
-  const ss = buildSessionState({ mealPlan: target.mealPlan, plates: target.plates, weekStartDate: target.weekStartDate, byName, seenThisSession });
+  const ss = buildSessionState({ mealPlan: target.mealPlan, plates: target.plates, weekStartDate: target.weekStartDate, extraDays, byName, seenThisSession });
   const config = buildConfig({ grillOpen: settings.grillOpen, adventurousWeek: target.adventurousWeek, today, weekStartDate: target.weekStartDate });
 
   return {
@@ -497,7 +514,7 @@ export function checkWeek(evaluateWeek, { db, planKey, plan, forecastByDate = {}
   } catch (e) {
     out = { rationale: [], observations: [{ property: 'engine', severity: 'concern', text: `The week check hit an error: ${e && e.message ? e.message : e}` }] };
   }
-  const abbrOf = Object.fromEntries(Object.entries(weekDates(plan.weekStartDate)).map(([abbr, iso]) => [iso, abbr]));
+  const abbrOf = Object.fromEntries(Object.entries(weekDates(plan.weekStartDate, extraDaysOf(plan))).map(([abbr, iso]) => [iso, abbr]));
   // Ruling 12: a floor concern offers the fix (suggest-sides) for its day. The engine's
   // Observation has no day field, so the day is read from the date in its text; this
   // copy gains a `day` (abbr) the UI uses for the fix button. The concern itself names

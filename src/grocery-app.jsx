@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useMemo } from "react";
 // Engine input assembly (REFACTOR B3). The time-level and presence rules live there so
 // the app's UI and the engine's inputs can never disagree about them.
-import { TIME_LEVELS, seedTimeLevel, presentOn, abbrOfISO, mealRecency, assembleComposeInputs, runComposeWeek, reconcilePlates, platesFromCompose, checkWeek, reasonsOf } from "./engine/assembleInputs.js";
+import { TIME_LEVELS, seedTimeLevel, presentOn, abbrOfISO, mealRecency, extraDaysOf, dayKeyForDate, isExtraDay, MAX_EXTRA_DAYS, assembleComposeInputs, runComposeWeek, reconcilePlates, platesFromCompose, checkWeek, reasonsOf } from "./engine/assembleInputs.js";
 // The validated week-composition engine (REFACTOR S1). Shipped unchanged; called only
 // through runComposeWeek, which assembles and guards its inputs.
 import { composeWeek, evaluateWeek, CONSTANTS as ENGINE } from "./engine/composeWeek.js";
@@ -176,9 +176,7 @@ const buildPublished = db => {
   const plan       = getCurrentPlan(db);
   // Day-ordering follows the current plan's own date; shoppingDay is only the
   // no-plan-yet fallback (see SPEC-date-drives-ordering.md).
-  const { days, daysFull } = plan?.weekStartDate
-    ? getWeekFromDate(plan.weekStartDate)
-    : getWeekFromDay(settings.shoppingDay || "Wednesday");
+  const { days, daysFull } = planDays(plan, settings.shoppingDay);
   const draftMeals = plan?.mealPlan;
   const planMeals  = (draftMeals && Object.values(draftMeals).some(a => (a||[]).length))
     ? draftMeals
@@ -271,6 +269,22 @@ function getWeekFromDay(shoppingDay) {
 function getWeekFromDate(weekStartDate) {
   const startIdx = new Date(weekStartDate + "T00:00:00").getDay();
   return buildWeekFromStartIndex(startIdx);
+}
+
+// A plan's full day list: its seven weekday-keyed days, then any EXTRA days (X1, X2 —
+// shopping a day or two later than usual; see weekDates in assembleInputs), labelled
+// "Extra <weekday>". Every surface that walks a plan's days goes through this, so an
+// extra day shows up everywhere a normal one does. No plan yet → the shoppingDay week.
+function planDays(plan, shoppingDay) {
+  if (!plan?.weekStartDate) return getWeekFromDay(shoppingDay || "Wednesday");
+  const { days, daysFull } = getWeekFromDate(plan.weekStartDate);
+  const out = { days: [...days], daysFull: [...daysFull] };
+  for (let n = 1; n <= extraDaysOf(plan); n++) {
+    const iso = addDaysISO(plan.weekStartDate, 6 + n);
+    out.days.push(`X${n}`);
+    out.daysFull.push(`Extra ${DAYS_FULL[new Date(iso + "T00:00:00").getDay()]}`);
+  }
+  return out;
 }
 
 // settings.shoppingDay's one remaining job (see SPEC-date-drives-ordering.md):
@@ -609,7 +623,7 @@ const writeActivePlan = (db, plan) => {
 // current/next boundary. Falls back to current (home base) if neither plan's
 // week contains the date, e.g. no plan exists yet.
 const resolvePlanForDate = (db, dateISO) => {
-  const inWeek = plan => !!plan?.weekStartDate && dateISO >= plan.weekStartDate && dateISO <= addDaysISO(plan.weekStartDate, 6);
+  const inWeek = plan => !!plan?.weekStartDate && dateISO >= plan.weekStartDate && dateISO <= addDaysISO(plan.weekStartDate, 6 + extraDaysOf(plan));
   // A week runs from its own weekStartDate until the NEXT week's start date —
   // that start date is a hard boundary, not a rigid 7-day tile. So when a date
   // falls in both windows (overlap from a shifted shopping day), the plan with
@@ -801,6 +815,8 @@ const autoRetirePlans = db => {
         archivedAt: new Date().toISOString(),
         weekStartDate: outgoing.weekStartDate || null,
         mealPlan: outgoing.mealPlan || outgoing.meals || {},
+        // Extra days (X1, X2) are dated from this, so history keeps their dates right.
+        ...(extraDaysOf(outgoing) ? { extraDays: extraDaysOf(outgoing) } : {}),
         // Plate annotations (C1) carry the as-served leftovers snapshots history needs.
         ...(outgoing.plates ? { plates: outgoing.plates } : {}),
       }
@@ -1376,9 +1392,7 @@ function PlanTab({ db, persistDB, onGoToImport }) {
   // render so editing the date (see the date input in PlanWelcome) reorders
   // the days live. Falls back to the shoppingDay default only when there's no
   // active plan yet (very first load, before any plan exists).
-  const { days, daysFull } = draft?.weekStartDate
-    ? getWeekFromDate(draft.weekStartDate)
-    : getWeekFromDay(db.settings?.shoppingDay || "Wednesday");
+  const { days, daysFull } = planDays(draft, db.settings?.shoppingDay);
 
   // Step-flow migrations, applied in sequence so a draft from ANY prior version
   // lands correctly:
@@ -1474,6 +1488,24 @@ function PlanTab({ db, persistDB, onGoToImport }) {
   const setQuantitiesP  = v => { const nv = typeof v === "function" ? v(quantities)  : v; setQuantities(nv);  saveDraft({ quantities: nv }); };
   const setWeatherP     = v => { const nv = typeof v === "function" ? v(weather)     : v; setWeather(nv);     saveDraft({ weather: nv }); };
 
+  // EXTRA DAYS (shopping a day or two later than usual). Only the LATEST week can grow
+  // or shrink — this plan is "next", or there is no next week yet — so a week boundary
+  // never moves once a following week exists. Removing an extra day drops everything
+  // stored under its key, in the same single save.
+  const extraDays    = extraDaysOf(draft);
+  const canExtend    = !!draft?.weekStartDate && ((db.activePlan || "current") === "next" || !db.plans?.next?.weekStartDate);
+  const setExtraDays = n => {
+    const target = Math.max(0, Math.min(MAX_EXTRA_DAYS, n));
+    if (!canExtend || target === extraDays) return;
+    if (target > extraDays) { saveDraft({ extraDays: target }); return; }
+    const gone = []; for (let k = target + 1; k <= extraDays; k++) gone.push(`X${k}`);
+    const drop = o => { const c = { ...(o || {}) }; gone.forEach(k => delete c[k]); return c; };
+    const nm = drop(mealPlan), np = reconcilePlates(mealPlan, nm, plates, db.meals || []);
+    const nn = drop(dayNotes), nt = drop(timeLevels), npr = drop(presence), nd = drop(dayPills);
+    setMealPlan(nm); setPlates(np); setDayNotes(nn); setTimeLevels(nt); setPresence(npr); setDayPills(nd);
+    saveDraft({ extraDays: target, mealPlan: nm, plates: np, dayNotes: nn, timeLevels: nt, presence: npr, dayPills: nd });
+  };
+
   // Single-write committer for placing a meal on the planner. If the name is new,
   // it creates a stub meal record. Meals + mealPlan + draft are written in ONE
   // persistDB so the two mutations can't clobber each other's stale-closure db.
@@ -1551,9 +1583,9 @@ function PlanTab({ db, persistDB, onGoToImport }) {
   // defensive backstop rather than silently overwriting.
   const startNextWeek = () => {
     if (db.plans?.next) return;
-    const freshMeals = Object.fromEntries(days.map(d => [d, []]));
+    const freshMeals = Object.fromEntries(DAYS_ALL.map(d => [d, []]));
     const anchor     = draft?.weekStartDate || new Date().toISOString().split("T")[0];
-    const nextStart  = addDaysISO(anchor, 7);
+    const nextStart  = addDaysISO(anchor, 7 + extraDaysOf(draft));   // after any extra days
     const freshPlan = {
       weekStartDate: nextStart, notes:"", meals:{}, items:[],
       cartItems:[], cartIngredientIds:[], dismissedShared:[],
@@ -1628,7 +1660,7 @@ function PlanTab({ db, persistDB, onGoToImport }) {
       <WeekSelector db={db} persistDB={persistDB} />
       <StepNav />
       <div style={S.body}>
-        {step === 1 && <PlanMeals   mealPlan={mealPlan} plates={plates} setMealPlan={setMealPlanP} commitMealToPlan={commitMealToPlan} timeLevels={timeLevels} setTimeLevels={setTimeLevelsP} presence={presence} setPresence={setPresenceP} weekStartDate={draft?.weekStartDate} adventurousWeek={!!draft?.adventurousWeek} setAdventurousWeek={v => saveDraft({ adventurousWeek: v })} meals={meals} onNext={() => goToStep(2)} days={days} daysFull={daysFull} dayNotes={dayNotes} setDayNotes={setDayNotesP} dayPills={dayPills} setDayPills={setDayPillsP} db={db} persistDB={persistDB} />}
+        {step === 1 && <PlanMeals   mealPlan={mealPlan} plates={plates} setMealPlan={setMealPlanP} commitMealToPlan={commitMealToPlan} timeLevels={timeLevels} setTimeLevels={setTimeLevelsP} presence={presence} setPresence={setPresenceP} weekStartDate={draft?.weekStartDate} adventurousWeek={!!draft?.adventurousWeek} setAdventurousWeek={v => saveDraft({ adventurousWeek: v })} meals={meals} onNext={() => goToStep(2)} days={days} daysFull={daysFull} dayNotes={dayNotes} setDayNotes={setDayNotesP} dayPills={dayPills} setDayPills={setDayPillsP} db={db} persistDB={persistDB} extraDays={extraDays} canExtend={canExtend} setExtraDays={setExtraDays} />}
         {step === 2 && <PlanInventory checkedIds={checkedIds} setCheckedIds={setCheckedIdsP} stapleFlags={stapleFlags} setStapleFlags={setStapleFlagsP} quantities={quantities} setQuantities={setQuantitiesP} mealPlan={mealPlan} meals={meals} ingredients={ingredients} onNext={() => goToStep(3)} days={days} cartIngredientIds={draft?.cartIngredientIds || []} onChangeItemTier={(id, tier, subtype) => persistDB({ ...db, ingredients: db.ingredients.map(i => i.id === id ? { ...i, tier, stapleType: subtype || undefined } : i) })} />}
         {step === 3 && <PlanConfirm mode="confirm" checkedIds={checkedIds} removedIds={removedIds} setRemovedIds={setRemovedIdsP} addedItems={addedItems} setAddedItems={setAddedItemsP} stapleFlags={stapleFlags} quantities={quantities} setQuantities={setQuantitiesP} mealPlan={mealPlan} meals={meals} ingredients={ingredients} onNext={() => goToStep(4)} db={db} persistDB={persistDB} days={days} daysFull={daysFull} />}
         {step === 4 && <PlanConfirm mode="sparky" checkedIds={checkedIds} removedIds={removedIds} setRemovedIds={setRemovedIdsP} addedItems={addedItems} setAddedItems={setAddedItemsP} stapleFlags={stapleFlags} quantities={quantities} setQuantities={setQuantitiesP} mealPlan={mealPlan} meals={meals} ingredients={ingredients} onFinish={finishPlan} db={db} persistDB={persistDB} days={days} daysFull={daysFull} />}
@@ -1857,7 +1889,7 @@ function sideBadge(dish) {
   return <span style={S.tag(C.muted, "#F3F4F6")}>side</span>;
 }
 
-function PlanMeals({ mealPlan, plates, setMealPlan, commitMealToPlan, timeLevels, setTimeLevels, presence, setPresence, weekStartDate, adventurousWeek, setAdventurousWeek, meals, onNext, days, daysFull, dayNotes, setDayNotes, dayPills, setDayPills, db, persistDB }) {
+function PlanMeals({ mealPlan, plates, setMealPlan, commitMealToPlan, timeLevels, setTimeLevels, presence, setPresence, weekStartDate, adventurousWeek, setAdventurousWeek, meals, onNext, days, daysFull, dayNotes, setDayNotes, dayPills, setDayPills, db, persistDB, extraDays = 0, canExtend = false, setExtraDays }) {
   const [editing, setEditing] = useState(null);
   const [moving,  setMoving]  = useState(null);
   const [search,  setSearch]  = useState("");
@@ -1975,7 +2007,7 @@ function PlanMeals({ mealPlan, plates, setMealPlan, commitMealToPlan, timeLevels
     const plan = { ...(db.plans?.[planKey] || {}), weekStartDate, mealPlan, plates, timeLevels, presence, adventurousWeek };
     if (!weekStartDate) return { planned: 0, observations: [], leftovers: {} };
     return checkWeek(evaluateWeek, { db, planKey, plan, forecastByDate, today: todayLocalISO(), days });
-  }, [mealPlan, plates, timeLevels, presence, adventurousWeek, forecastKey, db.meals, db.settings, db.planTail, db.mealHistory, weekStartDate]);
+  }, [mealPlan, plates, timeLevels, presence, adventurousWeek, forecastKey, db.meals, db.settings, db.planTail, db.mealHistory, weekStartDate, days.join(",")]);
 
   // Fill every EMPTY day with a composed plate (REFACTOR S1 — composeWeek replaces the
   // old weighted-random getMealSuggestions). Days that already have anything on them are
@@ -2249,7 +2281,7 @@ function PlanMeals({ mealPlan, plates, setMealPlan, commitMealToPlan, timeLevels
         const pills         = (dayPills?.[day] || []).filter(p => p.label !== "grill");
         const dayFc         = forecastByDate[dateOfDay[day]];
         const grillOk       = engineGrillOk(grillOpen, dayFc);
-        const timeLevel     = (timeLevels || {})[day] || seedTimeLevel(day);
+        const timeLevel     = (timeLevels || {})[day] || seedTimeLevel(dateOfDay[day] ? abbrOfISO(dateOfDay[day]) : day);
         const isEditingNew  = editing?.day === day && editing?.mealIdx == null;
         const editingPills  = pillEditDay === day;
         // The day as a PLATE (REFACTOR C1): the plate entry for each listed meal, when
@@ -2274,7 +2306,11 @@ function PlanMeals({ mealPlan, plates, setMealPlan, commitMealToPlan, timeLevels
         return (
           <div key={day} style={S.mealCard(timeLevel === "none" ? "easy" : "medium")}>
             <div style={{ fontSize:11, fontWeight:700, color:C.accentMuted, letterSpacing:"0.06em", textTransform:"uppercase", marginBottom:4 }}>
-              {daysFull[i]}
+              {daysFull[i]}{isExtraDay(day) && dateOfDay[day] && ` · ${Number(dateOfDay[day].slice(5, 7))}/${Number(dateOfDay[day].slice(8))}`}
+              {isExtraDay(day) && canExtend && day === `X${extraDays}` && (
+                <button title="Remove this extra day" style={{ marginLeft:8, background:"none", border:"none", color:C.faint, fontSize:12, cursor:"pointer", padding:0, textTransform:"none", letterSpacing:0 }}
+                  onClick={() => { if (!dayMeals.length || window.confirm(`Remove ${daysFull[i]}? Its meals and notes go with it.`)) setExtraDays(extraDays - 1); }}>× remove</button>
+              )}
               {dayFc && <span style={{ marginLeft:8, fontWeight:600, color:C.muted, textTransform:"none", letterSpacing:0 }}>{dayFc.icon} {dayFc.hi}° · {dayFc.pop}% rain</span>}
             </div>
             <div style={{ display:"flex", alignItems:"center", gap:4, flexWrap:"wrap", marginBottom:6 }}>
@@ -2344,7 +2380,7 @@ function PlanMeals({ mealPlan, plates, setMealPlan, commitMealToPlan, timeLevels
                     <div>
                       <div style={{ fontSize:12, color:C.muted, marginBottom:6 }}>Move to:</div>
                       <div style={{ display:"flex", flexWrap:"wrap", gap:6 }}>
-                        {days.filter(d=>d!==day).map(d => <button key={d} style={{ ...S.btnSm, background:C.primaryLight, color:C.primary }} onClick={() => moveMeal(day,mealIdx,d)}>{d}</button>)}
+                        {days.filter(d=>d!==day).map(d => <button key={d} style={{ ...S.btnSm, background:C.primaryLight, color:C.primary }} onClick={() => moveMeal(day,mealIdx,d)}>{isExtraDay(d) ? "+" + daysFull[days.indexOf(d)].replace("Extra ", "").slice(0, 3) : d}</button>)}
                         <button style={{ ...S.btnSm, background:C.dangerLight, color:C.danger }} onClick={() => setMoving(null)}>Cancel</button>
                       </div>
                     </div>
@@ -2430,6 +2466,16 @@ function PlanMeals({ mealPlan, plates, setMealPlan, commitMealToPlan, timeLevels
           </div>
         );
       })}
+      {/* Shopping a day or two later than usual: add days after the week's last day. Only
+          the latest week can (see setExtraDays in PlanTab), so a boundary never moves. */}
+      {canExtend && extraDays < MAX_EXTRA_DAYS && weekStartDate && (() => {
+        const iso = addDaysISO(weekStartDate, 7 + extraDays);
+        return (
+          <button style={{ background:"none", border:`1.5px dashed ${C.border}`, borderRadius:8, padding:"8px 12px", fontSize:13, cursor:"pointer", color:C.muted, width:"100%", marginBottom:10 }} onClick={() => setExtraDays(extraDays + 1)}>
+            + Add an extra day ({DAYS_FULL[new Date(iso + "T00:00:00").getDay()]} {Number(iso.slice(5, 7))}/{Number(iso.slice(8))}) — shopping later than usual
+          </button>
+        );
+      })()}
       {totalMeals > 0 && (
         <div style={{ marginBottom:10 }}>
           <button style={{ ...S.btn, ...S.btnS, marginBottom:draftSms?8:0 }} onClick={textDraftPlan}>{draftCopied ? "✓ Copied — paste into Messages" : "📋 Copy draft plan for family"}</button>
@@ -4506,13 +4552,11 @@ function buildFridgeReportHTML(db) {
   const printedPlan = getActivePlan(db);
   const mp    = printedPlan?.mealPlan || printedPlan?.meals || {};
   const notes = printedPlan?.dayNotes || {};
-  const { days: order } = printedPlan?.weekStartDate
-    ? getWeekFromDate(printedPlan.weekStartDate)
-    : getWeekFromDay(db.settings?.shoppingDay || "Wednesday");
+  const { days: order, daysFull: orderFull } = planDays(printedPlan, db.settings?.shoppingDay);
 
-  const daysHTML = order.map(d => {
+  const daysHTML = order.map((d, i) => {
     const names = (mp[d] || []).map(s => String(s).trim()).filter(Boolean);
-    return fridgeReportBuildDay(d, names, (notes[d] || "").trim(), ix);
+    return fridgeReportBuildDay(isExtraDay(d) ? orderFull[i] : d, names, (notes[d] || "").trim(), ix);
   }).join("");
 
   const weekOf = printedPlan?.weekStartDate || "";
@@ -4525,11 +4569,9 @@ function buildFridgeReportHTML(db) {
   let teaserHTML = "";
   if (nextPlan) {
     const npMp = nextPlan.mealPlan || nextPlan.meals || {};
-    const { days: nextOrder } = nextPlan.weekStartDate
-      ? getWeekFromDate(nextPlan.weekStartDate)
-      : getWeekFromDay(db.settings?.shoppingDay || "Wednesday");
+    const { days: nextOrder, daysFull: nextFull } = planDays(nextPlan, db.settings?.shoppingDay);
     const items = nextOrder
-      .map(d => ({ d, names: (npMp[d] || []).map(s => String(s).trim()).filter(Boolean) }))
+      .map((d, i) => ({ d: isExtraDay(d) ? nextFull[i] : d, names: (npMp[d] || []).map(s => String(s).trim()).filter(Boolean) }))
       .filter(x => x.names.length);
     if (items.length) {
       teaserHTML =
@@ -4659,7 +4701,7 @@ function TonightTab({ db, persistDB }) {
   const tonightPlan  = resolvePlanForDate(db, todayISO);
   const tomorrowPlan = resolvePlanForDate(db, tomorrowISO);
   const mealOnDate = (plan, dateISO) => {
-    const abbr = DAYS_ALL[new Date(dateISO + "T00:00:00").getDay()];
+    const abbr = dayKeyForDate(plan, dateISO) || DAYS_ALL[new Date(dateISO + "T00:00:00").getDay()];
     const mp = plan?.mealPlan || plan?.meals || {};
     return (mp[abbr] || []).join(", ") || null;
   };
@@ -4673,10 +4715,8 @@ function TonightTab({ db, persistDB }) {
   // date labels make that self-explaining.
   const activePlan  = getActivePlan(db);
   const planMeals   = activePlan?.mealPlan || activePlan?.meals || {};
-  const { days, daysFull } = activePlan?.weekStartDate
-    ? getWeekFromDate(activePlan.weekStartDate)
-    : getWeekFromDay(db.settings?.shoppingDay || "Wednesday");
-  const todayAbbr      = DAYS_ALL[new Date().getDay()];
+  const { days, daysFull } = planDays(activePlan, db.settings?.shoppingDay);
+  const todayAbbr      = dayKeyForDate(activePlan, todayISO) || DAYS_ALL[new Date().getDay()];
   const scheduleTodayIdx = days.indexOf(todayAbbr);
 
   const buildMessage = () => `Tonight's dinner (${dateLabel(todayISO)}): ${todayMeal||"Not planned yet"}`;
@@ -4750,7 +4790,7 @@ function TonightTab({ db, persistDB }) {
           const isToday = i===scheduleTodayIdx;
           return (
             <div key={d} style={{ display:"flex", padding:"9px 0", borderBottom:`1px solid ${C.border}`, gap:10 }}>
-              <div style={{ fontSize:12, fontWeight:700, color:isToday?C.primary:C.faint, width:36 }}>{d}</div>
+              <div style={{ fontSize:12, fontWeight:700, color:isToday?C.primary:C.faint, width:36 }}>{isExtraDay(d) ? "+" + daysFull[i].replace("Extra ", "").slice(0, 3) : d}</div>
               <div style={{ flex:1, fontSize:14, fontWeight:isToday?700:400, color:isToday?C.primary:C.text }}>{m||"—"}</div>
               {isToday && <div style={{ fontSize:11, color:C.accent, fontWeight:700 }}>today</div>}
             </div>
