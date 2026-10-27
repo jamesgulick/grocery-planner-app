@@ -1661,7 +1661,7 @@ function PlanTab({ db, persistDB, onGoToImport }) {
       <StepNav />
       <div style={S.body}>
         {step === 1 && <PlanMeals   mealPlan={mealPlan} plates={plates} setMealPlan={setMealPlanP} commitMealToPlan={commitMealToPlan} timeLevels={timeLevels} setTimeLevels={setTimeLevelsP} presence={presence} setPresence={setPresenceP} weekStartDate={draft?.weekStartDate} adventurousWeek={!!draft?.adventurousWeek} setAdventurousWeek={v => saveDraft({ adventurousWeek: v })} meals={meals} onNext={() => goToStep(2)} days={days} daysFull={daysFull} dayNotes={dayNotes} setDayNotes={setDayNotesP} dayPills={dayPills} setDayPills={setDayPillsP} db={db} persistDB={persistDB} extraDays={extraDays} canExtend={canExtend} setExtraDays={setExtraDays} />}
-        {step === 2 && <PlanInventory checkedIds={checkedIds} setCheckedIds={setCheckedIdsP} stapleFlags={stapleFlags} setStapleFlags={setStapleFlagsP} quantities={quantities} setQuantities={setQuantitiesP} mealPlan={mealPlan} meals={meals} ingredients={ingredients} onNext={() => goToStep(3)} days={days} cartIngredientIds={draft?.cartIngredientIds || []} onChangeItemTier={(id, tier, subtype) => persistDB({ ...db, ingredients: db.ingredients.map(i => i.id === id ? { ...i, tier, stapleType: subtype || undefined } : i) })} />}
+        {step === 2 && <PlanInventory checkedIds={checkedIds} setCheckedIds={setCheckedIdsP} stapleFlags={stapleFlags} setStapleFlags={setStapleFlagsP} quantities={quantities} setQuantities={setQuantitiesP} mealPlan={mealPlan} meals={meals} ingredients={ingredients} onNext={() => goToStep(3)} days={days} cartIngredientIds={draft?.cartIngredientIds || []} onUpdateItem={(id, patch) => persistDB({ ...db, ingredients: db.ingredients.map(i => i.id === id ? { ...i, ...patch } : i) })} />}
         {step === 3 && <PlanConfirm mode="confirm" checkedIds={checkedIds} removedIds={removedIds} setRemovedIds={setRemovedIdsP} addedItems={addedItems} setAddedItems={setAddedItemsP} stapleFlags={stapleFlags} quantities={quantities} setQuantities={setQuantitiesP} mealPlan={mealPlan} meals={meals} ingredients={ingredients} onNext={() => goToStep(4)} db={db} persistDB={persistDB} days={days} daysFull={daysFull} />}
         {step === 4 && <PlanConfirm mode="sparky" checkedIds={checkedIds} removedIds={removedIds} setRemovedIds={setRemovedIdsP} addedItems={addedItems} setAddedItems={setAddedItemsP} stapleFlags={stapleFlags} quantities={quantities} setQuantities={setQuantitiesP} mealPlan={mealPlan} meals={meals} ingredients={ingredients} onFinish={finishPlan} db={db} persistDB={persistDB} days={days} daysFull={daysFull} />}
         {step > 1 && (
@@ -2492,9 +2492,11 @@ function PlanMeals({ mealPlan, plates, setMealPlan, commitMealToPlan, timeLevels
   );
 }
 
-function PlanInventory({ checkedIds, setCheckedIds, stapleFlags, setStapleFlags, quantities, setQuantities, mealPlan, meals, ingredients, onNext, days, cartIngredientIds = [], onChangeItemTier }) {
+function PlanInventory({ checkedIds, setCheckedIds, stapleFlags, setStapleFlags, quantities, setQuantities, mealPlan, meals, ingredients, onNext, days, cartIngredientIds = [], onUpdateItem }) {
   const [locIdx, setLocIdx] = useState(0);
-  const [moverId, setMoverId] = useState(null); // id of item whose tier picker is open
+  const [editId, setEditId] = useState(null);     // item whose "⋯ edit" panel is open
+  const [moveNote, setMoveNote] = useState(null); // what happened to an item moved to another location
+  useEffect(() => { setMoveNote(null); setEditId(null); }, [locIdx]);
   const LOCS    = INVENTORY_LOCS;
   const loc     = LOCS[locIdx];
   const prompts = { Pantry:"Open your pantry.", Fridge:"Open the fridge.", Freezer:"Open the freezer.", Garage:"Check the garage freezer / storage.", Cabinet:"Check the spice cabinet.", "Medicine Cabinet":"Check the medicine cabinet.", Other:"Check other storage." };
@@ -2563,34 +2565,42 @@ function PlanInventory({ checkedIds, setCheckedIds, stapleFlags, setStapleFlags,
     );
   };
 
-  // Subtle per-item affordance to fix a misfiled item's tier without leaving the
-  // flow. Collapsed to a small link; tap to reveal the full tier picker, which
-  // persists the change so the item re-sections live and stays fixed everywhere.
-  const TierMover = ({ ing }) => {
-    const open = moverId === ing.id;
-    if (!onChangeItemTier) return null;
-    if (!open) return (
-      <button style={{ background:"none", border:"none", color:C.faint, fontSize:11, cursor:"pointer", padding:"2px 4px", whiteSpace:"nowrap" }} onClick={() => setMoverId(ing.id)}>⋯ move</button>
-    );
-    return (
-      <div style={{ display:"flex", flexWrap:"wrap", gap:4, justifyContent:"flex-end", maxWidth:200 }}>
-        {tierOptions().map(o => {
-          const active = tierValueOf(ing) === o.value;
-          return (
-            <button key={o.value} style={{ ...S.btnSm, padding:"3px 7px", fontSize:10, background:active?C.primary:"#F3F4F6", color:active?"#fff":C.muted }}
-              onClick={() => { onChangeItemTier(ing.id, o.tier, o.subtype); setMoverId(null); }}>{o.label}</button>
-          );
-        })}
-        <button style={{ ...S.btnSm, padding:"3px 7px", fontSize:10, background:"none", color:C.faint }} onClick={() => setMoverId(null)}>✕</button>
-      </div>
-    );
+  // "⋯ edit": fix an item's profile (how often, where kept, usual amount) without
+  // leaving the walk. The panel opens under the row; changes persist to the item, so a
+  // re-filed item re-sections live. An item moved to ANOTHER location leaves this view,
+  // so the note at the top says where it went and whether it's still on the list.
+  const onListNow = ing => ing.tier === "staple" ? !!stapleFlags[ing.id] : !checkedIds.includes(ing.id);
+  const updateItem = (ing, patch) => {
+    if (!onUpdateItem) return;
+    onUpdateItem(ing.id, patch);
+    // Re-filed as specialty with no planned meal needing it: specialty items only show
+    // when a meal does, so it drops out of the walk. Say so rather than let it vanish.
+    if (patch.tier === "specialty" && ing.tier !== "specialty" && !mealIngIds.has(ing.id) && !inPrep.has(ing.id)) {
+      setEditId(null);
+      setMoveNote(`${ing.name} is now specialty. Specialty items only come up when a planned meal needs one, so it's off this week's list.`);
+    }
+    const to = patch.storageLocation;
+    if (to && to !== loc) {
+      setEditId(null);
+      const toIdx = LOCS.indexOf(to);
+      setMoveNote(toIdx >= 0 && toIdx < locIdx
+        ? `${ing.name} moved to ${to}. You've already been through ${to}; it's ${onListNow(ing) ? "still on" : "not on"} this week's list.`
+        : toIdx > locIdx ? `${ing.name} moved to ${to}. It'll come up there.` : `${ing.name} moved to ${to}.`);
+    }
   };
+  const EditBtn = ({ ing }) => !onUpdateItem ? null : (
+    <button style={{ background:"none", border:"none", color:editId === ing.id ? C.primary : C.faint, fontSize:11, cursor:"pointer", padding:"2px 4px", whiteSpace:"nowrap" }} onClick={() => setEditId(editId === ing.id ? null : ing.id)}>⋯ edit</button>
+  );
+  const EditPanel = ({ ing }) => editId !== ing.id ? null : (
+    <ItemEditPanel ing={ing} thisWeek={quantities[ing.id]} onUpdate={patch => updateItem(ing, patch)} onClose={() => setEditId(null)} />
+  );
 
   const StapleRow = ({ ing, accent }) => {
     const flagged = inPrep.has(ing.id);
     // 1 meal -> name context line; 2+ meals -> the ×N badge above (never both)
     const usedBy  = !multiMeal[ing.id] && (usedByMeal[ing.id] || []).length === 1 ? usedByMeal[ing.id] : [];
     return (
+      <>
       <div key={ing.id} style={{ display:"flex", alignItems:"center", padding:"10px 0", borderBottom:`1px solid ${C.border}`, gap:8 }}>
         <div style={{ flex:1, minWidth:0 }}>
           <div style={{ fontSize:14, fontWeight:500 }}>{ing.name}{multiMeal[ing.id] && <span style={{ marginLeft:6, fontSize:11, fontWeight:700, color:"#B45309", background:"#FEF3C7", borderRadius:5, padding:"1px 5px" }}>×{multiMeal[ing.id]} meals</span>}</div>
@@ -2600,9 +2610,11 @@ function PlanInventory({ checkedIds, setCheckedIds, stapleFlags, setStapleFlags,
             : <div style={{ fontSize:11, color:stapleFlags[ing.id]?accent:C.faint }}>{stapleFlags[ing.id]?"Adding to list":"Have enough"}</div>}
         </div>
         <QtyEdit ing={ing} />
-        <TierMover ing={ing} />
-        {moverId !== ing.id && <Toggle value={!!stapleFlags[ing.id]} onChange={v => setStapleFlags(prev => ({...prev,[ing.id]:v}))} />}
+        <EditBtn ing={ing} />
+        <Toggle value={!!stapleFlags[ing.id]} onChange={v => setStapleFlags(prev => ({...prev,[ing.id]:v}))} />
       </div>
+      <EditPanel ing={ing} />
+      </>
     );
   };
 
@@ -2612,6 +2624,7 @@ function PlanInventory({ checkedIds, setCheckedIds, stapleFlags, setStapleFlags,
         <div style={S.sectionLabel}>Step 3 - Inventory - {loc}</div>
         <div style={S.h2}>{loc}</div>
         <div style={S.sub}>{prompts[loc] || `Check ${loc}.`}</div>
+        {moveNote && <div style={{ fontSize:12, lineHeight:1.4, marginTop:8, padding:"6px 8px", borderRadius:6, background:C.primaryLight, color:C.primary }}>{moveNote}</div>}
       </div>
 
       {(alwaysHere.length > 0 || weeklyHere.length > 0 || slowNeededHere.length > 0 || slowHere.length > 0 || mealHere.length > 0) ? (
@@ -2622,22 +2635,23 @@ function PlanInventory({ checkedIds, setCheckedIds, stapleFlags, setStapleFlags,
               {alwaysHere.map(ing => {
                 const skipped = checkedIds.includes(ing.id);
                 return (
-                  <div key={ing.id} style={{ display:"flex", alignItems:"center", padding:"10px 0", borderBottom:`1px solid ${C.border}`, gap:8, opacity:skipped?0.5:1, transition:"opacity 0.2s" }}>
+                  <React.Fragment key={ing.id}>
+                  <div style={{ display:"flex", alignItems:"center", padding:"10px 0", borderBottom:`1px solid ${C.border}`, gap:8, opacity:skipped?0.5:1, transition:"opacity 0.2s" }}>
                     <div style={{ flex:1, minWidth:0 }}>
                       <div style={{ fontSize:14, fontWeight:500, textDecoration:skipped?"line-through":"none", color:skipped?C.muted:"inherit" }}>{ing.name}{multiMeal[ing.id] && <span style={{ marginLeft:6, fontSize:11, fontWeight:700, color:"#B45309", background:"#FEF3C7", borderRadius:5, padding:"1px 5px" }}>×{multiMeal[ing.id]} meals</span>}</div>
                       {!multiMeal[ing.id] && (usedByMeal[ing.id]||[]).length === 1 && <div style={{ fontSize:11, color:C.accent, fontWeight:600 }}>for {usedByMeal[ing.id][0]}</div>}
                       {inPrep.has(ing.id) && <div style={{ fontSize:11, color:C.verified, fontWeight:600 }}>✓ In cart</div>}
                     </div>
                     {!skipped && <QtyEdit ing={ing} />}
-                    <TierMover ing={ing} />
-                    {moverId !== ing.id && (
-                      <button
-                        onClick={() => setCheckedIds(prev => skipped ? prev.filter(id => id !== ing.id) : [...prev, ing.id])}
-                        style={{ border:"none", background:"none", cursor:"pointer", fontSize:12, fontWeight:600, padding:"4px 6px", color:skipped?C.faint:C.accent, whiteSpace:"nowrap" }}>
-                        {skipped ? "Skipped — tap to add" : "✓ On list"}
-                      </button>
-                    )}
+                    <EditBtn ing={ing} />
+                    <button
+                      onClick={() => setCheckedIds(prev => skipped ? prev.filter(id => id !== ing.id) : [...prev, ing.id])}
+                      style={{ border:"none", background:"none", cursor:"pointer", fontSize:12, fontWeight:600, padding:"4px 6px", color:skipped?C.faint:C.accent, whiteSpace:"nowrap" }}>
+                      {skipped ? "Skipped — tap to add" : "✓ On list"}
+                    </button>
                   </div>
+                  <EditPanel ing={ing} />
+                  </React.Fragment>
                 );
               })}
             </>
@@ -2668,7 +2682,8 @@ function PlanInventory({ checkedIds, setCheckedIds, stapleFlags, setStapleFlags,
               {mealHere.map(ing => {
                 const inStock = checkedIds.includes(ing.id);
                 return (
-                  <div key={ing.id} style={{ display:"flex", alignItems:"center", gap:8, padding:"10px 0", borderBottom:`1px solid ${C.border}`, opacity:inStock?0.4:1, transition:"opacity 0.2s" }}>
+                  <React.Fragment key={ing.id}>
+                  <div style={{ display:"flex", alignItems:"center", gap:8, padding:"10px 0", borderBottom:`1px solid ${C.border}`, opacity:inStock?0.4:1, transition:"opacity 0.2s" }}>
                     <div style={{ display:"flex", alignItems:"center", gap:10, flex:1, minWidth:0, cursor:"pointer" }} onClick={() => toggleChecked(ing.id)}>
                       <div style={S.checkBox(inStock)}>{inStock && "✓"}</div>
                       <div style={{ flex:1, minWidth:0 }}>
@@ -2678,8 +2693,10 @@ function PlanInventory({ checkedIds, setCheckedIds, stapleFlags, setStapleFlags,
                           : <div style={{ fontSize:11, color:inStock?C.verified:C.faint }}>{inStock?"Have it — skipping":"Need it — will order"}</div>}
                       </div>
                     </div>
-                    <div onClick={e => e.stopPropagation()} style={{ display:"flex", alignItems:"center", gap:8 }}><QtyEdit ing={ing} /><TierMover ing={ing} /></div>
+                    <div onClick={e => e.stopPropagation()} style={{ display:"flex", alignItems:"center", gap:8 }}><QtyEdit ing={ing} /><EditBtn ing={ing} /></div>
                   </div>
+                  <EditPanel ing={ing} />
+                  </React.Fragment>
                 );
               })}
             </>
@@ -2716,6 +2733,8 @@ function PlanConfirm({ mode = "confirm", checkedIds, removedIds, setRemovedIds, 
   const [framed, setFramed] = useState(true); // prepend the Sparky instruction header
   const [reconcileCopied, setReconcileCopied] = useState(false);
   const [sharedSparkyCopied, setSharedSparkyCopied] = useState(false);
+  const [editId, setEditId]     = useState(null);        // item whose "⋯ edit" panel is open
+  const [keepSel, setKeepSel]   = useState(() => new Set()); // amounts ticked to become the usual
 
   const activePlan         = getActivePlan(db);
   const cartIngredientIds = activePlan?.cartIngredientIds || [];
@@ -2749,6 +2768,29 @@ function PlanConfirm({ mode = "confirm", checkedIds, removedIds, setRemovedIds, 
   // uses it — the inventory judgment wins.
   const orderingIds   = new Set(allNeeded.map(i => i.id));
   const activeCount   = allNeeded.filter(i => !removedIds.includes(i.id) && !cartIngredientIds.includes(i.id)).length + addedItems.length;
+
+  // "⋯ edit item": the item's profile (how often, where kept, usual amount), written to
+  // the item itself. This week's amount stays the amount chip's job.
+  const updateItem = (id, patch) => persistDB({ ...db, ingredients: db.ingredients.map(i => i.id === id ? { ...i, ...patch } : i) });
+
+  // KEEP AS USUAL (VALIDATION-LOG 10/27): one card, only when this week's amounts differ
+  // from the items' usual ones. Nothing is pre-ticked (most changes are one-offs).
+  // "Just this week" dismisses it for this exact set of changes (kept on the plan), so it
+  // comes back only if an amount changes again.
+  const changedAmounts = allNeeded.filter(i => !removedIds.includes(i.id) && !cartIngredientIds.includes(i.id)
+    && quantities[i.id] !== undefined && quantities[i.id] !== (i.defaultQuantity || ""));
+  const changedSig = changedAmounts.map(i => `${i.id}=${quantities[i.id]}`).sort().join("|");
+  const showKeepCard = mode === "confirm" && changedAmounts.length > 0 && activePlan?.usualPromptDismissed !== changedSig;
+  const keepAsUsual = () => {
+    const ids = new Set([...keepSel].filter(id => changedAmounts.some(i => i.id === id)));
+    if (!ids.size) return;
+    persistDB({ ...db, ingredients: db.ingredients.map(i => ids.has(i.id) ? { ...i, defaultQuantity: quantities[i.id] } : i) });
+    setKeepSel(new Set());
+  };
+  const justThisWeek = () => {
+    if (!activePlan) return;
+    persistDB(writeActivePlan(db, { ...activePlan, usualPromptDismissed: changedSig }));
+  };
 
   // Shared ingredients = EVERY multi-meal item this week, regardless of status.
   // This deliberately INCLUDES in-stock and in-cart items — those are the dangerous
@@ -2884,7 +2926,9 @@ function PlanConfirm({ mode = "confirm", checkedIds, removedIds, setRemovedIds, 
   const ItemRow = ({ ing }) => {
     const isRemoved = removedIds.includes(ing.id);
     const inCart    = cartIngredientIds.includes(ing.id);
+    const custom    = quantities[ing.id] !== undefined && quantities[ing.id] !== (ing.defaultQuantity || "");
     return (
+      <>
       <div style={{ display:"flex", alignItems:"center", gap:10, padding:"11px 0", borderBottom:`1px solid ${C.border}`, opacity:(isRemoved||inCart)?0.4:1 }}>
         <div style={{ ...S.checkBox(isRemoved||inCart), background:(isRemoved||inCart)?"#CCC":"#fff", border:(isRemoved||inCart)?"none":`2px solid ${C.border}`, color:"#888" }}
           onClick={() => { if(!inCart) setRemovedIds(prev => prev.includes(ing.id) ? prev.filter(x => x !== ing.id) : [...prev, ing.id]); }}>
@@ -2893,9 +2937,13 @@ function PlanConfirm({ mode = "confirm", checkedIds, removedIds, setRemovedIds, 
         <div style={{ flex:1, minWidth:0 }}>
           <div style={{ fontSize:14, textDecoration:(isRemoved||inCart)?"line-through":"none" }}>{ing.name}</div>
           {inCart && <div style={{ fontSize:11, color:C.verified, fontWeight:600 }}>Already in cart</div>}
+          {custom && !inCart && !isRemoved && <div style={{ fontSize:11, color:C.faint }}>this week {quantities[ing.id] || "none"} · usual {ing.defaultQuantity || "none"}</div>}
         </div>
         {!inCart && !isRemoved && <QtyChip ing={ing} />}
+        <button style={{ background:"none", border:"none", color:editId === ing.id ? C.primary : C.faint, fontSize:11, cursor:"pointer", padding:"2px 4px", whiteSpace:"nowrap" }} onClick={() => setEditId(editId === ing.id ? null : ing.id)}>⋯ edit</button>
       </div>
+      {editId === ing.id && <ItemEditPanel ing={ing} thisWeek={quantities[ing.id]} onUpdate={patch => updateItem(ing.id, patch)} onClose={() => setEditId(null)} />}
+      </>
     );
   };
 
@@ -2911,6 +2959,28 @@ function PlanConfirm({ mode = "confirm", checkedIds, removedIds, setRemovedIds, 
           <button style={{ ...S.btnSm, flex:1, background:view==="flat"?C.primary:"#F3F4F6", color:view==="flat"?"#fff":C.muted }} onClick={() => setView("flat")}>Flat list</button>
         </div>
       </div>
+
+      {showKeepCard && (
+        <div style={S.card}>
+          <div style={{ fontSize:13, fontWeight:700, marginBottom:4 }}>You changed {changedAmounts.length} amount{changedAmounts.length === 1 ? "" : "s"} this week. Keep any as the new usual?</div>
+          <div style={{ fontSize:12, color:C.muted, marginBottom:6 }}>Tick the ones that should be the amount from now on. The rest stay just for this week.</div>
+          {changedAmounts.map(i => {
+            const on = keepSel.has(i.id);
+            return (
+              <div key={i.id} style={{ display:"flex", alignItems:"center", gap:10, padding:"6px 0", cursor:"pointer" }}
+                onClick={() => setKeepSel(prev => { const n = new Set(prev); n.has(i.id) ? n.delete(i.id) : n.add(i.id); return n; })}>
+                <div style={S.checkBox(on)}>{on && "✓"}</div>
+                <div style={{ flex:1, fontSize:13 }}>{i.name}</div>
+                <div style={{ fontSize:12, color:C.muted, whiteSpace:"nowrap" }}>{i.defaultQuantity || "none"} → <b style={{ color:C.text }}>{quantities[i.id] || "none"}</b></div>
+              </div>
+            );
+          })}
+          <div style={{ display:"flex", gap:8, marginTop:8 }}>
+            <button style={{ ...S.btnSm, flex:1, background:keepSel.size ? C.primary : "#F3F4F6", color:keepSel.size ? "#fff" : C.faint }} disabled={!keepSel.size} onClick={keepAsUsual}>Make checked the usual</button>
+            <button style={{ ...S.btnSm, flex:1, background:"#F3F4F6", color:C.muted }} onClick={justThisWeek}>Just this week</button>
+          </div>
+        </div>
+      )}
 
       {sharedItems.length > 0 && (
         <div style={S.card}>
@@ -3316,6 +3386,40 @@ const ROTATION_HELP = {
 const CADENCE_OPTIONS = ["none","weekly","biweekly"];
 const COST_OPTIONS    = ["none","low","moderate","high"];
 const CARRY_DAYS      = [1,2,3,4,5,6,7];
+
+// "⋯ edit item" (VALIDATION-LOG 10/27): fix an item's profile where it's noticed while
+// planning (Inventory, Confirm): how often it's bought, where it's kept, its USUAL
+// amount. Writes the item itself; this week's amount stays the amount button's job,
+// and the panel says so when the two differ.
+function ItemEditPanel({ ing, thisWeek, onUpdate, onClose }) {
+  const [usual, setUsual] = useState(ing.defaultQuantity || "");
+  const commitUsual = () => { const v = usual.trim(); if (v !== (ing.defaultQuantity || "")) onUpdate({ defaultQuantity: v }); };
+  const label = t => <div style={{ fontSize:11, color:C.muted, fontWeight:600, margin:"8px 0 4px" }}>{t}</div>;
+  const chip = (active, text, onClick) => (
+    <button key={text} style={{ ...S.btnSm, padding:"3px 8px", fontSize:11, background:active ? C.primary : "#fff", color:active ? "#fff" : C.muted, border:`1px solid ${active ? C.primary : C.border}` }} onClick={onClick}>{text}</button>
+  );
+  const locs = ing.storageLocation === "Unassigned" ? ["Unassigned", ...INVENTORY_LOCS] : INVENTORY_LOCS;
+  return (
+    <div style={{ margin:"2px 0 10px", padding:"6px 10px 10px", background:"#FAFAFA", border:`1px solid ${C.border}`, borderRadius:8 }}>
+      {label("How often")}
+      <div style={{ display:"flex", flexWrap:"wrap", gap:4 }}>
+        {tierOptions().map(o => chip(tierValueOf(ing) === o.value, o.label, () => onUpdate({ tier: o.tier, stapleType: o.subtype || undefined })))}
+      </div>
+      {label("Where it's kept")}
+      <div style={{ display:"flex", flexWrap:"wrap", gap:4 }}>
+        {locs.map(l => chip(ing.storageLocation === l, l, () => onUpdate({ storageLocation: l })))}
+      </div>
+      {label("Usual amount")}
+      <input style={{ ...S.input, marginBottom:0, fontSize:13, padding:"6px 8px" }} value={usual} placeholder="e.g. 2 cans" onChange={e => setUsual(e.target.value)} onBlur={commitUsual} onKeyDown={e => { if (e.key === "Enter") e.target.blur(); }} />
+      {thisWeek !== undefined && thisWeek !== (ing.defaultQuantity || "") && (
+        <div style={{ fontSize:11, color:C.faint, marginTop:4 }}>This week: {thisWeek || "none"}. That's set with the amount button and doesn't change the usual.</div>
+      )}
+      <div style={{ textAlign:"right", marginTop:8 }}>
+        <button style={{ ...S.btnSm, background:C.primary, color:"#fff" }} onClick={() => { commitUsual(); onClose(); }}>Done</button>
+      </div>
+    </div>
+  );
+}
 
 // Meal search matches descriptors as well as names: the four engine facets (so "pasta",
 // "meaty", "soup" find meals tagged that way), the meal type, and the notes.
