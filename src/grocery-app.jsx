@@ -4853,7 +4853,11 @@ function TonightTab({ db, persistDB }) {
   const tonightPlan  = resolvePlanForDate(db, todayISO);
   const tomorrowPlan = resolvePlanForDate(db, tomorrowISO);
   const mealOnDate = (plan, dateISO) => {
-    const abbr = dayKeyForDate(plan, dateISO) || DAYS_ALL[new Date(dateISO + "T00:00:00").getDay()];
+    // A dated plan answers only for its own dates: a date outside it (e.g. today, when the
+    // week starts tomorrow) is "not planned", never the same weekday from another week.
+    // Only an undated legacy plan falls back to matching the weekday name.
+    const abbr = plan?.weekStartDate ? dayKeyForDate(plan, dateISO) : DAYS_ALL[new Date(dateISO + "T00:00:00").getDay()];
+    if (!abbr) return null;
     const mp = plan?.mealPlan || plan?.meals || {};
     return (mp[abbr] || []).join(", ") || null;
   };
@@ -4868,7 +4872,8 @@ function TonightTab({ db, persistDB }) {
   const activePlan  = getActivePlan(db);
   const planMeals   = activePlan?.mealPlan || activePlan?.meals || {};
   const { days, daysFull } = planDays(activePlan, db.settings?.shoppingDay);
-  const todayAbbr      = dayKeyForDate(activePlan, todayISO) || DAYS_ALL[new Date().getDay()];
+  // Same rule for the schedule's "today" marker: none when today isn't in the shown week.
+  const todayAbbr      = activePlan?.weekStartDate ? dayKeyForDate(activePlan, todayISO) : DAYS_ALL[new Date().getDay()];
   const scheduleTodayIdx = days.indexOf(todayAbbr);
 
   const buildMessage = () => `Tonight's dinner (${dateLabel(todayISO)}): ${todayMeal||"Not planned yet"}`;
