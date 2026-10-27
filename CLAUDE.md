@@ -222,6 +222,12 @@ Pre-migration DBs carry two older single-slot concepts (db.planDraft live-editin
   them** (the plan is "next", or no next week exists), so a week boundary never moves
   once a following week exists; a new next week starts after the extra days.
   `autoRetirePlans` keeps `extraDays` in `planTail` so history dates them.
+- `keptIds` — specialty items on this week's list that no planned meal needs. Re-filing an
+  item ("⋯ edit" on Inventory/Confirm → PlanTab's `updateItem`) never changes whether it's
+  on the list: its on/off state is carried to the new tier's rule (always: not skipped;
+  staple: `stapleFlags`; specialty: needed by a meal or in `keptIds`), and the item and
+  the plan are written in one save. `usualPromptDismissed` records the set of amount
+  changes the Confirm "keep as usual?" card was dismissed for.
 - The plan-inputs migration (easy pills → timeLevels, the Partner away map and the away-member toggle → presence / an open-ended away period) is stamped by `_planInputsVer`.
 
 Settings added for the engine: `grillOpen` (grill season, Manage → Config → Cooking), `awayRanges`, `learnMode`. `awayMemberHome` survives, relabelled, and now ONLY decides who gets family texts.

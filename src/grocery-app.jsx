@@ -1459,6 +1459,41 @@ function PlanTab({ db, persistDB, onGoToImport }) {
     persistDB(writeActivePlan(db, next), opts);
   };
 
+  // RE-FILING AN ITEM ("⋯ edit" on Inventory and Confirm) never changes whether it's on
+  // this week's list. Each frequency has its own on-list rule (always: not skipped;
+  // staple: flagged; specialty: a planned meal needs it, or it's in keptIds), so a tier
+  // change carries the item's current on/off state across to the new tier's rule.
+  // keptIds holds specialty items chosen to buy that no planned meal needs. The item
+  // and the plan are written in ONE save, so neither write can clobber the other.
+  const keptIds = draft?.keptIds || [];
+  const updateItem = (id, patch) => {
+    const ing = ingredients.find(i => i.id === id);
+    if (!ing) return;
+    const nextIngredients = ingredients.map(i => i.id === id ? { ...i, ...patch } : i);
+    if (!patch.tier || patch.tier === ing.tier) { persistDB({ ...db, ingredients: nextIngredients }); return; }
+    const planned = Object.values(mealPlan).flat();
+    const mealNeeds = meals.some(m => planned.includes(m.name) && (m.ingredients || []).includes(id));
+    const skipped = checkedIds.includes(id);
+    const wasOn = ing.tier === "always" ? !skipped
+      : ing.tier === "staple" ? !!stapleFlags[id] && !skipped
+      : (mealNeeds || keptIds.includes(id)) && !skipped;
+    let nChecked = checkedIds.filter(x => x !== id), nFlags = { ...stapleFlags }, nKept = keptIds.filter(x => x !== id);
+    delete nFlags[id];
+    if (patch.tier === "always" && !wasOn) nChecked.push(id);
+    if (patch.tier === "staple" && wasOn) nFlags[id] = true;
+    if (patch.tier === "specialty") {
+      if (wasOn && !mealNeeds) nKept.push(id);
+      if (!wasOn && mealNeeds) nChecked.push(id);
+    }
+    setCheckedIds(nChecked); setStapleFlags(nFlags);
+    const next = {
+      ...draft,
+      step, maxStep, timeLevels, presence, mealPlan, plates, checkedIds: nChecked, removedIds, addedItems, dayNotes, dayPills, stapleFlags: nFlags, quantities, weather,
+      keptIds: nKept, _stepsVer: 4, startedAt: draft?.startedAt || new Date().toISOString(),
+    };
+    persistDB(writeActivePlan({ ...db, ingredients: nextIngredients }, next));
+  };
+
   const clearDraft = () => persistDB(writeActivePlan(db, null));
 
   // Navigate to any step. maxStep only ever grows, so once you've visited a step
@@ -1661,9 +1696,9 @@ function PlanTab({ db, persistDB, onGoToImport }) {
       <StepNav />
       <div style={S.body}>
         {step === 1 && <PlanMeals   mealPlan={mealPlan} plates={plates} setMealPlan={setMealPlanP} commitMealToPlan={commitMealToPlan} timeLevels={timeLevels} setTimeLevels={setTimeLevelsP} presence={presence} setPresence={setPresenceP} weekStartDate={draft?.weekStartDate} adventurousWeek={!!draft?.adventurousWeek} setAdventurousWeek={v => saveDraft({ adventurousWeek: v })} meals={meals} onNext={() => goToStep(2)} days={days} daysFull={daysFull} dayNotes={dayNotes} setDayNotes={setDayNotesP} dayPills={dayPills} setDayPills={setDayPillsP} db={db} persistDB={persistDB} extraDays={extraDays} canExtend={canExtend} setExtraDays={setExtraDays} />}
-        {step === 2 && <PlanInventory checkedIds={checkedIds} setCheckedIds={setCheckedIdsP} stapleFlags={stapleFlags} setStapleFlags={setStapleFlagsP} quantities={quantities} setQuantities={setQuantitiesP} mealPlan={mealPlan} meals={meals} ingredients={ingredients} onNext={() => goToStep(3)} days={days} cartIngredientIds={draft?.cartIngredientIds || []} onUpdateItem={(id, patch) => persistDB({ ...db, ingredients: db.ingredients.map(i => i.id === id ? { ...i, ...patch } : i) })} />}
-        {step === 3 && <PlanConfirm mode="confirm" checkedIds={checkedIds} removedIds={removedIds} setRemovedIds={setRemovedIdsP} addedItems={addedItems} setAddedItems={setAddedItemsP} stapleFlags={stapleFlags} quantities={quantities} setQuantities={setQuantitiesP} mealPlan={mealPlan} meals={meals} ingredients={ingredients} onNext={() => goToStep(4)} db={db} persistDB={persistDB} days={days} daysFull={daysFull} />}
-        {step === 4 && <PlanConfirm mode="sparky" checkedIds={checkedIds} removedIds={removedIds} setRemovedIds={setRemovedIdsP} addedItems={addedItems} setAddedItems={setAddedItemsP} stapleFlags={stapleFlags} quantities={quantities} setQuantities={setQuantitiesP} mealPlan={mealPlan} meals={meals} ingredients={ingredients} onFinish={finishPlan} db={db} persistDB={persistDB} days={days} daysFull={daysFull} />}
+        {step === 2 && <PlanInventory checkedIds={checkedIds} setCheckedIds={setCheckedIdsP} stapleFlags={stapleFlags} setStapleFlags={setStapleFlagsP} quantities={quantities} setQuantities={setQuantitiesP} mealPlan={mealPlan} meals={meals} ingredients={ingredients} onNext={() => goToStep(3)} days={days} cartIngredientIds={draft?.cartIngredientIds || []} onUpdateItem={updateItem} keptIds={keptIds} />}
+        {step === 3 && <PlanConfirm mode="confirm" onUpdateItem={updateItem} keptIds={keptIds} checkedIds={checkedIds} removedIds={removedIds} setRemovedIds={setRemovedIdsP} addedItems={addedItems} setAddedItems={setAddedItemsP} stapleFlags={stapleFlags} quantities={quantities} setQuantities={setQuantitiesP} mealPlan={mealPlan} meals={meals} ingredients={ingredients} onNext={() => goToStep(4)} db={db} persistDB={persistDB} days={days} daysFull={daysFull} />}
+        {step === 4 && <PlanConfirm mode="sparky" onUpdateItem={updateItem} keptIds={keptIds} checkedIds={checkedIds} removedIds={removedIds} setRemovedIds={setRemovedIdsP} addedItems={addedItems} setAddedItems={setAddedItemsP} stapleFlags={stapleFlags} quantities={quantities} setQuantities={setQuantitiesP} mealPlan={mealPlan} meals={meals} ingredients={ingredients} onFinish={finishPlan} db={db} persistDB={persistDB} days={days} daysFull={daysFull} />}
         {step > 1 && (
           <button style={{ background:"none", border:`1px solid ${C.border}`, borderRadius:10, padding:"10px 16px", fontSize:14, color:C.muted, cursor:"pointer", width:"100%", marginTop:4 }} onClick={() => goToStep(step - 1)}>
             ← Back
@@ -2492,7 +2527,7 @@ function PlanMeals({ mealPlan, plates, setMealPlan, commitMealToPlan, timeLevels
   );
 }
 
-function PlanInventory({ checkedIds, setCheckedIds, stapleFlags, setStapleFlags, quantities, setQuantities, mealPlan, meals, ingredients, onNext, days, cartIngredientIds = [], onUpdateItem }) {
+function PlanInventory({ checkedIds, setCheckedIds, stapleFlags, setStapleFlags, quantities, setQuantities, mealPlan, meals, ingredients, onNext, days, cartIngredientIds = [], onUpdateItem, keptIds = [] }) {
   const [locIdx, setLocIdx] = useState(0);
   const [editId, setEditId] = useState(null);     // item whose "⋯ edit" panel is open
   const [moveNote, setMoveNote] = useState(null); // what happened to an item moved to another location
@@ -2519,7 +2554,9 @@ function PlanInventory({ checkedIds, setCheckedIds, stapleFlags, setStapleFlags,
   // Specialty items show if a planned meal needs them — OR if they've been marked
   // "in cart" during prep (so an off-plan purchase like whole milk still appears
   // here, flagged as In cart, rather than vanishing from the inventory view).
-  const mealHere       = locIngs.filter(i => i.tier === "specialty" && (mealIngIds.has(i.id) || inPrep.has(i.id)));
+  // keptIds: specialty items chosen to buy this week that no planned meal needs (an item
+  // re-filed as specialty while on the list stays on it).
+  const mealHere       = locIngs.filter(i => i.tier === "specialty" && (mealIngIds.has(i.id) || inPrep.has(i.id) || keptIds.includes(i.id)));
 
   const toggleChecked = id => setCheckedIds(prev => prev.includes(id) ? prev.filter(x => x!==id) : [...prev, id]);
   const multiMeal = multiMealCounts(mealPlan, meals);
@@ -2569,13 +2606,18 @@ function PlanInventory({ checkedIds, setCheckedIds, stapleFlags, setStapleFlags,
   // leaving the walk. The panel opens under the row; changes persist to the item, so a
   // re-filed item re-sections live. An item moved to ANOTHER location leaves this view,
   // so the note at the top says where it went and whether it's still on the list.
-  const onListNow = ing => ing.tier === "staple" ? !!stapleFlags[ing.id] : !checkedIds.includes(ing.id);
+  const onListNow = ing => ing.tier === "staple" ? !!stapleFlags[ing.id] && !checkedIds.includes(ing.id)
+    : ing.tier === "specialty" ? (mealIngIds.has(ing.id) || keptIds.includes(ing.id)) && !checkedIds.includes(ing.id)
+    : !checkedIds.includes(ing.id);
   const updateItem = (ing, patch) => {
     if (!onUpdateItem) return;
     onUpdateItem(ing.id, patch);
     // Re-filed as specialty with no planned meal needing it: specialty items only show
     // when a meal does, so it drops out of the walk. Say so rather than let it vanish.
-    if (patch.tier === "specialty" && ing.tier !== "specialty" && !mealIngIds.has(ing.id) && !inPrep.has(ing.id)) {
+    // Re-filed as specialty: specialty items only show when a planned meal needs one, or
+    // when kept because they were already on the list. Say which, rather than let an
+    // unneeded one vanish.
+    if (patch.tier === "specialty" && ing.tier !== "specialty" && !mealIngIds.has(ing.id) && !inPrep.has(ing.id) && !onListNow(ing)) {
       setEditId(null);
       setMoveNote(`${ing.name} is now specialty. Specialty items only come up when a planned meal needs one, so it's off this week's list.`);
     }
@@ -2722,7 +2764,7 @@ function PlanInventory({ checkedIds, setCheckedIds, stapleFlags, setStapleFlags,
   );
 }
 
-function PlanConfirm({ mode = "confirm", checkedIds, removedIds, setRemovedIds, addedItems, setAddedItems, stapleFlags, quantities = {}, setQuantities, mealPlan, meals, ingredients, onNext, onFinish, db, persistDB, days, daysFull }) {
+function PlanConfirm({ mode = "confirm", onUpdateItem, keptIds = [], checkedIds, removedIds, setRemovedIds, addedItems, setAddedItems, stapleFlags, quantities = {}, setQuantities, mealPlan, meals, ingredients, onNext, onFinish, db, persistDB, days, daysFull }) {
   const [newItem, setNewItem]   = useState("");
   const [total, setTotal]       = useState("");
   const [view, setView]         = useState("meal");
@@ -2760,7 +2802,7 @@ function PlanConfirm({ mode = "confirm", checkedIds, removedIds, setRemovedIds, 
   const dedup = arr => arr.filter(i => { if(seen.has(i.id)) return false; seen.add(i.id); return true; });
   const alwaysNeeded  = dedup(ingredients.filter(i => i.tier==="always" && !checkedIds.includes(i.id)));
   const stapleNeeded  = dedup(ingredients.filter(i => i.tier==="staple" && stapleFlags[i.id] && !checkedIds.includes(i.id)));
-  const mealNeeded    = dedup(ingredients.filter(i => mealIngIds.has(i.id) && i.tier==="specialty" && !checkedIds.includes(i.id)));
+  const mealNeeded    = dedup(ingredients.filter(i => (mealIngIds.has(i.id) || keptIds.includes(i.id)) && i.tier==="specialty" && !checkedIds.includes(i.id)));
   const allNeeded     = [...alwaysNeeded, ...stapleNeeded, ...mealNeeded];
   // Authoritative set of what's actually being ordered. Every view (by-meal,
   // flat, copy, save) filters against this so they can't disagree. A staple
@@ -2771,7 +2813,7 @@ function PlanConfirm({ mode = "confirm", checkedIds, removedIds, setRemovedIds, 
 
   // "⋯ edit item": the item's profile (how often, where kept, usual amount), written to
   // the item itself. This week's amount stays the amount chip's job.
-  const updateItem = (id, patch) => persistDB({ ...db, ingredients: db.ingredients.map(i => i.id === id ? { ...i, ...patch } : i) });
+  const updateItem = (id, patch) => onUpdateItem ? onUpdateItem(id, patch) : persistDB({ ...db, ingredients: db.ingredients.map(i => i.id === id ? { ...i, ...patch } : i) });
 
   // KEEP AS USUAL (VALIDATION-LOG 10/27): one card, only when this week's amounts differ
   // from the items' usual ones. Nothing is pre-ticked (most changes are one-offs).
@@ -3068,8 +3110,10 @@ function PlanConfirm({ mode = "confirm", checkedIds, removedIds, setRemovedIds, 
             const isRemoved = removedIds.includes(i.id);
             const inCart = cartIngredientIds.includes(i.id);
             const tc = TIER_COLORS[i.tier] || {};
+            const custom = quantities[i.id] !== undefined && quantities[i.id] !== (i.defaultQuantity || "");
             return (
-              <div key={i.id} style={{ display:"flex", alignItems:"center", gap:10, padding:"11px 0", borderBottom:`1px solid ${C.border}`, opacity:(isRemoved||inCart)?0.4:1 }}>
+              <React.Fragment key={i.id}>
+              <div style={{ display:"flex", alignItems:"center", gap:10, padding:"11px 0", borderBottom:`1px solid ${C.border}`, opacity:(isRemoved||inCart)?0.4:1 }}>
                 <div style={{ ...S.checkBox(isRemoved||inCart), background:(isRemoved||inCart)?"#CCC":"#fff", border:(isRemoved||inCart)?"none":`2px solid ${C.border}`, color:"#888" }}
                   onClick={() => { if(!inCart) setRemovedIds(prev => prev.includes(i.id) ? prev.filter(x => x !== i.id) : [...prev, i.id]); }}>
                   {(isRemoved||inCart) && "✓"}
@@ -3079,9 +3123,13 @@ function PlanConfirm({ mode = "confirm", checkedIds, removedIds, setRemovedIds, 
                   <span style={S.badge(tc.color, tc.bg)}>{i.tier}</span>
                   {multiMeal[i.id] && <span style={{ fontSize:11, fontWeight:700, color:"#B45309", background:"#FEF3C7", borderRadius:5, padding:"1px 5px", marginLeft:4 }}>×{multiMeal[i.id]} meals</span>}
                   {inCart && <span style={{ fontSize:11, color:C.verified, fontWeight:600, marginLeft:4 }}>in cart</span>}
+                  {custom && !inCart && !isRemoved && <div style={{ fontSize:11, color:C.faint }}>this week {quantities[i.id] || "none"} · usual {i.defaultQuantity || "none"}</div>}
                 </div>
                 {!inCart && !isRemoved && <QtyChip ing={i} />}
+                <button style={{ background:"none", border:"none", color:editId === i.id ? C.primary : C.faint, fontSize:11, cursor:"pointer", padding:"2px 4px", whiteSpace:"nowrap" }} onClick={() => setEditId(editId === i.id ? null : i.id)}>⋯ edit</button>
               </div>
+              {editId === i.id && <ItemEditPanel ing={i} thisWeek={quantities[i.id]} onUpdate={patch => updateItem(i.id, patch)} onClose={() => setEditId(null)} />}
+              </React.Fragment>
             );
           })}
           {addedItems.map((item, idx) => (
