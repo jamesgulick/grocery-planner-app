@@ -154,6 +154,7 @@ in one file: **`src/grocery-app.jsx`**. `src/main.jsx` only mounts it.
 src/grocery-app.jsx          ← the app: state, UI, all components, styles
 src/engine/composeWeek.js    ← the engine: composeWeek + evaluateWeek (validated offline; see below)
 src/engine/assembleInputs.js ← app state → engine inputs, plates, week check, hardened call
+src/ingredientMatch.js       ← the one text→ingredient matcher (recipe paste, Prep's cart paste); not engine
 src/main.jsx                 ← mounts <App/> to #root
 src/index.css                ← base styles
 index.html                   ← Vite entry
@@ -397,6 +398,14 @@ garbage-collect the unreferenced objects. Far cheaper never to commit it.
   not stored as defaults, when set to off/none, so an unchanged save leaves the record as
   it was. The legacy `leftovers` field (card badge, fridge report) is kept in step with
   `carries` at save.
+- **Recipe paste / text matching.** Every place that turns pasted text into ingredient
+  items uses `src/ingredientMatch.js` (pure, node-testable): it matches on WORDS (case,
+  punctuation, plurals, word order, quantities, units and prep words normalised; an
+  exact name always wins), calls a match "partial" below two-thirds coverage, and skips
+  terms on `settings.pantryIgnore` (seeded from `DEFAULT_PANTRY_IGNORE`, edited from the
+  review's row menu). Don't add a second matcher. The meal editor's "Paste a recipe" is
+  built on `PasteReview` (paste → Review → one "Add N ingredients" button), the shape the
+  other paste boxes should adopt; it has no variant options yet by design.
 - **Change what the engine is given** (a new input from app state): edit
   `assembleInputs.js`; the contract says what each input may contain.
 - **Change the Meals-step display or actions:** `PlanMeals` in `grocery-app.jsx`; keep

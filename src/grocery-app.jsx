@@ -5,6 +5,7 @@ import { TIME_LEVELS, seedTimeLevel, presentOn, abbrOfISO, mealRecency, extraDay
 // The validated week-composition engine (REFACTOR S1). Shipped unchanged; called only
 // through runComposeWeek, which assembles and guards its inputs.
 import { composeWeek, evaluateWeek, CONSTANTS as ENGINE } from "./engine/composeWeek.js";
+import { analyseRecipe, analyseLine, matchIngredient as matchIngredientText, cleanName, ignoreTermFor, DEFAULT_PANTRY_IGNORE } from "./ingredientMatch.js";
 
 // ── Globals ────────────────────────────────────────────────────────────────────
 
@@ -1263,16 +1264,9 @@ function PrepTab({ db, persistDB }) {
 
   // Match a typed/pasted line to a real ingredient, so it populates
   // cartIngredientIds (which the Inventory + List steps actually honor) rather
-  // than free-text cartItems (which nothing reads). Match: exact name, then
-  // substring either direction, preferring the shortest (closest) name.
-  const matchIngredient = q => {
-    const ql = q.toLowerCase();
-    const matches = db.ingredients.filter(i => {
-      const n = i.name.toLowerCase();
-      return n === ql || n.includes(ql) || ql.includes(n);
-    }).sort((a, b) => a.name.length - b.name.length);
-    return matches[0] || null;
-  };
+  // than free-text cartItems (which nothing reads). Uses the app's one text matcher
+  // (ingredientMatch.js: words, plurals and word order, full matches only).
+  const matchIngredient = q => matchIngredientText(q, db.ingredients);
 
   // Strip leading numbering (1. / 1)), bullets (- * •), and whitespace from a
   // pasted line.
@@ -3469,6 +3463,92 @@ function ItemEditPanel({ ing, thisWeek, onUpdate, onClose }) {
   );
 }
 
+// PASTE → REVIEW → CONFIRM. One shape for pasting text into the app (the pattern
+// inventory found four paste boxes that each behaved differently). Built for recipe
+// paste; the caller supplies how text becomes rows, how a row renders and what
+// confirming does. Deliberately no variants until another paste box converts.
+function PasteReview({ placeholder, hint, analyse, renderRow, confirmLabel, onConfirm, onCancel }) {
+  const [text, setText] = useState("");
+  const [rows, setRows] = useState(null);
+  const update = (i, patch) => setRows(rs => rs.map((r, k) => (k === i ? { ...r, ...patch } : r)));
+  if (!rows) return (
+    <div>
+      {hint && <div style={{ fontSize:12, color:C.muted, marginBottom:6 }}>{hint}</div>}
+      <textarea style={{ ...S.input, minHeight:140, fontSize:13, resize:"vertical", marginBottom:8 }} placeholder={placeholder} value={text} onChange={e => setText(e.target.value)} />
+      <div style={{ display:"flex", gap:8 }}>
+        <button style={{ ...S.btnSm, flex:1, background:text.trim() ? C.primary : "#F3F4F6", color:text.trim() ? "#fff" : C.faint }} disabled={!text.trim()} onClick={() => setRows(analyse(text))}>Review</button>
+        <button style={{ ...S.btnSm, background:"#F3F4F6", color:C.muted }} onClick={onCancel}>Cancel</button>
+      </div>
+    </div>
+  );
+  const label = confirmLabel(rows);
+  return (
+    <div>
+      <div>{rows.map((r, i) => <React.Fragment key={i}>{renderRow(r, patch => update(i, patch))}</React.Fragment>)}</div>
+      <div style={{ display:"flex", gap:8, marginTop:10, flexWrap:"wrap" }}>
+        <button style={{ ...S.btnSm, flex:"1 1 160px", background:label ? C.primary : "#F3F4F6", color:label ? "#fff" : C.faint }} disabled={!label} onClick={() => onConfirm(rows)}>{label || "Nothing to add"}</button>
+        <button style={{ ...S.btnSm, background:"#F3F4F6", color:C.muted }} onClick={() => setRows(null)}>Back to edit</button>
+        <button style={{ ...S.btnSm, background:"#F3F4F6", color:C.muted }} onClick={onCancel}>Cancel</button>
+      </div>
+    </div>
+  );
+}
+
+// Recipe paste rows (SPEC-recipe-paste). A row is the matcher's result plus what the
+// user decides: on (ticked), mode (match/new/ignored/skip), the chosen item or new name.
+const recipeRowFrom = (r, existingIds) => {
+  const already = r.kind === "match" && existingIds.includes(r.item.id);
+  return { ...r, mode: r.kind, already, on: r.kind === "new" || (r.kind === "match" && r.full && !already), menu: false, picking: false, q: "" };
+};
+
+function RecipePasteRow({ row, set, ingredients, sideNames, onIgnore, onUnignore }) {
+  const text = row.part || row.line;
+  const isSide = row.mode === "match" && sideNames.has(row.item.name.trim().toLowerCase());
+  const boxable = (row.mode === "match" && !row.already) || row.mode === "new";
+  const menuable = row.mode !== "skip" || row.reason !== "heading";
+  const picks = row.picking && row.q.trim()
+    ? ingredients.filter(i => i.name.toLowerCase().includes(row.q.trim().toLowerCase())).slice(0, 6) : [];
+  const link = { background:"none", border:"none", padding:"4px 0", fontSize:12, color:C.primary, cursor:"pointer", textAlign:"left" };
+  return (
+    <div style={{ padding:"8px 0", borderBottom:`1px solid ${C.border}`, opacity:row.mode === "skip" || row.mode === "ignored" || row.already ? 0.6 : 1 }}>
+      <div style={{ display:"flex", gap:10, alignItems:"flex-start" }}>
+        {boxable
+          ? <div style={{ ...S.checkBox(row.on), width:20, height:20, marginTop:2 }} onClick={() => set({ on: !row.on })}>{row.on && "✓"}</div>
+          : <div style={{ width:20, flexShrink:0 }} />}
+        <div style={{ flex:1, minWidth:0, cursor:menuable ? "pointer" : "default" }} onClick={() => menuable && set({ menu: !row.menu, picking: false })}>
+          {row.mode === "match" && <div style={{ fontSize:14, fontWeight:500 }}>{row.item.name}
+            {!row.full && !row.already && <span style={{ ...S.tag(C.warning, C.warningLight) }}>partial</span>}
+            {row.already && <span style={{ fontSize:11, color:C.faint, marginLeft:6 }}>already in this meal</span>}</div>}
+          {row.mode === "new" && <div style={{ display:"flex", alignItems:"center", gap:6 }} onClick={e => e.stopPropagation()}>
+            <input style={{ ...S.input, marginBottom:0, fontSize:14, padding:"4px 8px" }} value={row.name} onChange={e => set({ name: e.target.value })} />
+            <span style={{ ...S.tag(C.accent, C.primaryLight), marginLeft:0, whiteSpace:"nowrap" }}>new item</span></div>}
+          {row.mode === "ignored" && <div style={{ fontSize:13, color:C.muted }}>Ignored, on your pantry list</div>}
+          {row.mode === "skip" && <div style={{ fontSize:13, color:C.faint }}>{row.reason === "heading" ? "Heading, skipped" : "Skipped"}</div>}
+          <div style={{ fontSize:11, color:C.faint, marginTop:2, overflowWrap:"anywhere" }}>{row.line}{row.part ? `  ·  "${row.part}"` : ""}{row.orAlternatives?.length ? `  ·  or ${row.orAlternatives.join(", ")}` : ""}</div>
+          {isSide && !row.already && <div style={{ fontSize:11, color:C.muted, marginTop:2 }}>Also a side dish. Ticking it makes it part of this meal's shopping every time.</div>}
+          {row.mode === "new" && row.suggestions?.length > 0 && <div style={{ fontSize:12, color:C.muted, marginTop:4 }} onClick={e => e.stopPropagation()}>Did you mean {row.suggestions.map((it, k) => (
+            <button key={it.id} style={{ ...link, display:"inline", padding:0, marginRight:6 }} onClick={() => set({ mode:"match", item:it, full:true, on:true })}>{it.name}{k < row.suggestions.length - 1 ? "," : "?"}</button>))}</div>}
+        </div>
+      </div>
+      {row.menu && (
+        <div style={{ marginLeft:30, marginTop:4, display:"flex", flexDirection:"column" }}>
+          {(row.mode === "match" || row.mode === "new") && <button style={link} onClick={() => set({ picking: !row.picking })}>{row.mode === "match" ? "Choose another item" : "Choose an existing item"}</button>}
+          {row.picking && (
+            <div>
+              <input autoFocus style={{ ...S.input, marginBottom:4, fontSize:13, padding:"6px 8px" }} placeholder="Search items..." value={row.q} onChange={e => set({ q: e.target.value })} />
+              {picks.map(it => <button key={it.id} style={{ ...link, display:"block", color:C.text }} onClick={() => set({ mode:"match", item:it, full:true, on:true, picking:false, menu:false, q:"" })}>{it.name}</button>)}
+            </div>
+          )}
+          {row.mode === "match" && <button style={link} onClick={() => set({ mode:"new", name: cleanName(text), suggestions: [], on:true, menu:false })}>Make it a new item</button>}
+          {(row.mode === "skip" && row.reason !== "heading") && <button style={link} onClick={() => set({ mode:"new", name: cleanName(text), suggestions: [], on:true, menu:false })}>Add as a new item</button>}
+          {row.mode !== "ignored" && ignoreTermFor(text) && <button style={link} onClick={() => onIgnore(ignoreTermFor(text))}>Always ignore "{ignoreTermFor(text)}"</button>}
+          {row.mode === "ignored" && <button style={link} onClick={() => onUnignore(row.term)}>Stop ignoring "{row.term}"</button>}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // Meal search matches descriptors as well as names: the four engine facets (so "pasta",
 // "meaty", "soup" find meals tagged that way), the meal type, and the notes.
 function mealMatches(m, q) {
@@ -3635,7 +3715,7 @@ function EngineFacetsCard({ form, setField, isMain, pairCandidates, pairIds, tog
   );
 }
 
-function MealEditor({ meal, allMeals, ingredients, onSave, onCancel, onDelete, onAddIngredient, initialName, familyContacts }) {
+function MealEditor({ meal, allMeals, ingredients, onSave, onCancel, onDelete, onAddIngredient, onAddIngredients, pantryIgnore, onSetPantryIgnore, initialName, familyContacts }) {
   const [form, setForm] = useState(meal || { id:"m"+Date.now(), createdAt:new Date().toISOString(), name:toSentenceCase(initialName||""), effort:"medium", type:"dinner", tempAffinity:"neutral", grillable:false, leftovers:"none", rotation:"in", preferences:[], notes:"", ingredients:[] });
   // Real family names live in settings (self included, via role-flag
   // migration — see SPEC-family-roles.md); fall back to the generic constant
@@ -3690,6 +3770,48 @@ function MealEditor({ meal, allMeals, ingredients, onSave, onCancel, onDelete, o
     if(as&&!bs) return -1; if(!as&&bs) return 1; return a.name.localeCompare(b.name);
   }).filter(i => i.name.toLowerCase().includes(ingSearch.toLowerCase()));
 
+  // RECIPE PASTE (SPEC-recipe-paste): paste the ingredient list, review every line,
+  // confirm once. Changes the form's selection like ticking by hand; new items are
+  // created on confirm (as "Add new ingredient…" does) as Unassigned specialty items.
+  const [pasting, setPasting] = useState(false);
+  const [pasteNote, setPasteNote] = useState(null);
+  const ignoreList = pantryIgnore || DEFAULT_PANTRY_IGNORE;
+  const sideNames = new Set((allMeals || []).filter(m => m.type === "side").map(m => m.name.trim().toLowerCase()));
+  // A row re-analysed against a new ignore list keeps the user's other choices fresh.
+  const recheck = (row, list) => {
+    const r = analyseLine(row.part || row.line, ingredients, list)[0] || { kind:"skip", reason:"empty" };
+    return { ...recipeRowFrom({ ...r, line: row.line, part: row.part }, form.ingredients) };
+  };
+  const addRecipe = rows => {
+    const ids = new Set(form.ingredients);
+    const byName = new Map(ingredients.map(i => [i.name.trim().toLowerCase(), i]));
+    const created = [];
+    for (const r of rows) {
+      if (!r.on) continue;
+      if (r.mode === "match") ids.add(r.item.id);
+      if (r.mode === "new") {
+        const name = toSentenceCase((r.name || "").trim());
+        if (!name) continue;
+        const key = name.toLowerCase();
+        const hit = byName.get(key);
+        if (hit) { ids.add(hit.id); continue; }
+        const ing = { id:"i"+Date.now()+Math.random().toString(36).slice(2,7), createdAt:new Date().toISOString(), name, storageLocation:"Unassigned", tier:"specialty", optional:false, defaultQuantity:"" };
+        byName.set(key, ing); created.push(ing); ids.add(ing.id);
+      }
+    }
+    if (created.length) onAddIngredients(created);
+    const added = ids.size - form.ingredients.length;
+    set("ingredients", [...ids]);
+    setPasting(false);
+    setPasteNote(`Added ${added} ingredient${added === 1 ? "" : "s"}${created.length ? `, ${created.length} of them new (Unassigned, set their location in Items)` : ""}. Save the meal to keep them.`);
+  };
+  const recipeLabel = rows => {
+    const ids = new Set(), names = new Set();
+    rows.forEach(r => { if (r.on && r.mode === "match") ids.add(r.item.id); if (r.on && r.mode === "new" && (r.name || "").trim()) names.add(r.name.trim().toLowerCase()); });
+    const n = ids.size + names.size;
+    return n ? `Add ${n} ingredient${n === 1 ? "" : "s"}` : null;
+  };
+
   const doQuickAdd = () => {
     if (!quickName.trim()) return;
     const name   = toSentenceCase(quickName.trim());
@@ -3736,7 +3858,26 @@ function MealEditor({ meal, allMeals, ingredients, onSave, onCancel, onDelete, o
       </div>
       <EngineFacetsCard form={form} setField={setField} isMain={isMain} pairCandidates={pairCandidates} pairIds={pairIds} togglePair={togglePair} familyMembers={familyMembers} startOpen={!meal || !ROTATION_OPTIONS.includes(meal.rotation)} />
       <div style={S.card}>
-        <div style={S.sectionLabel}>Ingredients ({form.ingredients.length} selected)</div>
+        <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", gap:8 }}>
+          <div style={S.sectionLabel}>Ingredients ({form.ingredients.length} selected)</div>
+          {!pasting && onAddIngredients && <button style={{ background:"none", border:"none", color:C.primary, fontSize:13, fontWeight:600, cursor:"pointer", padding:"2px 0" }} onClick={() => { setPasting(true); setPasteNote(null); }}>Paste a recipe</button>}
+        </div>
+        {pasteNote && !pasting && <div style={{ fontSize:12, lineHeight:1.4, margin:"6px 0", padding:"6px 8px", borderRadius:6, background:C.primaryLight, color:C.primary }}>{pasteNote}</div>}
+        {pasting ? (
+          <PasteReview
+            hint="Paste the recipe's ingredient list, one ingredient per line."
+            placeholder={"2 cups shredded cheddar cheese\n1 yellow onion, chopped\n…"}
+            analyse={text => analyseRecipe(text, ingredients, ignoreList).map(r => recipeRowFrom(r, form.ingredients))}
+            confirmLabel={recipeLabel}
+            onConfirm={addRecipe}
+            onCancel={() => setPasting(false)}
+            renderRow={(row, setRow) => (
+              <RecipePasteRow row={row} set={setRow} ingredients={ingredients} sideNames={sideNames}
+                onIgnore={term => { const list = [...ignoreList, term]; onSetPantryIgnore(list); setRow(recheck(row, list)); }}
+                onUnignore={term => { const list = ignoreList.filter(t => t !== term); onSetPantryIgnore(list); setRow(recheck(row, list)); }} />
+            )}
+          />
+        ) : (<>
         <SearchBar value={ingSearch} onChange={setIngSearch} placeholder="Search ingredients..." />
         <div style={{ maxHeight:280, overflowY:"auto" }}>
           {sortedIngs.map(ing => {
@@ -3770,6 +3911,7 @@ function MealEditor({ meal, allMeals, ingredients, onSave, onCancel, onDelete, o
             </div>
           )}
         </div>
+        </>)}
       </div>
       <button style={{ ...S.btn, ...S.btnP }} onClick={save}>Save meal</button>
       <button style={{ ...S.btn, ...S.btnS }} onClick={onCancel}>Cancel</button>
@@ -3816,6 +3958,8 @@ function ManageMeals({ db, persistDB }) {
   };
   const saveMealName = (id, name) => { persistDB({...db, meals:db.meals.map(m=>m.id===id?{...m,name}:m)}); setInlineEdit(null); };
   const addIngredient = newIng => persistDB({...db, ingredients:[...db.ingredients, newIng]});
+  const addIngredients = list => persistDB({...db, ingredients:[...db.ingredients, ...list]});
+  const setPantryIgnore = list => persistDB({...db, settings:{ ...db.settings, pantryIgnore:list }});
 
   if (editing) return (
     <div style={S.body}>
@@ -3828,7 +3972,7 @@ function ManageMeals({ db, persistDB }) {
           </div>
         </div>
       )}
-      <MealEditor meal={editing==="new"?null:editing} allMeals={db.meals} initialName={editing==="new"?newMealName:""} ingredients={db.ingredients} familyContacts={db.settings?.familyContacts} onSave={saveMeal} onCancel={() => { setEditing(null); setConfirmDelete(null); setNewMealName(""); }} onDelete={deleteMeal} onAddIngredient={addIngredient} />
+      <MealEditor meal={editing==="new"?null:editing} allMeals={db.meals} initialName={editing==="new"?newMealName:""} ingredients={db.ingredients} familyContacts={db.settings?.familyContacts} onSave={saveMeal} onCancel={() => { setEditing(null); setConfirmDelete(null); setNewMealName(""); }} onDelete={deleteMeal} onAddIngredient={addIngredient} onAddIngredients={addIngredients} pantryIgnore={db.settings?.pantryIgnore} onSetPantryIgnore={setPantryIgnore} />
     </div>
   );
 
