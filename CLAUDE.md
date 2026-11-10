@@ -155,6 +155,7 @@ src/grocery-app.jsx          ← the app: state, UI, all components, styles
 src/engine/composeWeek.js    ← the engine: composeWeek + evaluateWeek (validated offline; see below)
 src/engine/assembleInputs.js ← app state → engine inputs, plates, week check, hardened call
 src/ingredientMatch.js       ← the one text→ingredient matcher (recipe paste, Prep's cart paste); not engine
+src/mealRename.js            ← renames a meal everywhere plans and history name it; not engine
 src/main.jsx                 ← mounts <App/> to #root
 src/index.css                ← base styles
 index.html                   ← Vite entry
@@ -406,6 +407,13 @@ garbage-collect the unreferenced objects. Far cheaper never to commit it.
   review's row menu). Don't add a second matcher. The meal editor's "Paste a recipe" is
   built on `PasteReview` (paste → Review → one "Add N ingredients" button), the shape the
   other paste boxes should adopt; it has no variant options yet by design.
+- **Meal names are keys.** Plans and history store meals by NAME (`mealPlan`, plate dish
+  names, `planTail`, `mealHistory`), so every rename goes through `renameMeal` in
+  `src/mealRename.js`, which rewrites all of them in one save, and `mealNameProblem` blocks
+  a blank name or one another meal has (trimmed, case-blind). A NEW field that stores meal
+  names must be added to `renameMeal`; the untracked `engine/merge/meal-rename-test.mjs`
+  (run it on an exported DB) renames every meal and fails if the engine inputs, recency
+  or planned meals change. Sent texts and the published family list keep the old name.
 - **Change what the engine is given** (a new input from app state): edit
   `assembleInputs.js`; the contract says what each input may contain.
 - **Change the Meals-step display or actions:** `PlanMeals` in `grocery-app.jsx`; keep

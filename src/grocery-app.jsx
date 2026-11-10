@@ -6,6 +6,7 @@ import { TIME_LEVELS, seedTimeLevel, presentOn, abbrOfISO, mealRecency, extraDay
 // through runComposeWeek, which assembles and guards its inputs.
 import { composeWeek, evaluateWeek, CONSTANTS as ENGINE } from "./engine/composeWeek.js";
 import { analyseRecipe, analyseLine, matchIngredient as matchIngredientText, cleanName, ignoreTermFor, DEFAULT_PANTRY_IGNORE } from "./ingredientMatch.js";
+import { renameMeal, mealNameProblem } from "./mealRename.js";
 
 // ── Globals ────────────────────────────────────────────────────────────────────
 
@@ -3742,7 +3743,11 @@ function MealEditor({ meal, allMeals, ingredients, onSave, onCancel, onDelete, o
     else { const cur = form.pairsWith || []; setField("pairsWith", cur.includes(id) ? cur.filter(x => x !== id) : [...cur, id]); }
   };
   const pairCandidates = others.filter(m => isMain ? m.type === "side" : m.type !== "side");
+  // Plans and history name meals by name, so a clash would merge two meals' histories.
+  const nameProblem = mealNameProblem(allMeals, form.id, form.name);
+  const renaming = meal && form.name.trim() !== meal.name;
   const save = () => {
+    if (nameProblem) return;
     // The legacy leftovers field still drives the card badge and the fridge report; keep
     // it from contradicting carries (the engine's field): leftovers set → not "none".
     const out = { ...form };
@@ -3828,7 +3833,11 @@ function MealEditor({ meal, allMeals, ingredients, onSave, onCancel, onDelete, o
         <div style={{ fontSize:18, fontWeight:700 }}>{form.name||"Untitled"}</div>
       </div>
       <div style={S.card}>
-        <FieldGroup label="Meal name"><input style={S.input} value={form.name} onChange={e => set("name", toSentenceCase(e.target.value))} placeholder="e.g. Mexican nite" /></FieldGroup>
+        <FieldGroup label="Meal name">
+          <input style={S.input} value={form.name} onChange={e => set("name", toSentenceCase(e.target.value))} placeholder="e.g. Mexican nite" />
+          {form.name.trim() && nameProblem && <div style={{ fontSize:12, color:C.danger, marginTop:4 }}>{nameProblem}</div>}
+          {renaming && !nameProblem && <div style={{ fontSize:12, color:C.muted, marginTop:4 }}>Saving renames it in your plans and history too, so its list, leftovers and last-served date stay with it.</div>}
+        </FieldGroup>
         <FieldGroup label="Type"><PillSelect options={MEAL_TYPES} value={form.type} onChange={v => set("type",v)} /></FieldGroup>
         <FieldGroup label="Effort"><PillSelect options={EFFORTS} value={form.effort} onChange={v => set("effort",v)} /></FieldGroup>
         <FieldGroup label="Day feel (affinity)"><PillSelect options={TEMP_AFFINITY_OPTIONS} value={form.tempAffinity || "neutral"} onChange={v => set("tempAffinity",v)} /></FieldGroup>
@@ -3913,7 +3922,7 @@ function MealEditor({ meal, allMeals, ingredients, onSave, onCancel, onDelete, o
         </div>
         </>)}
       </div>
-      <button style={{ ...S.btn, ...S.btnP }} onClick={save}>Save meal</button>
+      <button style={{ ...S.btn, ...S.btnP, ...(nameProblem ? { opacity:0.5, cursor:"default" } : {}) }} disabled={!!nameProblem} onClick={save}>Save meal</button>
       <button style={{ ...S.btn, ...S.btnS }} onClick={onCancel}>Cancel</button>
       {meal && <div style={{ ...S.btn, ...S.btnD, cursor:"pointer" }} onClick={() => onDelete(meal.id)}>Delete meal</div>}
     </div>
@@ -3935,8 +3944,11 @@ function ManageMeals({ db, persistDB }) {
 
   // One write for the meal and every side whose link to it changed (a main's sides are
   // stored on the sides). `sides` is null when the saved meal is itself a side.
+  // A renamed meal is renamed everywhere plans and history name it (renameMeal) first.
   const saveMeal = (form, sides) => {
-    let meals = editing==="new" ? [...db.meals, form] : db.meals.map(m => m.id===form.id ? form : m);
+    const base = editing==="new" ? db : renameMeal(db, form.id, form.name);
+    const saved = { ...form, name: form.name.trim() };
+    let meals = editing==="new" ? [...base.meals, saved] : base.meals.map(m => m.id===form.id ? saved : m);
     if (sides) meals = meals.map(m => {
       if (m.type !== "side" || m.id === form.id) return m;
       const has = (m.pairsWith || []).includes(form.id), want = sides.has(m.id);
@@ -3946,7 +3958,7 @@ function ManageMeals({ db, persistDB }) {
       const left = pairsWith.filter(x => x !== form.id);
       return left.length ? { ...rest, pairsWith: left } : rest;   // an emptied list goes, as it was before
     });
-    persistDB({...db, meals}); setEditing(null);
+    persistDB({...base, meals}); setEditing(null);
   };
   const deleteMeal = id => {
     const meal = db.meals.find(m => m.id === id);
@@ -3956,7 +3968,11 @@ function ManageMeals({ db, persistDB }) {
       onConfirm: () => { persistDB({...db, meals:db.meals.filter(m=>m.id!==id).map(m => (m.pairsWith||[]).includes(id) ? { ...m, pairsWith: m.pairsWith.filter(x => x !== id) } : m)}); setEditing(null); setConfirmDelete(null); }
     });
   };
-  const saveMealName = (id, name) => { persistDB({...db, meals:db.meals.map(m=>m.id===id?{...m,name}:m)}); setInlineEdit(null); };
+  const saveMealName = (id, name) => {
+    const problem = mealNameProblem(db.meals, id, name);
+    if (problem) { setInlineEdit(p => p && ({ ...p, error:problem })); return; }
+    persistDB(renameMeal(db, id, name)); setInlineEdit(null);
+  };
   const addIngredient = newIng => persistDB({...db, ingredients:[...db.ingredients, newIng]});
   const addIngredients = list => persistDB({...db, ingredients:[...db.ingredients, ...list]});
   const setPantryIgnore = list => persistDB({...db, settings:{ ...db.settings, pantryIgnore:list }});
@@ -4036,9 +4052,10 @@ function ManageMeals({ db, persistDB }) {
           return (
             <div key={meal.id} style={{ ...S.row, ...(i===filtered.length-1?S.rowLast:{}), cursor:"default" }}>
               <div style={{ flex:1 }}>
+                {isInline && inlineEdit.error && <div style={{ fontSize:12, color:C.danger, marginBottom:3 }}>{inlineEdit.error} Esc to cancel.</div>}
                 <div style={{ display:"flex", alignItems:"center", gap:4, marginBottom:3 }}>
                   {isInline ? (
-                    <input autoFocus style={{ ...S.input, flex:1, fontSize:15, fontWeight:600, padding:"6px 10px" }} value={inlineEdit.value} onChange={e => setInlineEdit(p=>({...p,value:toSentenceCase(e.target.value)}))} onBlur={() => saveMealName(meal.id,inlineEdit.value)} onKeyDown={e => { if(e.key==="Enter") saveMealName(meal.id,inlineEdit.value); if(e.key==="Escape") setInlineEdit(null); }} />
+                    <input autoFocus style={{ ...S.input, flex:1, fontSize:15, fontWeight:600, padding:"6px 10px" }} value={inlineEdit.value} onChange={e => setInlineEdit(p=>({...p,value:toSentenceCase(e.target.value),error:null}))} onBlur={() => saveMealName(meal.id,inlineEdit.value)} onKeyDown={e => { if(e.key==="Enter") saveMealName(meal.id,inlineEdit.value); if(e.key==="Escape") setInlineEdit(null); }} />
                   ) : (
                     <>
                       <span style={{ fontWeight:600, fontSize:15 }}>{meal.name}</span>
