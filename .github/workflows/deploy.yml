@@ -2,8 +2,11 @@ name: Deploy to GitHub Pages
 
 # Production = `main`, built at the site root. Always.
 # Preview    = `integration/composeWeek`, built into /preview/ when that branch
-#              exists. Best-effort: a failing preview build never blocks the
-#              production deploy — the preview is simply left out.
+#              exists (hotfix previews; storage suffix _preview).
+# V2         = `v2`, built into /v2/ when that branch exists (the polish v2;
+#              storage suffix _v2).
+# Both are best-effort: a failing preview build never blocks the production
+# deploy — that preview is simply left out.
 #
 # This workflow always runs from `main` (push to main, or a manual/dispatched run
 # on main — see preview-trigger.yml), so the branch can never alter how
@@ -25,6 +28,7 @@ concurrency:
 
 env:
   PREVIEW_BRANCH: integration/composeWeek
+  V2_BRANCH: v2
 
 jobs:
   build:
@@ -62,10 +66,37 @@ jobs:
           # Guard: the preview shares an origin (and so localStorage) with the
           # live app. Refuse to publish a preview build that doesn't isolate its
           # storage keys behind VITE_PREVIEW.
-          grep -q "VITE_PREVIEW" src/grocery-app.jsx || { echo "Preview does not isolate storage; refusing."; exit 1; }
+          grep -rq "VITE_PREVIEW" src/ || { echo "Preview does not isolate storage; refusing."; exit 1; }
           npm install
           VITE_PREVIEW=1 npm run build -- --outDir ../preview-dist
           mv ../preview-dist ../dist/preview
+
+      # ---- v2 (best-effort) ------------------------------------------------
+      - name: Check for v2 branch
+        id: v2
+        run: |
+          if git ls-remote --exit-code --heads origin "$V2_BRANCH" >/dev/null; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "No $V2_BRANCH branch; skipping v2."
+          fi
+      - uses: actions/checkout@v4
+        if: steps.v2.outputs.exists == 'true'
+        continue-on-error: true
+        with:
+          ref: ${{ env.V2_BRANCH }}
+          path: v2-src
+      - name: Build v2 into dist/v2
+        if: steps.v2.outputs.exists == 'true'
+        continue-on-error: true
+        working-directory: v2-src
+        run: |
+          # Same guard as the preview: v2 shares the origin, so it must keep its
+          # storage behind its own suffix (VITE_PREVIEW=v2 -> _v2).
+          grep -rqF 'VITE_PREVIEW === "v2"' src/ || { echo "v2 does not isolate storage; refusing."; exit 1; }
+          npm install
+          VITE_PREVIEW=v2 npm run build -- --outDir ../v2-dist
+          mv ../v2-dist ../dist/v2
 
       - uses: actions/upload-pages-artifact@v3
         with:

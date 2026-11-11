@@ -57,11 +57,13 @@ const EFFORTS = ["easy","medium","involved"];
 const TEMP_AFFINITY_OPTIONS = ["comfort","neutral","light"];
 const MEAL_TYPES       = ["dinner","side","remix","batch","takeout"];
 const FAMILY_NAMES     = ["Partner","Kid 1","Kid 2","Kid 3","Me"];
-// Preview builds (VITE_PREVIEW=1, deployed at /preview/) share an origin — and so
-// localStorage — with the live app. Every key gets a _preview suffix so a preview
-// can never write the live DB; the live DB is only ever READ, to seed the preview.
-const IS_PREVIEW       = !!import.meta.env.VITE_PREVIEW;
-const KEY_SUFFIX       = IS_PREVIEW ? "_preview" : "";
+// Preview builds share an origin — and so localStorage — with the live app:
+// VITE_PREVIEW=1 (the hotfix preview, /preview/) and VITE_PREVIEW=v2 (the polish
+// v2 preview, /v2/). Each gets its own key suffix so a preview can never write the
+// live DB or the other preview's; the live DB is only ever READ, to seed it.
+const PREVIEW_SLOT     = import.meta.env.VITE_PREVIEW === "v2" ? "v2" : import.meta.env.VITE_PREVIEW ? "preview" : null;
+const IS_PREVIEW       = !!PREVIEW_SLOT;
+const KEY_SUFFIX       = IS_PREVIEW ? "_" + PREVIEW_SLOT : "";
 const LIVE_DB_KEY      = "grocery_db";
 const DB_KEY           = LIVE_DB_KEY + KEY_SUFFIX;
 const RECOVERY_KEY     = "grocery_recovery" + KEY_SUFFIX;
@@ -95,7 +97,18 @@ const exportMeta = db => {
     // seed-vs-real) instead of re-deriving it from the fresh export moment.
     dataChangedAt:  db.dataChangedAt || null,
     lastExportedAt: db.lastExportedAt || null,
+    // A preview build's export is test data; the live app warns before importing it.
+    ...(IS_PREVIEW ? { preview: PREVIEW_SLOT } : {}),
   };
+};
+
+// The export guard: true when it's fine to import `imp`. The live app asks first
+// if the file came from a preview build (its plan may be sandbox data); a
+// preview build imports anything without asking.
+const previewImportOk = imp => {
+  const from = imp?._meta?.preview;
+  if (!from || IS_PREVIEW) return true;
+  return window.confirm(`This file was exported from the ${from === "v2" ? "v2 preview" : "preview"}, not your live app, so its plan may be test data. Import it anyway?`);
 };
 
 // Assemble the object written on export: a _meta node first (human-readable
@@ -142,7 +155,7 @@ const downloadBackup = (db, persistDB) => {
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
-  a.download = "grocery_db.json";
+  a.download = !IS_PREVIEW ? "grocery_db.json" : PREVIEW_SLOT === "v2" ? "grocery_db-V2-PREVIEW.json" : "grocery_db-PREVIEW.json";
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);
@@ -4682,6 +4695,7 @@ function ManageConfig({ db, persistDB }) {
   // instead of a bare "Imported!" alert.
   const applyImport = imp => {
     if (!imp.meals || !imp.ingredients) throw new Error("Invalid format");
+    if (!previewImportOk(imp)) return false;
     const asOf = imp._meta?.dataChangedAt || null;
     const parsed = {
       ...stripExportNodes(imp),
@@ -4690,6 +4704,7 @@ function ManageConfig({ db, persistDB }) {
     };
     persistDB(parsed);
     setImportSuccess({ meals: parsed.meals.length, items: parsed.ingredients.length, asOf });
+    return true;
   };
 
   const importDB = file => {
@@ -4703,8 +4718,7 @@ function ManageConfig({ db, persistDB }) {
 
   const importFromPaste = () => {
     try {
-      applyImport(JSON.parse(extractJSON(pasteText)));
-      setPasteText(""); setImportError("");
+      if (applyImport(JSON.parse(extractJSON(pasteText)))) { setPasteText(""); setImportError(""); }
     } catch(e) { setImportError("Could not parse: " + e.message); }
   };
 
@@ -5312,8 +5326,10 @@ export default function App() {
 
   const acceptSessionImport = () => {
     try {
-      const parsed = stripExportNodes(JSON.parse(extractJSON(sessionImport)));
+      const raw = JSON.parse(extractJSON(sessionImport));
+      const parsed = stripExportNodes(raw);
       if (!parsed.meals || !parsed.ingredients) throw new Error("Not a valid grocery database");
+      if (!previewImportOk(raw)) return;
       setSessionPendingConfirm(parsed);
       setSessionError("");
     } catch(e) {
@@ -5351,7 +5367,7 @@ export default function App() {
       <div style={S.app}>
         {IS_PREVIEW && (
           <div style={{ background:"#7A4DFF", color:"#fff", fontSize:12, fontWeight:700, padding:"6px 12px", display:"flex", alignItems:"center", justifyContent:"space-between", gap:10 }}>
-            <span>PREVIEW — separate data; your live app is untouched</span>
+            <span>{PREVIEW_SLOT === "v2" ? "V2 PREVIEW" : "PREVIEW"} — separate data; your live app is untouched</span>
             <button
               style={{ background:"rgba(255,255,255,0.2)", color:"#fff", border:"1px solid rgba(255,255,255,0.5)", borderRadius:6, fontSize:11, fontWeight:700, padding:"3px 8px", cursor:"pointer" }}
               onClick={() => { if (window.confirm("Discard preview data and re-copy your live data?") && seedPreviewFromLive(true)) window.location.reload(); }}
