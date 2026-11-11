@@ -2838,9 +2838,12 @@ function PlanConfirm({ mode = "confirm", onUpdateItem, keptIds = [], checkedIds,
     .map(id => {
       const ing = ingredients.find(i => i.id === id);
       if (!ing) return null;
+      // "ordering" only when it is on the list being sent (orderingIds, not dropped here):
+      // a staple left at "have enough" or an item dropped on this step is not on the order.
       const status = cartIngredientIds.includes(id) ? "in cart"
                    : checkedIds.includes(id)        ? "in stock"
-                   : "ordering";
+                   : orderingIds.has(id) && !removedIds.includes(id) ? "ordering"
+                   : "not on list";
       return { id, name:ing.name, loc:ing.storageLocation || "", n:multiMeal[id], status, dismissed:dismissedShared.includes(id) };
     })
     .filter(Boolean)
@@ -3027,7 +3030,7 @@ function PlanConfirm({ mode = "confirm", onUpdateItem, keptIds = [], checkedIds,
           </div>
           <div style={{ background:"#FEF9EF", border:`1px solid #FCE7C3`, borderRadius:8, padding:"8px 10px" }}>
             {sharedItems.map(s => {
-              const sc = s.status === "in cart" ? C.verified : s.status === "in stock" ? C.muted : "#B45309";
+              const sc = s.status === "in cart" ? C.verified : s.status === "ordering" ? "#B45309" : C.muted;
               return (
                 <div key={s.id} style={{ display:"flex", justifyContent:"space-between", alignItems:"center", fontSize:13, padding:"3px 0", opacity:s.dismissed?0.45:1 }}>
                   <span style={{ display:"flex", alignItems:"center", gap:8, flex:1, minWidth:0, cursor:"pointer" }} onClick={() => toggleDismissShared(s.id)}>
@@ -3100,8 +3103,8 @@ function PlanConfirm({ mode = "confirm", onUpdateItem, keptIds = [], checkedIds,
         </>
       ) : (
         <div style={{ ...S.card, padding:"0 16px" }}>
-          <div style={{ fontSize:11, color:C.faint, padding:"10px 0 6px", borderBottom:`1px solid ${C.border}` }}>All {activeCount} items in one list · tap a quantity to adjust for this week</div>
-          {allNeeded.map(i => {
+          <div style={{ fontSize:11, color:C.faint, padding:"10px 0 6px", borderBottom:`1px solid ${C.border}` }}>All {activeCount} items A–Z · tap a quantity to adjust for this week</div>
+          {[...allNeeded].sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity:"base" })).map(i => {
             const isRemoved = removedIds.includes(i.id);
             const inCart = cartIngredientIds.includes(i.id);
             const tc = TIER_COLORS[i.tier] || {};
