@@ -1361,7 +1361,7 @@ function PrepTab({ db, persistDB }) {
 
 // ── PLAN TAB ───────────────────────────────────────────────────────────────────
 
-function PlanTab({ db, persistDB, onGoToImport }) {
+function PlanTab({ db, persistDB, onGoToImport, onGoToUnassigned }) {
   // The plan the owner is currently EDITING — follows db.activePlan (current or
   // next), unlike Prep/Tonight which are pinned to current. This plan object
   // doubles as both the live-editing draft and the committed record (they were
@@ -1663,6 +1663,7 @@ function PlanTab({ db, persistDB, onGoToImport }) {
             persistDB={persistDB}
             db={db}
             onGoToImport={onGoToImport}
+            onGoToUnassigned={onGoToUnassigned}
           />
         </div>
       </div>
@@ -1691,7 +1692,7 @@ function PlanTab({ db, persistDB, onGoToImport }) {
   );
 }
 
-function PlanWelcome({ onStart, onStartNext, onResume, draft, persistDB, db, onGoToImport }) {
+function PlanWelcome({ onStart, onStartNext, onResume, draft, persistDB, db, onGoToImport, onGoToUnassigned }) {
   // Resolve the resume-step label from the draft's own version stamp — initMaxStep
   // lives in PlanTab, not here, so migrate locally. Mirrors PlanTab's migration.
   const _mV2 = s => [0,1,1,2,3,4,4,5][s] ?? 0;
@@ -1747,38 +1748,16 @@ function PlanWelcome({ onStart, onStartNext, onResume, draft, persistDB, db, onG
         </div>
       )}
 
+      {/* The one actionable line from the old "at a glance" counts card: items
+          with no storage location never come up on the Inventory walk. */}
       {db && (() => {
-        const ings       = db.ingredients || [];
-        const meals      = db.meals || [];
-        const plan       = getActivePlan(db);
-        const always     = ings.filter(i => i.tier === "always").length;
-        const staple     = ings.filter(i => i.tier === "staple").length;
-        const specialty  = ings.filter(i => i.tier === "specialty").length;
-        const unassigned = ings.filter(i => i.storageLocation === "Unassigned").length;
-        const mealsWithIngs = meals.filter(m => m.ingredients?.length > 0).length;
-        const inCart     = (plan?.cartIngredientIds?.length || 0) + (plan?.cartItems?.length || 0);
+        const unassigned = (db.ingredients || []).filter(i => i.storageLocation === "Unassigned").length;
+        if (!unassigned) return null;
         return (
-          <div style={S.card}>
-            <div style={S.sectionLabel}>This week at a glance</div>
-            <div style={{ display:"flex", gap:0, marginBottom:10 }}>
-              {[
-                { label:"Always", value:always,    color:C.accent,   bg:"#E8F5EE" },
-                { label:"Staple", value:staple,     color:"#3730A3",  bg:"#EEF2FF" },
-                { label:"Specialty", value:specialty, color:C.muted,  bg:"#F3F4F6" },
-                { label:"Unassigned", value:unassigned, color:C.warning, bg:C.warningLight },
-              ].map((item, i, arr) => (
-                <div key={item.label} style={{ flex:1, textAlign:"center", padding:"10px 4px", background:item.bg, borderRadius:i===0?"8px 0 0 8px":i===arr.length-1?"0 8px 8px 0":"0", borderRight:i<arr.length-1?`1px solid ${C.border}`:"none" }}>
-                  <div style={{ fontSize:22, fontWeight:800, color:item.color, lineHeight:1 }}>{item.value}</div>
-                  <div style={{ fontSize:10, fontWeight:700, color:item.color, opacity:0.8, marginTop:3, textTransform:"uppercase", letterSpacing:"0.04em" }}>{item.label}</div>
-                </div>
-              ))}
-            </div>
-            <div style={{ display:"flex", gap:16, fontSize:13, color:C.muted }}>
-              <span>🍽 {mealsWithIngs}/{meals.length} meals linked</span>
-              {inCart > 0 && <span>🛒 {inCart} already in cart</span>}
-              {unassigned > 0 && <span style={{ color:C.warning }}>⚠️ {unassigned} need location</span>}
-            </div>
-          </div>
+          <button style={{ display:"block", width:"100%", textAlign:"left", fontSize:13, fontWeight:600, color:C.warning, background:C.warningLight, border:"none", borderRadius:8, padding:"10px 12px", marginBottom:12, cursor:onGoToUnassigned?"pointer":"default" }}
+            onClick={onGoToUnassigned} disabled={!onGoToUnassigned}>
+            ⚠️ {unassigned} item{unassigned === 1 ? "" : "s"} need{unassigned === 1 ? "s" : ""} a location ›
+          </button>
         );
       })()}
 
@@ -2282,13 +2261,12 @@ function PlanMeals({ mealPlan, plates, setMealPlan, commitMealToPlan, timeLevels
           <div><div style={{ fontWeight:600, fontSize:14 }}>Adventurous week</div><div style={{ fontSize:12, color:C.faint }}>Place one meal you haven't tried yet</div></div>
           <Toggle value={!!adventurousWeek} onChange={v => setAdventurousWeek(v)} />
         </div>
-        <button style={{ ...S.btn, ...S.btnS, marginBottom:0 }} onClick={regenerate} disabled={loading}>{loading?"Thinking...":"Fill empty days"}</button>
+        <button style={{ ...S.btn, ...(totalMeals === 0 ? S.btnP : S.btnS), marginBottom:0 }} onClick={regenerate} disabled={loading}>{loading?"Thinking...":"Fill empty days"}</button>
         {fillNotes.map((n, k) => (
           <div key={k} style={{ fontSize:12, lineHeight:1.45, padding:"6px 8px", marginTop:8, borderRadius:6, color:C.warning, background:C.warningLight }}>⚠ {prettyDates(n.text)}</div>
         ))}
       </div>
       <WeekCheckPanel check={weekCheck} total={days.length} onFix={suggestSides} fixLabel={d => (dishesOf(d).some(x => x.role === "main") ? "Suggest a side" : "Suggest a main")} showInfo={showWeekInfo} setShowInfo={setShowWeekInfo} learnMode={learnMode} setLearnMode={setLearnMode} />
-      {totalMeals === 0 && <button style={{ ...S.btn, ...S.btnP }} onClick={regenerate}>Generate meal plan</button>}
       {days.map((day, i) => {
         const dayMeals      = mealPlan[day] || [];
         // Stored "grill" pills are from before grill became engine-derived; not shown.
@@ -2751,7 +2729,6 @@ function PlanConfirm({ mode = "confirm", onUpdateItem, keptIds = [], checkedIds,
   const [batchCopied, setBatchCopied] = useState(null); // index of the batch just copied
   const [manualBatch, setManualBatch] = useState(null); // { idx, text } when clipboard fails
   const [framed, setFramed] = useState(true); // prepend the Sparky instruction header
-  const [reconcileCopied, setReconcileCopied] = useState(false);
   const [sharedSparkyCopied, setSharedSparkyCopied] = useState(false);
   const [editId, setEditId]     = useState(null);        // item whose "⋯ edit" panel is open
   const [keepSel, setKeepSel]   = useState(() => new Set()); // amounts ticked to become the usual
@@ -2878,7 +2855,6 @@ function PlanConfirm({ mode = "confirm", onUpdateItem, keptIds = [], checkedIds,
     return `${preamble}\n${numbered}`;
   };
 
-  const reconcilePrompt = "Now list back every item you added to my cart, numbered. Then tell me which items from what I pasted you did NOT add, and why.";
 
   const copyText = (text, idx) => {
     let ok = false;
@@ -3168,13 +3144,6 @@ function PlanConfirm({ mode = "confirm", onUpdateItem, keptIds = [], checkedIds,
           </>
         )}
 
-        <div style={{ marginTop:12, paddingTop:10, borderTop:`1px solid ${C.border}` }}>
-          <div style={{ fontSize:12, color:C.muted, marginBottom:6, lineHeight:1.4 }}>After pasting {batches.length > 1 ? "all batches" : "the list"}, send this to catch anything Sparky missed:</div>
-          <button style={{ ...S.btn, ...S.btnS, marginBottom:0 }} onClick={() => { const ok = copyText(reconcilePrompt); setReconcileCopied(true); setTimeout(()=>setReconcileCopied(false),2000); if(!ok) setManualBatch({ idx:-1, text:reconcilePrompt }); }}>
-            {reconcileCopied ? "✓ Copied!" : "Copy “what did you miss?” prompt"}
-          </button>
-        </div>
-
         {activeShared.length > 0 && (
           <div style={{ marginTop:12, paddingTop:10, borderTop:`1px solid ${C.border}` }}>
             <div style={{ fontSize:12, fontWeight:700, color:"#B45309", marginBottom:4 }}>Shared-item quantity check</div>
@@ -3206,7 +3175,7 @@ function PlanConfirm({ mode = "confirm", onUpdateItem, keptIds = [], checkedIds,
 
 // ── MANAGE TAB ─────────────────────────────────────────────────────────────────
 
-function ManageTab({ db, persistDB, initialSub }) {
+function ManageTab({ db, persistDB, initialSub, initialItemsLoc }) {
   // ManageTab is unmounted/remounted on every tab switch (App only renders it
   // while tab==="manage"), so a caller can land the user on a specific
   // sub-tab (e.g. the header's Import action → Config) just by setting this
@@ -3221,7 +3190,7 @@ function ManageTab({ db, persistDB, initialSub }) {
         </div>
       </div>
       {sub==="meals"  && <ManageMeals  db={db} persistDB={persistDB} />}
-      {sub==="items"  && <ManageItems  db={db} persistDB={persistDB} />}
+      {sub==="items"  && <ManageItems  db={db} persistDB={persistDB} initialLoc={initialItemsLoc} />}
       {sub==="config" && <ManageConfig db={db} persistDB={persistDB} />}
       {sub==="help"   && <ManageHelp />}
     </div>
@@ -4078,10 +4047,10 @@ function TableRow({ ing, isAlt, onSave, selected, onToggle, onDelete }) {
   );
 }
 
-function ManageItems({ db, persistDB }) {
+function ManageItems({ db, persistDB, initialLoc }) {
   const [search, setSearch]       = useState("");
   const [filterTier, setFilterTier] = useState("all");
-  const [filterLoc, setFilterLoc]   = useState("all");
+  const [filterLoc, setFilterLoc]   = useState(initialLoc || "all");
   const [editing, setEditing]     = useState(null);
   const [quickAdd, setQuickAdd]   = useState(false);
   const [quickName, setQuickName] = useState("");
@@ -4848,6 +4817,7 @@ export default function App() {
   const [saveOk, setSaveOk]                     = useState(true);
   const [recovery, setRecovery]                 = useState(null); // { savedAt, db } awaiting restore
   const [manageInitialSub, setManageInitialSub] = useState(undefined); // header's Import action lands Manage on Config
+  const [manageItemsLoc, setManageItemsLoc]     = useState(undefined); // Welcome's "need location" line lands Items on Unassigned; any tab-bar tap clears it
   const dbRef = useRef(null);
 
   useEffect(() => {
@@ -5008,7 +4978,7 @@ export default function App() {
           )}
 
           <div style={S.tabs}>
-            {TABS.map(t => <button key={t.id} style={S.tab(tab===t.id)} onClick={() => setTab(t.id)}>{t.label}</button>)}
+            {TABS.map(t => <button key={t.id} style={S.tab(tab===t.id)} onClick={() => { setManageItemsLoc(undefined); setTab(t.id); }}>{t.label}</button>)}
           </div>
         </div>
 
@@ -5071,8 +5041,8 @@ export default function App() {
         )}
 
         {tab==="prep"    && <PrepTab    db={db} persistDB={persistDB} />}
-        {tab==="plan"    && <PlanTab    key={db.activePlan || "current"} db={db} persistDB={persistDB} onGoToImport={() => { setManageInitialSub("config"); setTab("manage"); }} />}
-        {tab==="manage"  && <ManageTab  db={db} persistDB={persistDB} initialSub={manageInitialSub} />}
+        {tab==="plan"    && <PlanTab    key={db.activePlan || "current"} db={db} persistDB={persistDB} onGoToImport={() => { setManageInitialSub("config"); setTab("manage"); }} onGoToUnassigned={() => { setManageInitialSub("items"); setManageItemsLoc("Unassigned"); setTab("manage"); }} />}
+        {tab==="manage"  && <ManageTab  db={db} persistDB={persistDB} initialSub={manageInitialSub} initialItemsLoc={manageItemsLoc} />}
         {tab==="tonight" && <TonightTab db={db} persistDB={persistDB} />}
       </div>
     </ErrorBoundary>
