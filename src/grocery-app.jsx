@@ -118,21 +118,6 @@ const buildExportDB = db => ({ _meta: exportMeta(db), ...db, published: buildPub
 
 // On import, drop export-only nodes so they don't go stale in stored state.
 // They're regenerated fresh on every export.
-// Pull a JSON array out of a model reply, tolerating markdown fences, prose
-// preambles, and stray text. Returns [] rather than throwing, so one bad reply
-// degrades the feature instead of killing the whole cross-check.
-const parseJSONArray = text => {
-  if (!text) return [];
-  let s = String(text).trim();
-  // Strip ```json ... ``` fences if present.
-  s = s.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/i, "");
-  const start = s.indexOf("[");
-  const end   = s.lastIndexOf("]");
-  if (start === -1 || end === -1 || end <= start) return [];
-  try { const v = JSON.parse(s.slice(start, end + 1)); return Array.isArray(v) ? v : []; }
-  catch (e) { return []; }
-};
-
 const stripExportNodes = ({ _meta, published, ...rest }) => rest;
 
 // A backup (download or copy) stamps lastExportedAt with the SAME instant
@@ -349,174 +334,174 @@ function todayLocalISO() {
 const SEED_TS = "2020-01-01T00:00:00.000Z";
 
 const SEED_INGREDIENTS = [
-  { id:"i001", createdAt:SEED_TS, name:"Tuna (canned)", walmartName:"Chicken of the Sea Tuna", walmartVerified:true, storageLocation:"Pantry", tier:"staple", optional:false, defaultQuantity:"3 cans" },
-  { id:"i003", createdAt:SEED_TS, name:"Egg noodles", walmartName:"No Yolks Egg Noodles", storageLocation:"Pantry", tier:"staple", optional:false, defaultQuantity:"1 bag" },
-  { id:"i004", createdAt:SEED_TS, name:"Shredded cheddar", walmartName:"Kraft Shredded Cheddar", walmartVerified:true, storageLocation:"Fridge", tier:"staple", stapleType:"weekly", optional:false, defaultQuantity:"1 bag" },
-  { id:"i005", createdAt:SEED_TS, name:"Chicken strips (Tyson)", walmartName:"Tyson Southern Style Chicken Breast Tenderloins, 25 oz (Frozen, Fully Cooked)", walmartVerified:true, storageLocation:"Freezer", tier:"always", optional:false, defaultQuantity:"2 bags" },
-  { id:"i006", createdAt:SEED_TS, name:"Tortillas (lo carb)", walmartName:"Mission Carb Balance Flour Tortillas, Soft Taco Size, 8 Count", walmartVerified:true, storageLocation:"Pantry", tier:"staple", optional:false, defaultQuantity:"1 pack" },
-  { id:"i007", createdAt:SEED_TS, name:"Enchilada sauce", walmartName:"Old El Paso Enchilada Sauce", storageLocation:"Pantry", tier:"specialty", optional:false, defaultQuantity:"2 cans" },
-  { id:"i008", createdAt:SEED_TS, name:"Salsa", walmartName:"Tostitos Chunky Salsa", walmartVerified:true, storageLocation:"Pantry", tier:"staple", optional:false, defaultQuantity:"1 jar" },
-  { id:"i009", createdAt:SEED_TS, name:"Sour cream", walmartName:"Daisy Sour Cream", walmartVerified:true, storageLocation:"Garage", tier:"staple", optional:false, defaultQuantity:"1 tub" },
-  { id:"i010", createdAt:SEED_TS, name:"Rice", walmartName:"Carolina Jasmine Rice, Thai Fragrant Long Grain Rice, Gluten Free, 2 lb Bag", walmartVerified:true, storageLocation:"Pantry", tier:"staple", optional:false, defaultQuantity:"1 bag" },
-  { id:"i011", createdAt:SEED_TS, name:"Pasta sauce (red)", walmartName:"RAGU Simply Traditional Pasta Sauce, 24 oz", walmartVerified:true, storageLocation:"Pantry", tier:"staple", optional:false, defaultQuantity:"2 jars" },
-  { id:"i012", createdAt:SEED_TS, name:"Lasagna noodles", walmartName:"Barilla Lasagna Noodles", storageLocation:"Pantry", tier:"specialty", optional:false, defaultQuantity:"1 box" },
-  { id:"i013", createdAt:SEED_TS, name:"Ricotta cheese", walmartName:"Galbani Whole Milk Ricotta", walmartVerified:true, storageLocation:"Fridge", tier:"specialty", optional:false, defaultQuantity:"1 container" },
-  { id:"i014", createdAt:SEED_TS, name:"Mozzarella shredded", walmartName:"Sargento Shredded Mozzarella", walmartVerified:true, storageLocation:"Garage", tier:"staple", optional:false, defaultQuantity:"1 bag" },
-  { id:"i015", createdAt:SEED_TS, name:"Ground beef", walmartName:"Marketside Organic Grass-Fed Ground Beef, 85% Lean/15% Fat, 1 lb", walmartVerified:true, storageLocation:"Garage", tier:"specialty", optional:false, defaultQuantity:"2 lbs" },
-  { id:"i016", createdAt:SEED_TS, name:"Tater tots", walmartName:"Ore-Ida Tater Tots", walmartVerified:true, storageLocation:"Freezer", tier:"staple", optional:false, defaultQuantity:"1 bag" },
-  { id:"i017", createdAt:SEED_TS, name:"Kale, bagged", walmartName:"Fresh Green Kale, 16 oz", walmartVerified:true, storageLocation:"Garage", tier:"always", optional:false, defaultQuantity:"1 bunch" },
-  { id:"i018", createdAt:SEED_TS, name:"Eggs", walmartName:"Marketside Organic Cage-Free Brown Large Eggs, 18 Count", walmartVerified:true, storageLocation:"Fridge", tier:"always", optional:false, defaultQuantity:"1 dozen" },
-  { id:"i020", createdAt:SEED_TS, name:"Bread (647)", walmartName:"Schmidt Old Tyme 647 Low Calorie Keto Friendly Italian Bread 18 oz", walmartVerified:true, storageLocation:"Pantry", tier:"always", optional:false, defaultQuantity:"1 loaf" },
-  { id:"i021", createdAt:SEED_TS, name:"Butter", walmartName:"Great Value Sweet Cream Salted Butter, 16 oz, 4 Sticks", walmartVerified:true, storageLocation:"Garage", tier:"staple", optional:false, defaultQuantity:"1 lb" },
-  { id:"i022", createdAt:SEED_TS, name:"Crescent rolls", walmartName:"Pillsbury Crescent Rolls, Original Refrigerated Canned Pastry Dough, Value 2-Pack, 16 Rolls, 16 oz", walmartVerified:true, storageLocation:"Fridge", tier:"specialty", optional:false, defaultQuantity:"1 can" },
-  { id:"i023", createdAt:SEED_TS, name:"Chicken breast (fresh)", walmartName:"Perdue, No Antibiotics Ever, Fresh Boneless Skinless Chicken Breast value pack, 2.5-4 lb. Tray", walmartVerified:true, storageLocation:"Garage", tier:"specialty", optional:false, defaultQuantity:"2 lbs" },
-  { id:"i024", createdAt:SEED_TS, name:"Bacon", walmartName:"Oscar Mayer Bacon", walmartVerified:true, storageLocation:"Garage", tier:"specialty", optional:false, defaultQuantity:"1 pack" },
-  { id:"i1781748937379", createdAt:SEED_TS, name:"Peas, frozen", storageLocation:"Freezer", tier:"specialty", optional:false, defaultQuantity:"1" },
-  { id:"i1781750536287", createdAt:SEED_TS, name:"Potatoes", storageLocation:"Pantry", tier:"staple", stapleType:"slow", optional:false, defaultQuantity:"" },
-  { id:"i1781781802965", createdAt:SEED_TS, name:"Cream of chicken soup", walmartName:"Cream of chicken soup", storageLocation:"Pantry", tier:"specialty", optional:false, defaultQuantity:"1" },
-  { id:"i1781781814061", createdAt:SEED_TS, name:"Block cheddar", walmartName:"Block cheddar", storageLocation:"Fridge", tier:"specialty", optional:false, defaultQuantity:"1" },
-  { id:"i1781781828141", createdAt:SEED_TS, name:"Bread crumbs", walmartName:"Bread crumbs", storageLocation:"Pantry", tier:"staple", stapleType:"slow", optional:false, defaultQuantity:"" },
-  { id:"i17819586307302gn", createdAt:SEED_TS, name:"Extra virgin olive oil", storageLocation:"Pantry", tier:"staple", stapleType:"slow", optional:false, defaultQuantity:"1" },
-  { id:"i178195863073072o", createdAt:SEED_TS, name:"Dishwasher pods", storageLocation:"Other", tier:"always", optional:false, defaultQuantity:"1" },
-  { id:"i17819586307301i1", createdAt:SEED_TS, name:"Seasoned salt", storageLocation:"Cabinet", tier:"staple", stapleType:"slow", optional:false, defaultQuantity:"1" },
-  { id:"i1781958630730lbd", createdAt:SEED_TS, name:"Mixed salad greens", storageLocation:"Fridge", tier:"specialty", optional:false, defaultQuantity:"1" },
-  { id:"i1781958630730z93", createdAt:SEED_TS, name:"American cheese sliced", storageLocation:"Fridge", tier:"staple", optional:false, defaultQuantity:"1" },
-  { id:"i17819586307307vh", createdAt:SEED_TS, name:"Deli turkey breast", storageLocation:"Fridge", tier:"specialty", optional:false, defaultQuantity:"1" },
-  { id:"i1781958630730bmo", createdAt:SEED_TS, name:"Bananas", storageLocation:"Pantry", tier:"always", optional:false, defaultQuantity:"6" },
-  { id:"i1781958630730zms", createdAt:SEED_TS, name:"Dish soap", storageLocation:"Other", tier:"staple", optional:false, defaultQuantity:"1" },
-  { id:"i1781958630730rlq", createdAt:SEED_TS, name:"Bfree protein tortilla wraps", storageLocation:"Fridge", tier:"always", optional:false, defaultQuantity:"1" },
-  { id:"i17819586307308jj", createdAt:SEED_TS, name:"Tuna (evoo)", storageLocation:"Pantry", tier:"specialty", optional:false, defaultQuantity:"1" },
-  { id:"i1781958630730me6", createdAt:SEED_TS, name:"Green pepper", storageLocation:"Fridge", tier:"specialty", optional:false, defaultQuantity:"3" },
-  { id:"i1781958630730qfr", createdAt:SEED_TS, name:"Tortilla chips", storageLocation:"Pantry", tier:"staple", optional:false, defaultQuantity:"1" },
-  { id:"i1781958630730dzj", createdAt:SEED_TS, name:"Fettuccine ", storageLocation:"Pantry", tier:"specialty", optional:false, defaultQuantity:"1" },
-  { id:"i1781958630730jkl", createdAt:SEED_TS, name:"Alfredo ", storageLocation:"Pantry", tier:"specialty", optional:false, defaultQuantity:"1" },
-  { id:"i1781958630730t2h", createdAt:SEED_TS, name:"Riced cauliflower frozen", storageLocation:"Freezer", tier:"specialty", optional:false, defaultQuantity:"1" },
-  { id:"i1781958630730x8t", createdAt:SEED_TS, name:"Egglife egg white wrap, plain", storageLocation:"Fridge", tier:"staple", optional:false, defaultQuantity:"1" },
-  { id:"i17819586307303b0", createdAt:SEED_TS, name:"Frozen cheese pizza", storageLocation:"Freezer", tier:"staple", optional:false, defaultQuantity:"2" },
-  { id:"i1781958630730phc", createdAt:SEED_TS, name:"Sliced bread, regular", storageLocation:"Pantry", tier:"always", optional:false, defaultQuantity:"2" },
-  { id:"i1781958630730dxh", createdAt:SEED_TS, name:"Caesar salad kit", storageLocation:"Fridge", tier:"always", optional:false, defaultQuantity:"2" },
-  { id:"i1781958630730tva", createdAt:SEED_TS, name:"Cottage cheese", storageLocation:"Fridge", tier:"always", optional:false, defaultQuantity:"1" },
-  { id:"i1781958630730qco", createdAt:SEED_TS, name:"Plain Greek yogurt", storageLocation:"Fridge", tier:"staple", optional:false, defaultQuantity:"1" },
-  { id:"i178195863073057h", createdAt:SEED_TS, name:"Fresh spinach", storageLocation:"Fridge", tier:"always", optional:false, defaultQuantity:"1" },
-  { id:"i1781958630730x1o", createdAt:SEED_TS, name:"Diet iced tea", storageLocation:"Garage", tier:"staple", optional:false, defaultQuantity:"1" },
-  { id:"i1781958630730z49", createdAt:SEED_TS, name:"Ice cream, peanut butter cup", storageLocation:"Freezer", tier:"always", optional:false, defaultQuantity:"1" },
-  { id:"i1781958630730r4q", createdAt:SEED_TS, name:"Boneless chicken thighs", storageLocation:"Garage", tier:"specialty", optional:false, defaultQuantity:"1" },
-  { id:"i1781958630730r1b", createdAt:SEED_TS, name:"Fresh avocados", storageLocation:"Other", tier:"always", optional:false, defaultQuantity:"1" },
-  { id:"i1781958630730nms", createdAt:SEED_TS, name:"Beef stew meat", storageLocation:"Garage", tier:"specialty", optional:false, defaultQuantity:"1" },
-  { id:"i1781958630730zca", createdAt:SEED_TS, name:"Flat iron steak", storageLocation:"Garage", tier:"specialty", optional:false, defaultQuantity:"1" },
-  { id:"i1781958630730g1o", createdAt:SEED_TS, name:"Cherry tomatoes", storageLocation:"Fridge", tier:"specialty", optional:false, defaultQuantity:"1" },
-  { id:"i17819598605325kj", createdAt:SEED_TS, name:"Tylenol (acetaminophen)", storageLocation:"Medicine Cabinet", tier:"specialty", optional:false, defaultQuantity:"1" },
-  { id:"i1781959860532unb", createdAt:SEED_TS, name:"Hot dogs", storageLocation:"Fridge", tier:"specialty", optional:false, defaultQuantity:"1" },
-  { id:"i1781959860532iwr", createdAt:SEED_TS, name:"Stevia", storageLocation:"Cabinet", tier:"staple", stapleType:"slow", optional:false, defaultQuantity:"1" },
-  { id:"i1781959860532x9z", createdAt:SEED_TS, name:"Power crunch, mint chocoloate protein  bars", storageLocation:"Pantry", tier:"specialty", optional:false, defaultQuantity:"1" },
-  { id:"i17819598605324q3", createdAt:SEED_TS, name:"Peanut butter, jif", storageLocation:"Pantry", tier:"staple", optional:false, defaultQuantity:"1" },
-  { id:"i1781959860532uzu", createdAt:SEED_TS, name:"Toilet paper", storageLocation:"Other", tier:"always", optional:false, defaultQuantity:"1" },
-  { id:"i1781959860532vm6", createdAt:SEED_TS, name:"Goldfish", storageLocation:"Pantry", tier:"staple", optional:false, defaultQuantity:"2" },
-  { id:"i1781959860532ws5", createdAt:SEED_TS, name:"Whipped cream ", storageLocation:"Garage", tier:"staple", optional:false, defaultQuantity:"1" },
-  { id:"i1781959860532y9t", createdAt:SEED_TS, name:"Tortillas, regular", storageLocation:"Pantry", tier:"staple", optional:false, defaultQuantity:"1" },
-  { id:"i1781959860532skr", createdAt:SEED_TS, name:"647 hamburger rolls", storageLocation:"Pantry", tier:"specialty", optional:false, defaultQuantity:"1" },
-  { id:"i1781959860532y09", createdAt:SEED_TS, name:"Whole milk", storageLocation:"Fridge", tier:"specialty", optional:false, defaultQuantity:"1" },
-  { id:"i1781959860532qub", createdAt:SEED_TS, name:"Almond milk", storageLocation:"Garage", tier:"always", optional:false, defaultQuantity:"1" },
-  { id:"i1781959860532ica", createdAt:SEED_TS, name:"Garlic bread", storageLocation:"Freezer", tier:"specialty", optional:false, defaultQuantity:"1" },
-  { id:"i1781959860532ven", createdAt:SEED_TS, name:"Chex mix", storageLocation:"Pantry", tier:"always", optional:false, defaultQuantity:"1" },
-  { id:"i1781959860532hsz", createdAt:SEED_TS, name:"Gum", storageLocation:"Other", tier:"specialty", optional:false, defaultQuantity:"1" },
-  { id:"i1781959860532gt6", createdAt:SEED_TS, name:"Laundry detergent", storageLocation:"Other", tier:"specialty", optional:false, defaultQuantity:"1" },
-  { id:"i1781959860532ase", createdAt:SEED_TS, name:"Smarties", storageLocation:"Cabinet", tier:"staple", stapleType:"slow", optional:false, defaultQuantity:"1" },
-  { id:"i1781959860532j6m", createdAt:SEED_TS, name:"Rotini, plain", storageLocation:"Pantry", tier:"specialty", optional:false, defaultQuantity:"1" },
-  { id:"i1781959860532jk1", createdAt:SEED_TS, name:"Onion soup mix", storageLocation:"Pantry", tier:"specialty", optional:false, defaultQuantity:"1" },
-  { id:"i1781959860532rtb", createdAt:SEED_TS, name:"Chicken bouillon", storageLocation:"Cabinet", tier:"specialty", optional:false, defaultQuantity:"1" },
-  { id:"i178195986053219m", createdAt:SEED_TS, name:"Hot dog buns", storageLocation:"Pantry", tier:"specialty", optional:false, defaultQuantity:"1" },
-  { id:"i17819598605320w7", createdAt:SEED_TS, name:"Pesto", storageLocation:"Pantry", tier:"staple", stapleType:"slow", optional:false, defaultQuantity:"1" },
-  { id:"i17819598605327es", createdAt:SEED_TS, name:"Strawberry jelly", storageLocation:"Pantry", tier:"staple", optional:false, defaultQuantity:"1" },
-  { id:"i1781959860532c4g", createdAt:SEED_TS, name:"Hummus", storageLocation:"Fridge", tier:"always", optional:false, defaultQuantity:"1" },
-  { id:"i1781959860532g0a", createdAt:SEED_TS, name:"Frozen meatballs", storageLocation:"Freezer", tier:"staple", optional:false, defaultQuantity:"1" },
-  { id:"i1781959860532m96", createdAt:SEED_TS, name:"Baby carrots", storageLocation:"Fridge", tier:"specialty", optional:false, defaultQuantity:"1" },
-  { id:"i1781959860532n0i", createdAt:SEED_TS, name:"Tylenol sinus", storageLocation:"Medicine Cabinet", tier:"staple", optional:false, defaultQuantity:"1" },
-  { id:"i17819598605320ay", createdAt:SEED_TS, name:"Cetaphil bar soap", storageLocation:"Medicine Cabinet", tier:"specialty", optional:false, defaultQuantity:"1" },
-  { id:"i17819599423992nq", createdAt:SEED_TS, name:"Tomato soup", storageLocation:"Pantry", tier:"staple", optional:false, defaultQuantity:"2" },
-  { id:"i1781959942399e61", createdAt:SEED_TS, name:"Tortellini", storageLocation:"Pantry", tier:"specialty", optional:false, defaultQuantity:"1" },
-  { id:"i1781959942399ro1", createdAt:SEED_TS, name:"Grated parmesan", storageLocation:"Fridge", tier:"specialty", optional:false, defaultQuantity:"1" },
-  { id:"i1781959942399mj0", createdAt:SEED_TS, name:"Angel hair pasta", storageLocation:"Pantry", tier:"staple", stapleType:"slow", optional:false, defaultQuantity:"1" },
-  { id:"i1781959942399xkt", createdAt:SEED_TS, name:"Onion powder", storageLocation:"Seasonings", tier:"staple", stapleType:"slow", optional:false, defaultQuantity:"1" },
-  { id:"i1781960097710pvh", createdAt:SEED_TS, name:"Frozen sliced strawberries", storageLocation:"Freezer", tier:"specialty", optional:false, defaultQuantity:"1" },
-  { id:"i17819612095086b9", createdAt:SEED_TS, name:"Chili sauce", storageLocation:"Pantry", tier:"specialty", optional:false, defaultQuantity:"1" },
-  { id:"i1781961209508dyr", createdAt:SEED_TS, name:"Curry powder", storageLocation:"Seasonings", tier:"staple", stapleType:"slow", optional:false, defaultQuantity:"1" },
-  { id:"i1781961209508cra", createdAt:SEED_TS, name:"Rotel tomatoes", storageLocation:"Pantry", tier:"specialty", optional:false, defaultQuantity:"1" },
-  { id:"i1781961209508w15", createdAt:SEED_TS, name:"Garlic naan", storageLocation:"Freezer", tier:"specialty", optional:false, defaultQuantity:"1" },
-  { id:"i1781961209508ml9", createdAt:SEED_TS, name:"Elbow pasta", storageLocation:"Pantry", tier:"specialty", optional:false, defaultQuantity:"1" },
-  { id:"i17819612095087l0", createdAt:SEED_TS, name:"Canned black beans", storageLocation:"Pantry", tier:"specialty", optional:false, defaultQuantity:"1" },
-  { id:"i17819612095083sd", createdAt:SEED_TS, name:"Canned chili beans", storageLocation:"Pantry", tier:"specialty", optional:false, defaultQuantity:"1" },
-  { id:"i1781961209508d8i", createdAt:SEED_TS, name:"Chicken broth", storageLocation:"Pantry", tier:"specialty", optional:false, defaultQuantity:"2" },
-  { id:"i1781961209508xs5", createdAt:SEED_TS, name:"Plain naan", storageLocation:"Freezer", tier:"specialty", optional:false, defaultQuantity:"1" },
-  { id:"i1781961209508xhr", createdAt:SEED_TS, name:"Pickles", storageLocation:"Fridge", tier:"staple", stapleType:"slow", optional:true, defaultQuantity:"1" },
-  { id:"i1781961209508njt", createdAt:SEED_TS, name:"Ham steaks", storageLocation:"Fridge", tier:"specialty", optional:false, defaultQuantity:"1" },
-  { id:"i1781961209509ss8", createdAt:SEED_TS, name:"Dijon mustard", storageLocation:"Pantry", tier:"specialty", optional:false, defaultQuantity:"1" },
-  { id:"i1781961209509hy1", createdAt:SEED_TS, name:"Mushrooms", storageLocation:"Fridge", tier:"specialty", optional:false, defaultQuantity:"1" },
-  { id:"i1781961209509xys", createdAt:SEED_TS, name:"Yellow onions", storageLocation:"Pantry", tier:"staple", stapleType:"slow", optional:false, defaultQuantity:"1" },
-  { id:"i17819613878722iz", createdAt:SEED_TS, name:"Deli sliced ham", storageLocation:"Fridge", tier:"specialty", optional:false, defaultQuantity:"1" },
-  { id:"i17819613878724hb", createdAt:SEED_TS, name:"Vegetarian baked beans", storageLocation:"Pantry", tier:"specialty", optional:false, defaultQuantity:"1" },
-  { id:"i17819613878726an", createdAt:SEED_TS, name:"Ketchup", storageLocation:"Pantry", tier:"staple", stapleType:"slow", optional:false, defaultQuantity:"1" },
-  { id:"i1781961387873xsp", createdAt:SEED_TS, name:"Barbecue sauce", storageLocation:"Pantry", tier:"staple", stapleType:"slow", optional:false, defaultQuantity:"1" },
-  { id:"i1781961387873bkt", createdAt:SEED_TS, name:"Mayonnaise", storageLocation:"Pantry", tier:"staple", stapleType:"slow", optional:false, defaultQuantity:"1" },
-  { id:"i178196156080816o", createdAt:SEED_TS, name:"Taco seasoning mix", storageLocation:"Cabinet", tier:"specialty", optional:false, defaultQuantity:"2" },
-  { id:"i1781961560808zai", createdAt:SEED_TS, name:"Diced chicken breast, frozen", storageLocation:"Freezer", tier:"specialty", optional:false, defaultQuantity:"1" },
-  { id:"i17819615608086lr", createdAt:SEED_TS, name:"Frozen chopped spinach", storageLocation:"Freezer", tier:"specialty", optional:false, defaultQuantity:"1" },
-  { id:"i1781961560808fn6", createdAt:SEED_TS, name:"Soy sauce", storageLocation:"Cabinet", tier:"staple", stapleType:"slow", optional:false, defaultQuantity:"1" },
-  { id:"i1781961560808734", createdAt:SEED_TS, name:"Italian dressing mix", storageLocation:"Pantry", tier:"specialty", stapleType:"slow", optional:false, defaultQuantity:"1" },
-  { id:"i1781961560808fw1", createdAt:SEED_TS, name:"Marinated artichoke hearts", storageLocation:"Pantry", tier:"specialty", optional:false, defaultQuantity:"1" },
-  { id:"i1781961560808mzm", createdAt:SEED_TS, name:"Provolone cheese", storageLocation:"Fridge", tier:"staple", optional:false, defaultQuantity:"1" },
-  { id:"i1781961560808yg7", createdAt:SEED_TS, name:"Fresh slicing tomatoes", storageLocation:"Fridge", tier:"specialty", optional:false, defaultQuantity:"1" },
-  { id:"i17819616984862wb", createdAt:SEED_TS, name:"Sourdough bread sliced", storageLocation:"Pantry", tier:"specialty", optional:true, defaultQuantity:"1" },
-  { id:"i17819616984860zu", createdAt:SEED_TS, name:"Coleslaw mix", storageLocation:"Fridge", tier:"specialty", optional:false, defaultQuantity:"1" },
-  { id:"i1781961698486eq2", createdAt:SEED_TS, name:"Frozen deep dish pie shells", storageLocation:"Freezer", tier:"specialty", optional:false, defaultQuantity:"1" },
-  { id:"i1781961698486fc4", createdAt:SEED_TS, name:"Buttermilk pancake waffle mix", storageLocation:"Pantry", tier:"specialty", optional:false, defaultQuantity:"1" },
-  { id:"i1781961815068mh3", createdAt:SEED_TS, name:"Orange juice", storageLocation:"Fridge", tier:"specialty", optional:false, defaultQuantity:"1" },
-  { id:"i1781961815068u7g", createdAt:SEED_TS, name:"Breakfast sausage links", storageLocation:"Garage", tier:"specialty", optional:false, defaultQuantity:"1" },
-  { id:"i1781961815068cbm", createdAt:SEED_TS, name:"Scrapple", storageLocation:"Garage", tier:"specialty", optional:false, defaultQuantity:"1" },
-  { id:"i178196192976850n", createdAt:SEED_TS, name:"Ice cream, double dunker", storageLocation:"Freezer", tier:"staple", optional:false, defaultQuantity:"1" },
-  { id:"i1781962070435hji", createdAt:SEED_TS, name:"Italian seasoning", storageLocation:"Seasonings", tier:"specialty", optional:false, defaultQuantity:"1" },
-  { id:"i1781962070435ei0", createdAt:SEED_TS, name:"Tri-color rotini pasta", storageLocation:"Pantry", tier:"staple", optional:false, defaultQuantity:"1" },
-  { id:"i1781962070435vo0", createdAt:SEED_TS, name:"Vegetable oil", storageLocation:"Pantry", tier:"staple", stapleType:"slow", optional:false, defaultQuantity:"1" },
-  { id:"i1782060907056", createdAt:SEED_TS, name:"Italian bread", storageLocation:"Freezer", tier:"specialty", optional:false, defaultQuantity:"" },
-  { id:"i1782060995346", createdAt:SEED_TS, name:"Italian sausage", storageLocation:"Garage", tier:"specialty", optional:false, defaultQuantity:"" },
-  { id:"i1782061148399", createdAt:SEED_TS, name:"Hamburger rolls, regular", storageLocation:"Pantry", tier:"specialty", optional:false, defaultQuantity:"" },
-  { id:"i1782061680835", createdAt:SEED_TS, name:"Garlic powder", storageLocation:"Seasonings", tier:"staple", stapleType:"slow", optional:false, defaultQuantity:"" },
-  { id:"i1782162217949", createdAt:SEED_TS, name:"Red pepper flakes", storageLocation:"Seasonings", tier:"staple", stapleType:"slow", optional:false, defaultQuantity:"" },
-  { id:"i1782162229018", createdAt:SEED_TS, name:"Root beer", storageLocation:"Garage", tier:"specialty", optional:false, defaultQuantity:"" },
-  { id:"i1782164260781", createdAt:SEED_TS, name:"Flour", storageLocation:"Cabinet", tier:"staple", stapleType:"slow", optional:false, defaultQuantity:"" },
-  { id:"i1782165334504", createdAt:SEED_TS, name:"Garlic cloves", storageLocation:"Pantry", tier:"staple", stapleType:"slow", optional:false, defaultQuantity:"" },
-  { id:"i1782165394556", createdAt:SEED_TS, name:"Jalapenos", storageLocation:"Fridge", tier:"staple", stapleType:"slow", optional:false, defaultQuantity:"1 jar" },
-  { id:"i1782166436549", createdAt:SEED_TS, name:"Burger patties", storageLocation:"Garage", tier:"specialty", optional:false, defaultQuantity:"Packof 4" },
-  { id:"i1782783951124", createdAt:SEED_TS, name:"Paprika", storageLocation:"Seasonings", tier:"staple", stapleType:"slow", optional:false, defaultQuantity:"" },
-  { id:"i1782784082892", createdAt:SEED_TS, name:"Canned clams", storageLocation:"Pantry", tier:"specialty", optional:false, defaultQuantity:"" },
-  { id:"i1782784666802", createdAt:SEED_TS, name:"Kaiser rolls", storageLocation:"Pantry", tier:"specialty", optional:false, defaultQuantity:"" },
-  { id:"i1783171604267", createdAt:SEED_TS, name:"Worcestershire", storageLocation:"Cabinet", tier:"specialty", optional:false, defaultQuantity:"" },
-  { id:"i1783171637797", createdAt:SEED_TS, name:"Corn starch", storageLocation:"Cabinet", tier:"specialty", optional:false, defaultQuantity:"" },
-  { id:"i1783172830425", createdAt:SEED_TS, name:"Arborio rice", storageLocation:"Pantry", tier:"specialty", optional:false, defaultQuantity:"" },
-  { id:"i1783173306833", createdAt:SEED_TS, name:"Leeks", storageLocation:"Garage", tier:"specialty", optional:false, defaultQuantity:"" },
-  { id:"i1783173338967", createdAt:SEED_TS, name:"Thyme", storageLocation:"Fridge", tier:"specialty", optional:false, defaultQuantity:"" },
-  { id:"i1783173349016", createdAt:SEED_TS, name:"Raw cashews", storageLocation:"Pantry", tier:"specialty", optional:false, defaultQuantity:"" },
-  { id:"i1783173377588", createdAt:SEED_TS, name:"Olive oil, mild", storageLocation:"Pantry", tier:"staple", stapleType:"slow", optional:true, defaultQuantity:"" },
-  { id:"i1783173398508", createdAt:SEED_TS, name:"Vegetable broth", storageLocation:"Pantry", tier:"specialty", optional:false, defaultQuantity:"" },
-  { id:"i1783173614327", createdAt:SEED_TS, name:"Southwest seasoning, homemade", storageLocation:"Cabinet", tier:"specialty", optional:true, defaultQuantity:"" },
-  { id:"i1783173854535", createdAt:SEED_TS, name:"Pork loin", storageLocation:"Garage", tier:"specialty", optional:false, defaultQuantity:"" },
-  { id:"i1783173910229", createdAt:SEED_TS, name:"Penne", storageLocation:"Pantry", tier:"specialty", optional:false, defaultQuantity:"" },
-  { id:"i1783174079685", createdAt:SEED_TS, name:"Ravioli", storageLocation:"Fridge", tier:"specialty", optional:false, defaultQuantity:"" },
-  { id:"i1783182654608", createdAt:SEED_TS, name:"Feta cheese", storageLocation:"Fridge", tier:"specialty", optional:false, defaultQuantity:"" },
-  { id:"i1783183985376", createdAt:SEED_TS, name:"Beef broth", storageLocation:"Pantry", tier:"specialty", optional:false, defaultQuantity:"" },
-  { id:"i1783184043704", createdAt:SEED_TS, name:"Stewed tomatoes", storageLocation:"Pantry", tier:"specialty", optional:false, defaultQuantity:"" },
-  { id:"i1783190765964", createdAt:SEED_TS, name:"Tomato paste", storageLocation:"Pantry", tier:"specialty", optional:false, defaultQuantity:"" },
-  { id:"i1783190994435", createdAt:SEED_TS, name:"Chili powder", storageLocation:"Seasonings", tier:"specialty", optional:false, defaultQuantity:"" },
-  { id:"i1783191135052", createdAt:SEED_TS, name:"Pancake syrup", storageLocation:"Pantry", tier:"specialty", optional:false, defaultQuantity:"" },
-  { id:"i1783191142005", createdAt:SEED_TS, name:"Maple syrup", storageLocation:"Pantry", tier:"specialty", optional:false, defaultQuantity:"" },
-  { id:"i1783191153571", createdAt:SEED_TS, name:"Horseradish", storageLocation:"Fridge", tier:"specialty", optional:true, defaultQuantity:"" },
-  { id:"i1783191183588", createdAt:SEED_TS, name:"Pancake mix", storageLocation:"Pantry", tier:"specialty", optional:false, defaultQuantity:"" },
-  { id:"i1783191284449", createdAt:SEED_TS, name:"Apple cider vinegar", storageLocation:"Pantry", tier:"staple", stapleType:"slow", optional:false, defaultQuantity:"" },
-  { id:"i1783191311022", createdAt:SEED_TS, name:"Muenster cheese", storageLocation:"Fridge", tier:"specialty", optional:false, defaultQuantity:"" },
-  { id:"i1783259544927rbt", createdAt:SEED_TS, name:"Baked beans", storageLocation:"Pantry", tier:"specialty", optional:false, defaultQuantity:"1" },
-  { id:"i1783508027957", createdAt:SEED_TS, name:"Claritin", storageLocation:"Medicine Cabinet", tier:"always", optional:false, defaultQuantity:"" },
-  { id:"i1783940079640", createdAt:SEED_TS, name:"Stuffing mix", storageLocation:"Pantry", tier:"specialty", optional:false, defaultQuantity:"" },
-  { id:"i1783940138871", createdAt:SEED_TS, name:"Pork ribs", storageLocation:"Garage", tier:"specialty", optional:false, defaultQuantity:"" },
+  { id:"i001", createdAt:SEED_TS, name:"Tuna (canned)", walmartName:"Chicken of the Sea Tuna", walmartVerified:true, storageLocation:"Pantry", tier:"staple", defaultQuantity:"3 cans" },
+  { id:"i003", createdAt:SEED_TS, name:"Egg noodles", walmartName:"No Yolks Egg Noodles", storageLocation:"Pantry", tier:"staple", defaultQuantity:"1 bag" },
+  { id:"i004", createdAt:SEED_TS, name:"Shredded cheddar", walmartName:"Kraft Shredded Cheddar", walmartVerified:true, storageLocation:"Fridge", tier:"staple", stapleType:"weekly", defaultQuantity:"1 bag" },
+  { id:"i005", createdAt:SEED_TS, name:"Chicken strips (Tyson)", walmartName:"Tyson Southern Style Chicken Breast Tenderloins, 25 oz (Frozen, Fully Cooked)", walmartVerified:true, storageLocation:"Freezer", tier:"always", defaultQuantity:"2 bags" },
+  { id:"i006", createdAt:SEED_TS, name:"Tortillas (lo carb)", walmartName:"Mission Carb Balance Flour Tortillas, Soft Taco Size, 8 Count", walmartVerified:true, storageLocation:"Pantry", tier:"staple", defaultQuantity:"1 pack" },
+  { id:"i007", createdAt:SEED_TS, name:"Enchilada sauce", walmartName:"Old El Paso Enchilada Sauce", storageLocation:"Pantry", tier:"specialty", defaultQuantity:"2 cans" },
+  { id:"i008", createdAt:SEED_TS, name:"Salsa", walmartName:"Tostitos Chunky Salsa", walmartVerified:true, storageLocation:"Pantry", tier:"staple", defaultQuantity:"1 jar" },
+  { id:"i009", createdAt:SEED_TS, name:"Sour cream", walmartName:"Daisy Sour Cream", walmartVerified:true, storageLocation:"Garage", tier:"staple", defaultQuantity:"1 tub" },
+  { id:"i010", createdAt:SEED_TS, name:"Rice", walmartName:"Carolina Jasmine Rice, Thai Fragrant Long Grain Rice, Gluten Free, 2 lb Bag", walmartVerified:true, storageLocation:"Pantry", tier:"staple", defaultQuantity:"1 bag" },
+  { id:"i011", createdAt:SEED_TS, name:"Pasta sauce (red)", walmartName:"RAGU Simply Traditional Pasta Sauce, 24 oz", walmartVerified:true, storageLocation:"Pantry", tier:"staple", defaultQuantity:"2 jars" },
+  { id:"i012", createdAt:SEED_TS, name:"Lasagna noodles", walmartName:"Barilla Lasagna Noodles", storageLocation:"Pantry", tier:"specialty", defaultQuantity:"1 box" },
+  { id:"i013", createdAt:SEED_TS, name:"Ricotta cheese", walmartName:"Galbani Whole Milk Ricotta", walmartVerified:true, storageLocation:"Fridge", tier:"specialty", defaultQuantity:"1 container" },
+  { id:"i014", createdAt:SEED_TS, name:"Mozzarella shredded", walmartName:"Sargento Shredded Mozzarella", walmartVerified:true, storageLocation:"Garage", tier:"staple", defaultQuantity:"1 bag" },
+  { id:"i015", createdAt:SEED_TS, name:"Ground beef", walmartName:"Marketside Organic Grass-Fed Ground Beef, 85% Lean/15% Fat, 1 lb", walmartVerified:true, storageLocation:"Garage", tier:"specialty", defaultQuantity:"2 lbs" },
+  { id:"i016", createdAt:SEED_TS, name:"Tater tots", walmartName:"Ore-Ida Tater Tots", walmartVerified:true, storageLocation:"Freezer", tier:"staple", defaultQuantity:"1 bag" },
+  { id:"i017", createdAt:SEED_TS, name:"Kale, bagged", walmartName:"Fresh Green Kale, 16 oz", walmartVerified:true, storageLocation:"Garage", tier:"always", defaultQuantity:"1 bunch" },
+  { id:"i018", createdAt:SEED_TS, name:"Eggs", walmartName:"Marketside Organic Cage-Free Brown Large Eggs, 18 Count", walmartVerified:true, storageLocation:"Fridge", tier:"always", defaultQuantity:"1 dozen" },
+  { id:"i020", createdAt:SEED_TS, name:"Bread (647)", walmartName:"Schmidt Old Tyme 647 Low Calorie Keto Friendly Italian Bread 18 oz", walmartVerified:true, storageLocation:"Pantry", tier:"always", defaultQuantity:"1 loaf" },
+  { id:"i021", createdAt:SEED_TS, name:"Butter", walmartName:"Great Value Sweet Cream Salted Butter, 16 oz, 4 Sticks", walmartVerified:true, storageLocation:"Garage", tier:"staple", defaultQuantity:"1 lb" },
+  { id:"i022", createdAt:SEED_TS, name:"Crescent rolls", walmartName:"Pillsbury Crescent Rolls, Original Refrigerated Canned Pastry Dough, Value 2-Pack, 16 Rolls, 16 oz", walmartVerified:true, storageLocation:"Fridge", tier:"specialty", defaultQuantity:"1 can" },
+  { id:"i023", createdAt:SEED_TS, name:"Chicken breast (fresh)", walmartName:"Perdue, No Antibiotics Ever, Fresh Boneless Skinless Chicken Breast value pack, 2.5-4 lb. Tray", walmartVerified:true, storageLocation:"Garage", tier:"specialty", defaultQuantity:"2 lbs" },
+  { id:"i024", createdAt:SEED_TS, name:"Bacon", walmartName:"Oscar Mayer Bacon", walmartVerified:true, storageLocation:"Garage", tier:"specialty", defaultQuantity:"1 pack" },
+  { id:"i1781748937379", createdAt:SEED_TS, name:"Peas, frozen", storageLocation:"Freezer", tier:"specialty", defaultQuantity:"1" },
+  { id:"i1781750536287", createdAt:SEED_TS, name:"Potatoes", storageLocation:"Pantry", tier:"staple", stapleType:"slow", defaultQuantity:"" },
+  { id:"i1781781802965", createdAt:SEED_TS, name:"Cream of chicken soup", walmartName:"Cream of chicken soup", storageLocation:"Pantry", tier:"specialty", defaultQuantity:"1" },
+  { id:"i1781781814061", createdAt:SEED_TS, name:"Block cheddar", walmartName:"Block cheddar", storageLocation:"Fridge", tier:"specialty", defaultQuantity:"1" },
+  { id:"i1781781828141", createdAt:SEED_TS, name:"Bread crumbs", walmartName:"Bread crumbs", storageLocation:"Pantry", tier:"staple", stapleType:"slow", defaultQuantity:"" },
+  { id:"i17819586307302gn", createdAt:SEED_TS, name:"Extra virgin olive oil", storageLocation:"Pantry", tier:"staple", stapleType:"slow", defaultQuantity:"1" },
+  { id:"i178195863073072o", createdAt:SEED_TS, name:"Dishwasher pods", storageLocation:"Other", tier:"always", defaultQuantity:"1" },
+  { id:"i17819586307301i1", createdAt:SEED_TS, name:"Seasoned salt", storageLocation:"Cabinet", tier:"staple", stapleType:"slow", defaultQuantity:"1" },
+  { id:"i1781958630730lbd", createdAt:SEED_TS, name:"Mixed salad greens", storageLocation:"Fridge", tier:"specialty", defaultQuantity:"1" },
+  { id:"i1781958630730z93", createdAt:SEED_TS, name:"American cheese sliced", storageLocation:"Fridge", tier:"staple", defaultQuantity:"1" },
+  { id:"i17819586307307vh", createdAt:SEED_TS, name:"Deli turkey breast", storageLocation:"Fridge", tier:"specialty", defaultQuantity:"1" },
+  { id:"i1781958630730bmo", createdAt:SEED_TS, name:"Bananas", storageLocation:"Pantry", tier:"always", defaultQuantity:"6" },
+  { id:"i1781958630730zms", createdAt:SEED_TS, name:"Dish soap", storageLocation:"Other", tier:"staple", defaultQuantity:"1" },
+  { id:"i1781958630730rlq", createdAt:SEED_TS, name:"Bfree protein tortilla wraps", storageLocation:"Fridge", tier:"always", defaultQuantity:"1" },
+  { id:"i17819586307308jj", createdAt:SEED_TS, name:"Tuna (evoo)", storageLocation:"Pantry", tier:"specialty", defaultQuantity:"1" },
+  { id:"i1781958630730me6", createdAt:SEED_TS, name:"Green pepper", storageLocation:"Fridge", tier:"specialty", defaultQuantity:"3" },
+  { id:"i1781958630730qfr", createdAt:SEED_TS, name:"Tortilla chips", storageLocation:"Pantry", tier:"staple", defaultQuantity:"1" },
+  { id:"i1781958630730dzj", createdAt:SEED_TS, name:"Fettuccine ", storageLocation:"Pantry", tier:"specialty", defaultQuantity:"1" },
+  { id:"i1781958630730jkl", createdAt:SEED_TS, name:"Alfredo ", storageLocation:"Pantry", tier:"specialty", defaultQuantity:"1" },
+  { id:"i1781958630730t2h", createdAt:SEED_TS, name:"Riced cauliflower frozen", storageLocation:"Freezer", tier:"specialty", defaultQuantity:"1" },
+  { id:"i1781958630730x8t", createdAt:SEED_TS, name:"Egglife egg white wrap, plain", storageLocation:"Fridge", tier:"staple", defaultQuantity:"1" },
+  { id:"i17819586307303b0", createdAt:SEED_TS, name:"Frozen cheese pizza", storageLocation:"Freezer", tier:"staple", defaultQuantity:"2" },
+  { id:"i1781958630730phc", createdAt:SEED_TS, name:"Sliced bread, regular", storageLocation:"Pantry", tier:"always", defaultQuantity:"2" },
+  { id:"i1781958630730dxh", createdAt:SEED_TS, name:"Caesar salad kit", storageLocation:"Fridge", tier:"always", defaultQuantity:"2" },
+  { id:"i1781958630730tva", createdAt:SEED_TS, name:"Cottage cheese", storageLocation:"Fridge", tier:"always", defaultQuantity:"1" },
+  { id:"i1781958630730qco", createdAt:SEED_TS, name:"Plain Greek yogurt", storageLocation:"Fridge", tier:"staple", defaultQuantity:"1" },
+  { id:"i178195863073057h", createdAt:SEED_TS, name:"Fresh spinach", storageLocation:"Fridge", tier:"always", defaultQuantity:"1" },
+  { id:"i1781958630730x1o", createdAt:SEED_TS, name:"Diet iced tea", storageLocation:"Garage", tier:"staple", defaultQuantity:"1" },
+  { id:"i1781958630730z49", createdAt:SEED_TS, name:"Ice cream, peanut butter cup", storageLocation:"Freezer", tier:"always", defaultQuantity:"1" },
+  { id:"i1781958630730r4q", createdAt:SEED_TS, name:"Boneless chicken thighs", storageLocation:"Garage", tier:"specialty", defaultQuantity:"1" },
+  { id:"i1781958630730r1b", createdAt:SEED_TS, name:"Fresh avocados", storageLocation:"Other", tier:"always", defaultQuantity:"1" },
+  { id:"i1781958630730nms", createdAt:SEED_TS, name:"Beef stew meat", storageLocation:"Garage", tier:"specialty", defaultQuantity:"1" },
+  { id:"i1781958630730zca", createdAt:SEED_TS, name:"Flat iron steak", storageLocation:"Garage", tier:"specialty", defaultQuantity:"1" },
+  { id:"i1781958630730g1o", createdAt:SEED_TS, name:"Cherry tomatoes", storageLocation:"Fridge", tier:"specialty", defaultQuantity:"1" },
+  { id:"i17819598605325kj", createdAt:SEED_TS, name:"Tylenol (acetaminophen)", storageLocation:"Medicine Cabinet", tier:"specialty", defaultQuantity:"1" },
+  { id:"i1781959860532unb", createdAt:SEED_TS, name:"Hot dogs", storageLocation:"Fridge", tier:"specialty", defaultQuantity:"1" },
+  { id:"i1781959860532iwr", createdAt:SEED_TS, name:"Stevia", storageLocation:"Cabinet", tier:"staple", stapleType:"slow", defaultQuantity:"1" },
+  { id:"i1781959860532x9z", createdAt:SEED_TS, name:"Power crunch, mint chocoloate protein  bars", storageLocation:"Pantry", tier:"specialty", defaultQuantity:"1" },
+  { id:"i17819598605324q3", createdAt:SEED_TS, name:"Peanut butter, jif", storageLocation:"Pantry", tier:"staple", defaultQuantity:"1" },
+  { id:"i1781959860532uzu", createdAt:SEED_TS, name:"Toilet paper", storageLocation:"Other", tier:"always", defaultQuantity:"1" },
+  { id:"i1781959860532vm6", createdAt:SEED_TS, name:"Goldfish", storageLocation:"Pantry", tier:"staple", defaultQuantity:"2" },
+  { id:"i1781959860532ws5", createdAt:SEED_TS, name:"Whipped cream ", storageLocation:"Garage", tier:"staple", defaultQuantity:"1" },
+  { id:"i1781959860532y9t", createdAt:SEED_TS, name:"Tortillas, regular", storageLocation:"Pantry", tier:"staple", defaultQuantity:"1" },
+  { id:"i1781959860532skr", createdAt:SEED_TS, name:"647 hamburger rolls", storageLocation:"Pantry", tier:"specialty", defaultQuantity:"1" },
+  { id:"i1781959860532y09", createdAt:SEED_TS, name:"Whole milk", storageLocation:"Fridge", tier:"specialty", defaultQuantity:"1" },
+  { id:"i1781959860532qub", createdAt:SEED_TS, name:"Almond milk", storageLocation:"Garage", tier:"always", defaultQuantity:"1" },
+  { id:"i1781959860532ica", createdAt:SEED_TS, name:"Garlic bread", storageLocation:"Freezer", tier:"specialty", defaultQuantity:"1" },
+  { id:"i1781959860532ven", createdAt:SEED_TS, name:"Chex mix", storageLocation:"Pantry", tier:"always", defaultQuantity:"1" },
+  { id:"i1781959860532hsz", createdAt:SEED_TS, name:"Gum", storageLocation:"Other", tier:"specialty", defaultQuantity:"1" },
+  { id:"i1781959860532gt6", createdAt:SEED_TS, name:"Laundry detergent", storageLocation:"Other", tier:"specialty", defaultQuantity:"1" },
+  { id:"i1781959860532ase", createdAt:SEED_TS, name:"Smarties", storageLocation:"Cabinet", tier:"staple", stapleType:"slow", defaultQuantity:"1" },
+  { id:"i1781959860532j6m", createdAt:SEED_TS, name:"Rotini, plain", storageLocation:"Pantry", tier:"specialty", defaultQuantity:"1" },
+  { id:"i1781959860532jk1", createdAt:SEED_TS, name:"Onion soup mix", storageLocation:"Pantry", tier:"specialty", defaultQuantity:"1" },
+  { id:"i1781959860532rtb", createdAt:SEED_TS, name:"Chicken bouillon", storageLocation:"Cabinet", tier:"specialty", defaultQuantity:"1" },
+  { id:"i178195986053219m", createdAt:SEED_TS, name:"Hot dog buns", storageLocation:"Pantry", tier:"specialty", defaultQuantity:"1" },
+  { id:"i17819598605320w7", createdAt:SEED_TS, name:"Pesto", storageLocation:"Pantry", tier:"staple", stapleType:"slow", defaultQuantity:"1" },
+  { id:"i17819598605327es", createdAt:SEED_TS, name:"Strawberry jelly", storageLocation:"Pantry", tier:"staple", defaultQuantity:"1" },
+  { id:"i1781959860532c4g", createdAt:SEED_TS, name:"Hummus", storageLocation:"Fridge", tier:"always", defaultQuantity:"1" },
+  { id:"i1781959860532g0a", createdAt:SEED_TS, name:"Frozen meatballs", storageLocation:"Freezer", tier:"staple", defaultQuantity:"1" },
+  { id:"i1781959860532m96", createdAt:SEED_TS, name:"Baby carrots", storageLocation:"Fridge", tier:"specialty", defaultQuantity:"1" },
+  { id:"i1781959860532n0i", createdAt:SEED_TS, name:"Tylenol sinus", storageLocation:"Medicine Cabinet", tier:"staple", defaultQuantity:"1" },
+  { id:"i17819598605320ay", createdAt:SEED_TS, name:"Cetaphil bar soap", storageLocation:"Medicine Cabinet", tier:"specialty", defaultQuantity:"1" },
+  { id:"i17819599423992nq", createdAt:SEED_TS, name:"Tomato soup", storageLocation:"Pantry", tier:"staple", defaultQuantity:"2" },
+  { id:"i1781959942399e61", createdAt:SEED_TS, name:"Tortellini", storageLocation:"Pantry", tier:"specialty", defaultQuantity:"1" },
+  { id:"i1781959942399ro1", createdAt:SEED_TS, name:"Grated parmesan", storageLocation:"Fridge", tier:"specialty", defaultQuantity:"1" },
+  { id:"i1781959942399mj0", createdAt:SEED_TS, name:"Angel hair pasta", storageLocation:"Pantry", tier:"staple", stapleType:"slow", defaultQuantity:"1" },
+  { id:"i1781959942399xkt", createdAt:SEED_TS, name:"Onion powder", storageLocation:"Seasonings", tier:"staple", stapleType:"slow", defaultQuantity:"1" },
+  { id:"i1781960097710pvh", createdAt:SEED_TS, name:"Frozen sliced strawberries", storageLocation:"Freezer", tier:"specialty", defaultQuantity:"1" },
+  { id:"i17819612095086b9", createdAt:SEED_TS, name:"Chili sauce", storageLocation:"Pantry", tier:"specialty", defaultQuantity:"1" },
+  { id:"i1781961209508dyr", createdAt:SEED_TS, name:"Curry powder", storageLocation:"Seasonings", tier:"staple", stapleType:"slow", defaultQuantity:"1" },
+  { id:"i1781961209508cra", createdAt:SEED_TS, name:"Rotel tomatoes", storageLocation:"Pantry", tier:"specialty", defaultQuantity:"1" },
+  { id:"i1781961209508w15", createdAt:SEED_TS, name:"Garlic naan", storageLocation:"Freezer", tier:"specialty", defaultQuantity:"1" },
+  { id:"i1781961209508ml9", createdAt:SEED_TS, name:"Elbow pasta", storageLocation:"Pantry", tier:"specialty", defaultQuantity:"1" },
+  { id:"i17819612095087l0", createdAt:SEED_TS, name:"Canned black beans", storageLocation:"Pantry", tier:"specialty", defaultQuantity:"1" },
+  { id:"i17819612095083sd", createdAt:SEED_TS, name:"Canned chili beans", storageLocation:"Pantry", tier:"specialty", defaultQuantity:"1" },
+  { id:"i1781961209508d8i", createdAt:SEED_TS, name:"Chicken broth", storageLocation:"Pantry", tier:"specialty", defaultQuantity:"2" },
+  { id:"i1781961209508xs5", createdAt:SEED_TS, name:"Plain naan", storageLocation:"Freezer", tier:"specialty", defaultQuantity:"1" },
+  { id:"i1781961209508xhr", createdAt:SEED_TS, name:"Pickles", storageLocation:"Fridge", tier:"staple", stapleType:"slow", defaultQuantity:"1" },
+  { id:"i1781961209508njt", createdAt:SEED_TS, name:"Ham steaks", storageLocation:"Fridge", tier:"specialty", defaultQuantity:"1" },
+  { id:"i1781961209509ss8", createdAt:SEED_TS, name:"Dijon mustard", storageLocation:"Pantry", tier:"specialty", defaultQuantity:"1" },
+  { id:"i1781961209509hy1", createdAt:SEED_TS, name:"Mushrooms", storageLocation:"Fridge", tier:"specialty", defaultQuantity:"1" },
+  { id:"i1781961209509xys", createdAt:SEED_TS, name:"Yellow onions", storageLocation:"Pantry", tier:"staple", stapleType:"slow", defaultQuantity:"1" },
+  { id:"i17819613878722iz", createdAt:SEED_TS, name:"Deli sliced ham", storageLocation:"Fridge", tier:"specialty", defaultQuantity:"1" },
+  { id:"i17819613878724hb", createdAt:SEED_TS, name:"Vegetarian baked beans", storageLocation:"Pantry", tier:"specialty", defaultQuantity:"1" },
+  { id:"i17819613878726an", createdAt:SEED_TS, name:"Ketchup", storageLocation:"Pantry", tier:"staple", stapleType:"slow", defaultQuantity:"1" },
+  { id:"i1781961387873xsp", createdAt:SEED_TS, name:"Barbecue sauce", storageLocation:"Pantry", tier:"staple", stapleType:"slow", defaultQuantity:"1" },
+  { id:"i1781961387873bkt", createdAt:SEED_TS, name:"Mayonnaise", storageLocation:"Pantry", tier:"staple", stapleType:"slow", defaultQuantity:"1" },
+  { id:"i178196156080816o", createdAt:SEED_TS, name:"Taco seasoning mix", storageLocation:"Cabinet", tier:"specialty", defaultQuantity:"2" },
+  { id:"i1781961560808zai", createdAt:SEED_TS, name:"Diced chicken breast, frozen", storageLocation:"Freezer", tier:"specialty", defaultQuantity:"1" },
+  { id:"i17819615608086lr", createdAt:SEED_TS, name:"Frozen chopped spinach", storageLocation:"Freezer", tier:"specialty", defaultQuantity:"1" },
+  { id:"i1781961560808fn6", createdAt:SEED_TS, name:"Soy sauce", storageLocation:"Cabinet", tier:"staple", stapleType:"slow", defaultQuantity:"1" },
+  { id:"i1781961560808734", createdAt:SEED_TS, name:"Italian dressing mix", storageLocation:"Pantry", tier:"specialty", stapleType:"slow", defaultQuantity:"1" },
+  { id:"i1781961560808fw1", createdAt:SEED_TS, name:"Marinated artichoke hearts", storageLocation:"Pantry", tier:"specialty", defaultQuantity:"1" },
+  { id:"i1781961560808mzm", createdAt:SEED_TS, name:"Provolone cheese", storageLocation:"Fridge", tier:"staple", defaultQuantity:"1" },
+  { id:"i1781961560808yg7", createdAt:SEED_TS, name:"Fresh slicing tomatoes", storageLocation:"Fridge", tier:"specialty", defaultQuantity:"1" },
+  { id:"i17819616984862wb", createdAt:SEED_TS, name:"Sourdough bread sliced", storageLocation:"Pantry", tier:"specialty", defaultQuantity:"1" },
+  { id:"i17819616984860zu", createdAt:SEED_TS, name:"Coleslaw mix", storageLocation:"Fridge", tier:"specialty", defaultQuantity:"1" },
+  { id:"i1781961698486eq2", createdAt:SEED_TS, name:"Frozen deep dish pie shells", storageLocation:"Freezer", tier:"specialty", defaultQuantity:"1" },
+  { id:"i1781961698486fc4", createdAt:SEED_TS, name:"Buttermilk pancake waffle mix", storageLocation:"Pantry", tier:"specialty", defaultQuantity:"1" },
+  { id:"i1781961815068mh3", createdAt:SEED_TS, name:"Orange juice", storageLocation:"Fridge", tier:"specialty", defaultQuantity:"1" },
+  { id:"i1781961815068u7g", createdAt:SEED_TS, name:"Breakfast sausage links", storageLocation:"Garage", tier:"specialty", defaultQuantity:"1" },
+  { id:"i1781961815068cbm", createdAt:SEED_TS, name:"Scrapple", storageLocation:"Garage", tier:"specialty", defaultQuantity:"1" },
+  { id:"i178196192976850n", createdAt:SEED_TS, name:"Ice cream, double dunker", storageLocation:"Freezer", tier:"staple", defaultQuantity:"1" },
+  { id:"i1781962070435hji", createdAt:SEED_TS, name:"Italian seasoning", storageLocation:"Seasonings", tier:"specialty", defaultQuantity:"1" },
+  { id:"i1781962070435ei0", createdAt:SEED_TS, name:"Tri-color rotini pasta", storageLocation:"Pantry", tier:"staple", defaultQuantity:"1" },
+  { id:"i1781962070435vo0", createdAt:SEED_TS, name:"Vegetable oil", storageLocation:"Pantry", tier:"staple", stapleType:"slow", defaultQuantity:"1" },
+  { id:"i1782060907056", createdAt:SEED_TS, name:"Italian bread", storageLocation:"Freezer", tier:"specialty", defaultQuantity:"" },
+  { id:"i1782060995346", createdAt:SEED_TS, name:"Italian sausage", storageLocation:"Garage", tier:"specialty", defaultQuantity:"" },
+  { id:"i1782061148399", createdAt:SEED_TS, name:"Hamburger rolls, regular", storageLocation:"Pantry", tier:"specialty", defaultQuantity:"" },
+  { id:"i1782061680835", createdAt:SEED_TS, name:"Garlic powder", storageLocation:"Seasonings", tier:"staple", stapleType:"slow", defaultQuantity:"" },
+  { id:"i1782162217949", createdAt:SEED_TS, name:"Red pepper flakes", storageLocation:"Seasonings", tier:"staple", stapleType:"slow", defaultQuantity:"" },
+  { id:"i1782162229018", createdAt:SEED_TS, name:"Root beer", storageLocation:"Garage", tier:"specialty", defaultQuantity:"" },
+  { id:"i1782164260781", createdAt:SEED_TS, name:"Flour", storageLocation:"Cabinet", tier:"staple", stapleType:"slow", defaultQuantity:"" },
+  { id:"i1782165334504", createdAt:SEED_TS, name:"Garlic cloves", storageLocation:"Pantry", tier:"staple", stapleType:"slow", defaultQuantity:"" },
+  { id:"i1782165394556", createdAt:SEED_TS, name:"Jalapenos", storageLocation:"Fridge", tier:"staple", stapleType:"slow", defaultQuantity:"1 jar" },
+  { id:"i1782166436549", createdAt:SEED_TS, name:"Burger patties", storageLocation:"Garage", tier:"specialty", defaultQuantity:"Packof 4" },
+  { id:"i1782783951124", createdAt:SEED_TS, name:"Paprika", storageLocation:"Seasonings", tier:"staple", stapleType:"slow", defaultQuantity:"" },
+  { id:"i1782784082892", createdAt:SEED_TS, name:"Canned clams", storageLocation:"Pantry", tier:"specialty", defaultQuantity:"" },
+  { id:"i1782784666802", createdAt:SEED_TS, name:"Kaiser rolls", storageLocation:"Pantry", tier:"specialty", defaultQuantity:"" },
+  { id:"i1783171604267", createdAt:SEED_TS, name:"Worcestershire", storageLocation:"Cabinet", tier:"specialty", defaultQuantity:"" },
+  { id:"i1783171637797", createdAt:SEED_TS, name:"Corn starch", storageLocation:"Cabinet", tier:"specialty", defaultQuantity:"" },
+  { id:"i1783172830425", createdAt:SEED_TS, name:"Arborio rice", storageLocation:"Pantry", tier:"specialty", defaultQuantity:"" },
+  { id:"i1783173306833", createdAt:SEED_TS, name:"Leeks", storageLocation:"Garage", tier:"specialty", defaultQuantity:"" },
+  { id:"i1783173338967", createdAt:SEED_TS, name:"Thyme", storageLocation:"Fridge", tier:"specialty", defaultQuantity:"" },
+  { id:"i1783173349016", createdAt:SEED_TS, name:"Raw cashews", storageLocation:"Pantry", tier:"specialty", defaultQuantity:"" },
+  { id:"i1783173377588", createdAt:SEED_TS, name:"Olive oil, mild", storageLocation:"Pantry", tier:"staple", stapleType:"slow", defaultQuantity:"" },
+  { id:"i1783173398508", createdAt:SEED_TS, name:"Vegetable broth", storageLocation:"Pantry", tier:"specialty", defaultQuantity:"" },
+  { id:"i1783173614327", createdAt:SEED_TS, name:"Southwest seasoning, homemade", storageLocation:"Cabinet", tier:"specialty", defaultQuantity:"" },
+  { id:"i1783173854535", createdAt:SEED_TS, name:"Pork loin", storageLocation:"Garage", tier:"specialty", defaultQuantity:"" },
+  { id:"i1783173910229", createdAt:SEED_TS, name:"Penne", storageLocation:"Pantry", tier:"specialty", defaultQuantity:"" },
+  { id:"i1783174079685", createdAt:SEED_TS, name:"Ravioli", storageLocation:"Fridge", tier:"specialty", defaultQuantity:"" },
+  { id:"i1783182654608", createdAt:SEED_TS, name:"Feta cheese", storageLocation:"Fridge", tier:"specialty", defaultQuantity:"" },
+  { id:"i1783183985376", createdAt:SEED_TS, name:"Beef broth", storageLocation:"Pantry", tier:"specialty", defaultQuantity:"" },
+  { id:"i1783184043704", createdAt:SEED_TS, name:"Stewed tomatoes", storageLocation:"Pantry", tier:"specialty", defaultQuantity:"" },
+  { id:"i1783190765964", createdAt:SEED_TS, name:"Tomato paste", storageLocation:"Pantry", tier:"specialty", defaultQuantity:"" },
+  { id:"i1783190994435", createdAt:SEED_TS, name:"Chili powder", storageLocation:"Seasonings", tier:"specialty", defaultQuantity:"" },
+  { id:"i1783191135052", createdAt:SEED_TS, name:"Pancake syrup", storageLocation:"Pantry", tier:"specialty", defaultQuantity:"" },
+  { id:"i1783191142005", createdAt:SEED_TS, name:"Maple syrup", storageLocation:"Pantry", tier:"specialty", defaultQuantity:"" },
+  { id:"i1783191153571", createdAt:SEED_TS, name:"Horseradish", storageLocation:"Fridge", tier:"specialty", defaultQuantity:"" },
+  { id:"i1783191183588", createdAt:SEED_TS, name:"Pancake mix", storageLocation:"Pantry", tier:"specialty", defaultQuantity:"" },
+  { id:"i1783191284449", createdAt:SEED_TS, name:"Apple cider vinegar", storageLocation:"Pantry", tier:"staple", stapleType:"slow", defaultQuantity:"" },
+  { id:"i1783191311022", createdAt:SEED_TS, name:"Muenster cheese", storageLocation:"Fridge", tier:"specialty", defaultQuantity:"" },
+  { id:"i1783259544927rbt", createdAt:SEED_TS, name:"Baked beans", storageLocation:"Pantry", tier:"specialty", defaultQuantity:"1" },
+  { id:"i1783508027957", createdAt:SEED_TS, name:"Claritin", storageLocation:"Medicine Cabinet", tier:"always", defaultQuantity:"" },
+  { id:"i1783940079640", createdAt:SEED_TS, name:"Stuffing mix", storageLocation:"Pantry", tier:"specialty", defaultQuantity:"" },
+  { id:"i1783940138871", createdAt:SEED_TS, name:"Pork ribs", storageLocation:"Garage", tier:"specialty", defaultQuantity:"" },
 ];
 
 const SEED_MEALS = [
@@ -558,7 +543,7 @@ const SEED_MEALS = [
 ];
 
 const DEFAULT_SETTINGS = {
-  shoppingDay:"Wednesday", pickupTime:"5:00-6:00pm", budgetLimit:250, awayMemberHome:true,
+  shoppingDay:"Wednesday", awayMemberHome:true,
   // Date-range away periods for meal planning (REFACTOR B2): [{ id, name, from, to }],
   // ISO dates, either end may be null (open). See presentOn.
   awayRanges:[],
@@ -954,20 +939,6 @@ async function clearRecovery() {
   } catch(e) { /* non-fatal */ }
 }
 
-// ── Meal suggestions ───────────────────────────────────────────────────────────
-
-
-// Budget trimming: receipt lines above this price whose matched ingredient is
-// flagged OPTIONAL get surfaced in Reconcile as drop candidates. Config knob.
-const HIGH_PRICE = 5;
-
-// Output token budget for receipt extraction and matching. Compact pipe-delimited
-// formats keep replies small (~20 tokens/item extract, ~5/item match), but a full
-// 65+ item order still needs headroom. 1500 truncated a 65-item order; 2500 gives
-// margin. If a reply ever shows non-JSON/empty at this value, the SANDBOX rejected
-// it — lower it and chunk instead of raising further.
-const EXTRACT_TOKENS = 2500;
-
 // ── Live weather ────────────────────────────────────────────────────────────────
 // Replaces the old hand-baked WEEK_FORECAST with a live fetch from Open-Meteo
 // (free, no API key, CORS-enabled — works from a plain browser fetch when the app
@@ -1269,7 +1240,7 @@ function PrepTab({ db, persistDB }) {
   const addNewIngredient = rawName => {
     const name = rawName.trim();
     if (!name) return;
-    const newIng = { id:"i"+Date.now()+Math.random().toString(36).slice(2,5), createdAt:new Date().toISOString(), name:name.charAt(0).toUpperCase()+name.slice(1), storageLocation:"Unassigned", tier:"specialty", optional:false, defaultQuantity:"" };
+    const newIng = { id:"i"+Date.now()+Math.random().toString(36).slice(2,5), createdAt:new Date().toISOString(), name:name.charAt(0).toUpperCase()+name.slice(1), storageLocation:"Unassigned", tier:"specialty", defaultQuantity:"" };
     const base = activePlan || freshPlanBase();
     const updatedPlan = { ...base, cartIngredientIds:[...new Set([...(base.cartIngredientIds||[]), newIng.id])] };
     persistDB(writeActivePlan({ ...db, ingredients:[...db.ingredients, newIng] }, updatedPlan));
@@ -2774,7 +2745,6 @@ function PlanInventory({ checkedIds, setCheckedIds, stapleFlags, setStapleFlags,
 
 function PlanConfirm({ mode = "confirm", onUpdateItem, keptIds = [], checkedIds, removedIds, setRemovedIds, addedItems, setAddedItems, stapleFlags, quantities = {}, setQuantities, mealPlan, meals, ingredients, onNext, onFinish, db, persistDB, days, daysFull }) {
   const [newItem, setNewItem]   = useState("");
-  const [total, setTotal]       = useState("");
   const [view, setView]         = useState("meal");
   const [copied, setCopied]     = useState(false);
   const [batchIdx, setBatchIdx] = useState(0); // which batch is "current" in the stepper
@@ -2872,9 +2842,6 @@ function PlanConfirm({ mode = "confirm", onUpdateItem, keptIds = [], checkedIds,
     "For each one, tell me how much is currently in my cart, and whether you think that's enough to cover that many meals. " +
     "Flag any that look short so I can decide.\n\n" +
     activeShared.map(s => `• ${s.name} — needed for ${s.n} meals`).join("\n");
-
-  const budget = db.settings?.budgetLimit || 250;
-  const isOver = parseFloat(total) > budget;
 
   // Sparky (Walmart's chatbot) batches inputs into ~10 items per paste, so we
   // chunk into batches of 10 to paste sequentially. Quantity is kept on each
@@ -3063,16 +3030,6 @@ function PlanConfirm({ mode = "confirm", onUpdateItem, keptIds = [], checkedIds,
         </div>
       )}
 
-      <div style={S.card}>
-        <div style={S.sectionLabel}>Budget</div>
-        <div style={{ display:"flex", alignItems:"center", gap:10 }}>
-          <span style={{ fontSize:18 }}>$</span>
-          <input style={{ ...S.input, flex:1 }} type="number" placeholder={`Enter cart total (limit $${budget})`} value={total} onChange={e => setTotal(e.target.value)} />
-        </div>
-        {isOver && <div style={{ background:C.dangerLight, borderRadius:8, padding:"10px 12px", marginTop:8, fontSize:13, color:C.danger, fontWeight:600 }}>${(parseFloat(total)-budget).toFixed(2)} over — tap items to remove</div>}
-        {total && !isOver && <div style={{ background:C.primaryLight, borderRadius:8, padding:"10px 12px", marginTop:8, fontSize:13, color:C.primary, fontWeight:600 }}>Under budget by ${(budget-parseFloat(total)).toFixed(2)}</div>}
-      </div>
-
       {view === "meal" ? (
         <>
           {alwaysNeeded.length > 0 && (
@@ -3255,7 +3212,7 @@ function ManageTab({ db, persistDB, initialSub }) {
   // sub-tab (e.g. the header's Import action → Config) just by setting this
   // prop before switching tab — no lifted state needed.
   const [sub, setSub] = useState(initialSub || "meals");
-  const SUBS = [{id:"meals",label:"Meals"},{id:"items",label:"Items"},{id:"upload",label:"Upload"},{id:"config",label:"Config"},{id:"help",label:"Help"}];
+  const SUBS = [{id:"meals",label:"Meals"},{id:"items",label:"Items"},{id:"config",label:"Config"},{id:"help",label:"Help"}];
   return (
     <div>
       <div style={{ background:C.primary, padding:"0 16px", position:"sticky", top:52, zIndex:8 }}>
@@ -3265,7 +3222,6 @@ function ManageTab({ db, persistDB, initialSub }) {
       </div>
       {sub==="meals"  && <ManageMeals  db={db} persistDB={persistDB} />}
       {sub==="items"  && <ManageItems  db={db} persistDB={persistDB} />}
-      {sub==="upload" && <ManageUpload db={db} persistDB={persistDB} />}
       {sub==="config" && <ManageConfig db={db} persistDB={persistDB} />}
       {sub==="help"   && <ManageHelp />}
     </div>
@@ -3307,12 +3263,6 @@ const HELP_SECTIONS = [
     "Picking a meal for a day: mains first and sides at the bottom, except when you're replacing a side. Each row says when you last had it (or that it's already planned).",
     "Sort by **longest since** (meals you haven't had in a while rise to the top) or **most recent**.",
     "Search matches tags too: type \"pasta\", \"meaty\" or \"soup\" to find meals tagged that way.",
-  ]},
-  { t:"Uploading an order to Prep (\"already in cart\")", body:[
-    "This reads your placed Walmart order and marks any **matching known ingredients** as already-in-cart, so they drop off the shopping list you're about to make.",
-    "Matching is local: an order item matches one of your ingredients only if they share a **distinctive** word (not just a category like \"pasta\" or \"cheese\").",
-    "Order items with no matching ingredient — paper towels, medicine, snacks you don't track — are simply **ignored**. They're not added to your ingredient list.",
-    "The summary shows how many of your ingredients were marked in cart out of the total items on the order.",
   ]},
   { t:"Marking things you already have", body:[
     "**Inventory step**: checking an item marks it in-stock and drops it from the list. This is the reliable way.",
@@ -3816,7 +3766,7 @@ function MealEditor({ meal, allMeals, ingredients, onSave, onCancel, onDelete, o
         const key = name.toLowerCase();
         const hit = byName.get(key);
         if (hit) { ids.add(hit.id); continue; }
-        const ing = { id:"i"+Date.now()+Math.random().toString(36).slice(2,7), createdAt:new Date().toISOString(), name, storageLocation:"Unassigned", tier:"specialty", optional:false, defaultQuantity:"" };
+        const ing = { id:"i"+Date.now()+Math.random().toString(36).slice(2,7), createdAt:new Date().toISOString(), name, storageLocation:"Unassigned", tier:"specialty", defaultQuantity:"" };
         byName.set(key, ing); created.push(ing); ids.add(ing.id);
       }
     }
@@ -3836,7 +3786,7 @@ function MealEditor({ meal, allMeals, ingredients, onSave, onCancel, onDelete, o
   const doQuickAdd = () => {
     if (!quickName.trim()) return;
     const name   = toSentenceCase(quickName.trim());
-    const newIng = { id:"i"+Date.now(), createdAt:new Date().toISOString(), name, storageLocation:"Unassigned", tier:"specialty", optional:false, defaultQuantity:"" };
+    const newIng = { id:"i"+Date.now(), createdAt:new Date().toISOString(), name, storageLocation:"Unassigned", tier:"specialty", defaultQuantity:"" };
     onAddIngredient(newIng);
     set("ingredients", [...form.ingredients, newIng.id]);
     setQuickName(""); setQuickAdd(false); setIngSearch("");
@@ -3949,11 +3899,8 @@ function ManageMeals({ db, persistDB }) {
   const [search, setSearch]   = useState("");
   const [filter, setFilter]   = useState("all");
   const [editing, setEditing] = useState(null);
-  const [inlineEdit, setInlineEdit] = useState(null);
   const [confirmDelete, setConfirmDelete] = useState(null);
   const [newMealName, setNewMealName] = useState("");
-  const [viewMode, setViewMode] = useState("cards");   // cards | table
-  const setMealField = (id, field, value) => persistDB({ ...db, meals: db.meals.map(m => m.id===id ? { ...m, [field]:value } : m) });
 
   const filtered = db.meals.filter(m => (filter==="all"||m.type===filter) && mealMatches(m, search))
     .sort((a, b) => new Date(b.createdAt||SEED_TS) - new Date(a.createdAt||SEED_TS));
@@ -3984,11 +3931,6 @@ function ManageMeals({ db, persistDB }) {
       onConfirm: () => { persistDB({...db, meals:db.meals.filter(m=>m.id!==id).map(m => (m.pairsWith||[]).includes(id) ? { ...m, pairsWith: m.pairsWith.filter(x => x !== id) } : m)}); setEditing(null); setConfirmDelete(null); }
     });
   };
-  const saveMealName = (id, name) => {
-    const problem = mealNameProblem(db.meals, id, name);
-    if (problem) { setInlineEdit(p => p && ({ ...p, error:problem })); return; }
-    persistDB(renameMeal(db, id, name)); setInlineEdit(null);
-  };
   const addIngredient = newIng => persistDB({...db, ingredients:[...db.ingredients, newIng]});
   const addIngredients = list => persistDB({...db, ingredients:[...db.ingredients, ...list]});
   const setPantryIgnore = list => persistDB({...db, settings:{ ...db.settings, pantryIgnore:list }});
@@ -4013,8 +3955,6 @@ function ManageMeals({ db, persistDB }) {
       <SearchBar value={search} onChange={setSearch} placeholder="Search meals..." />
       <div style={{ display:"flex", gap:6, marginBottom:10, flexWrap:"wrap", alignItems:"center" }}>
         {["all",...MEAL_TYPES].map(t => <button key={t} style={{ ...S.btnSm, background:filter===t?C.primary:C.surface, color:filter===t?"#fff":C.muted, border:`1px solid ${C.border}` }} onClick={() => setFilter(t)}>{t}</button>)}
-        <span style={{ flex:1 }} />
-        <button style={{ ...S.btnSm, background:viewMode==="table"?C.accent:C.surface, color:viewMode==="table"?"#fff":C.muted, border:`1px solid ${C.border}` }} onClick={() => setViewMode(viewMode==="table"?"cards":"table")}>{viewMode==="table"?"▤ cards":"▦ table"}</button>
       </div>
       {filtered.length===0 && (
         search.trim()
@@ -4027,58 +3967,16 @@ function ManageMeals({ db, persistDB }) {
             </div>
           : <div style={{ textAlign:"center", padding:"40px 20px", color:C.faint }}>No meals. Tap + to add.</div>
       )}
-      {viewMode==="table" && filtered.length>0 && (
-        <div style={{ ...S.cardFlat, padding:0, overflow:"hidden" }}>
-          <div style={{ display:"flex", padding:"8px 10px", background:"#F3F4F6", fontSize:10, fontWeight:700, color:C.muted, textTransform:"uppercase", letterSpacing:"0.04em" }}>
-            <div style={{ flex:1 }}>Meal</div>
-            <div style={{ width:78, textAlign:"center" }}>Feel</div>
-            <div style={{ width:44, textAlign:"center" }}>Grill</div>
-            <div style={{ width:60, textAlign:"center" }}>Type</div>
-          </div>
-          {filtered.map((meal, i) => {
-            const aff = meal.tempAffinity || "neutral";
-            const affColor = aff==="comfort" ? {c:"#B45309",b:"#FEF3C7"} : aff==="light" ? {c:"#0369A1",b:"#E0F2FE"} : {c:C.muted,b:"#F3F4F6"};
-            const cycleAff = () => { const order=["comfort","neutral","light"]; setMealField(meal.id,"tempAffinity",order[(order.indexOf(aff)+1)%3]); };
-            const cycleType = () => { const i2=MEAL_TYPES.indexOf(meal.type||"dinner"); setMealField(meal.id,"type",MEAL_TYPES[(i2+1)%MEAL_TYPES.length]); };
-            return (
-              <div key={meal.id} style={{ display:"flex", alignItems:"center", padding:"7px 10px", borderTop:`1px solid ${C.border}`, fontSize:13 }}>
-                <div style={{ flex:1, fontWeight:600, paddingRight:6 }} onClick={() => setEditing(meal)}>{meal.name}</div>
-                <div style={{ width:78, textAlign:"center" }}>
-                  <button onClick={cycleAff} style={{ ...S.badge(affColor.c,affColor.b), border:"none", cursor:"pointer", width:70 }}>{aff}</button>
-                </div>
-                <div style={{ width:44, textAlign:"center" }}>
-                  <button onClick={() => setMealField(meal.id,"grillable",!meal.grillable)} style={{ border:"none", cursor:"pointer", borderRadius:6, padding:"3px 0", width:36, fontSize:12, fontWeight:700, background:meal.grillable?"#FFEDD5":"#F3F4F6", color:meal.grillable?"#9A3412":C.faint }}>{meal.grillable?"yes":"—"}</button>
-                </div>
-                <div style={{ width:60, textAlign:"center" }}>
-                  <button onClick={cycleType} style={{ ...S.badge(meal.type==="dinner"?C.muted:C.primary, meal.type==="dinner"?"#F3F4F6":C.primaryLight), border:"none", cursor:"pointer", width:56 }}>{meal.type||"dinner"}</button>
-                </div>
-              </div>
-            );
-          })}
-          <div style={{ padding:"8px 10px", fontSize:11, color:C.faint, borderTop:`1px solid ${C.border}` }}>Tap a tag to cycle it · tap the name to open full editor</div>
-        </div>
-      )}
-      {viewMode==="cards" && (
       <div style={S.cardFlat}>
         {filtered.map((meal, i) => {
           const ec       = EFFORT_COLORS[meal.effort] || {};
           const dislikes = (meal.preferences||[]).filter(p=>p.pref==="dislikes").map(p=>p.person);
           const likes    = (meal.preferences||[]).filter(p=>p.pref==="likes").map(p=>p.person);
-          const isInline = inlineEdit?.id===meal.id;
           return (
             <div key={meal.id} style={{ ...S.row, ...(i===filtered.length-1?S.rowLast:{}), cursor:"default" }}>
               <div style={{ flex:1 }}>
-                {isInline && inlineEdit.error && <div style={{ fontSize:12, color:C.danger, marginBottom:3 }}>{inlineEdit.error} Esc to cancel.</div>}
                 <div style={{ display:"flex", alignItems:"center", gap:4, marginBottom:3 }}>
-                  {isInline ? (
-                    <input autoFocus style={{ ...S.input, flex:1, fontSize:15, fontWeight:600, padding:"6px 10px" }} value={inlineEdit.value} onChange={e => setInlineEdit(p=>({...p,value:toSentenceCase(e.target.value),error:null}))} onBlur={() => saveMealName(meal.id,inlineEdit.value)} onKeyDown={e => { if(e.key==="Enter") saveMealName(meal.id,inlineEdit.value); if(e.key==="Escape") setInlineEdit(null); }} />
-                  ) : (
-                    <>
-                      <span style={{ fontWeight:600, fontSize:15 }}>{meal.name}</span>
-                      <button style={{ background:"none", border:"none", cursor:"pointer", fontSize:13, padding:"1px 3px", color:C.faint }} onClick={() => setInlineEdit({id:meal.id,value:meal.name})}>✏️</button>
-                      <span style={{ flex:1 }} />
-                    </>
-                  )}
+                  <span style={{ fontWeight:600, fontSize:15 }}>{meal.name}</span>
                 </div>
                 <div style={{ display:"flex", flexWrap:"wrap", gap:4 }}>
                   <span style={S.badge(ec.color,ec.bg)}>{meal.effort}</span>
@@ -4098,7 +3996,6 @@ function ManageMeals({ db, persistDB }) {
           );
         })}
       </div>
-      )}
       <button style={{ position:"fixed", bottom:80, right:16, background:C.primary, color:"#fff", border:"none", borderRadius:28, padding:"13px 20px", fontSize:15, fontWeight:700, cursor:"pointer", boxShadow:"0 4px 16px rgba(0,0,0,0.25)", zIndex:20 }} onClick={() => { setNewMealName(""); setEditing("new"); }}>+ Meal</button>
     </div>
   );
@@ -4107,7 +4004,7 @@ function ManageMeals({ db, persistDB }) {
 // ── Ingredient editor ──────────────────────────────────────────────────────────
 
 function IngredientEditor({ ingredient, onSave, onCancel, onDelete }) {
-  const [form, setForm] = useState(ingredient || { id:"i"+Date.now(), createdAt:new Date().toISOString(), name:"", storageLocation:"Pantry", tier:"specialty", optional:false, defaultQuantity:"" });
+  const [form, setForm] = useState(ingredient || { id:"i"+Date.now(), createdAt:new Date().toISOString(), name:"", storageLocation:"Pantry", tier:"specialty", defaultQuantity:"" });
   const set = (k, v) => setForm(p => ({...p,[k]:v}));
   return (
     <div>
@@ -4130,12 +4027,6 @@ function IngredientEditor({ ingredient, onSave, onCancel, onDelete }) {
             <div style={{ fontSize:12, color:C.faint, marginTop:4 }}>{(form.stapleType||DEFAULT_SUBTYPE(form.tier))==="weekly"?"Runs out weekly — check closely each shop":"Lasts a while — quick scan, usually fine"}</div>
           </FieldGroup>
         )}
-        <FieldGroup label="Optional?">
-          <div style={{ display:"flex", alignItems:"center", gap:10 }}>
-            <Toggle value={form.optional} onChange={v => set("optional",v)} />
-            <span style={{ fontSize:14, color:form.optional?C.muted:C.text }}>{form.optional?"Yes — cut first if over budget":"No"}</span>
-          </div>
-        </FieldGroup>
       </div>
       <button style={{ ...S.btn, ...S.btnP }} onClick={() => onSave(form)}>Save item</button>
       <button style={{ ...S.btn, ...S.btnS }} onClick={onCancel}>Cancel</button>
@@ -4181,11 +4072,6 @@ function TableRow({ ing, isAlt, onSave, selected, onToggle, onDelete }) {
         </select>
       </td>
       <td style={{ ...cell, textAlign:"center" }}>
-        <button style={{ background:"none", border:"none", cursor:"pointer", fontSize:15 }} onClick={() => onSave({...ing,optional:!ing.optional})} title={ing.optional?"Optional":"Required"}>
-          {ing.optional?"✓":"—"}
-        </button>
-      </td>
-      <td style={{ ...cell, textAlign:"center" }}>
         <div style={{ cursor:"pointer", color:C.danger, fontSize:16, fontWeight:700 }} onClick={onDelete}>×</div>
       </td>
     </tr>
@@ -4197,7 +4083,6 @@ function ManageItems({ db, persistDB }) {
   const [filterTier, setFilterTier] = useState("all");
   const [filterLoc, setFilterLoc]   = useState("all");
   const [editing, setEditing]     = useState(null);
-  const [inlineEdit, setInlineEdit] = useState(null);
   const [quickAdd, setQuickAdd]   = useState(false);
   const [quickName, setQuickName] = useState("");
   const [tableView, setTableView] = useState(false);
@@ -4230,11 +4115,10 @@ function ManageItems({ db, persistDB }) {
       }
     });
   };
-  const saveInlineIng = (id, field, value) => { persistDB({...db,ingredients:db.ingredients.map(i=>i.id===id?{...i,[field]:value}:i)}); setInlineEdit(null); };
   const doQuickAdd = () => {
     if (!quickName.trim()) return;
     const name = toSentenceCase(quickName.trim());
-    persistDB({...db, ingredients:[...db.ingredients, { id:"i"+Date.now(), createdAt:new Date().toISOString(), name, storageLocation:"Unassigned", tier:"specialty", optional:false, defaultQuantity:"" }]});
+    persistDB({...db, ingredients:[...db.ingredients, { id:"i"+Date.now(), createdAt:new Date().toISOString(), name, storageLocation:"Unassigned", tier:"specialty", defaultQuantity:"" }]});
     setQuickName(""); setQuickAdd(false); setSearch("");
   };
 
@@ -4345,7 +4229,6 @@ function ManageItems({ db, persistDB }) {
                 <th style={{ padding:"10px 12px", textAlign:"left", fontSize:11, fontWeight:700, textTransform:"uppercase", letterSpacing:"0.06em" }}>Qty</th>
                 <th style={{ padding:"10px 8px", textAlign:"left", fontSize:11, fontWeight:700, textTransform:"uppercase", letterSpacing:"0.06em" }}>Location</th>
                 <th style={{ padding:"10px 8px", textAlign:"left", fontSize:11, fontWeight:700, textTransform:"uppercase", letterSpacing:"0.06em" }}>Tier</th>
-                <th style={{ padding:"10px 8px", textAlign:"center", fontSize:11, fontWeight:700, textTransform:"uppercase", letterSpacing:"0.06em" }}>Opt?</th>
                 <th style={{ padding:"10px 8px", textAlign:"center", fontSize:11, fontWeight:700, textTransform:"uppercase", letterSpacing:"0.06em" }}>Del</th>
               </tr>
             </thead>
@@ -4360,26 +4243,17 @@ function ManageItems({ db, persistDB }) {
         <div style={S.cardFlat}>
           {filtered.map((ing, i) => {
             const tc       = TIER_COLORS[ing.tier] || {};
-            const isInline = inlineEdit?.id===ing.id && inlineEdit?.field==="name";
             return (
               <div key={ing.id} style={{ ...S.row, ...(i===filtered.length-1?S.rowLast:{}), flexDirection:"column", alignItems:"stretch", gap:5, cursor:"pointer" }} onClick={() => setEditing(ing)}>
                 <div style={{ display:"flex", alignItems:"center", gap:4 }}>
-                  {isInline ? (
-                    <input autoFocus style={{ ...S.input, flex:1, fontSize:14, fontWeight:600, padding:"6px 10px" }} value={inlineEdit.value} onChange={e => setInlineEdit(p=>({...p,value:toSentenceCase(e.target.value)}))} onBlur={() => saveInlineIng(ing.id,"name",inlineEdit.value)} onKeyDown={e => { if(e.key==="Enter") saveInlineIng(ing.id,"name",inlineEdit.value); if(e.key==="Escape") setInlineEdit(null); }} onClick={e => e.stopPropagation()} />
-                  ) : (
-                    <>
-                      <span style={{ fontWeight:600, fontSize:15 }}>{ing.name}</span>
-                      <button style={{ background:"none", border:"none", cursor:"pointer", fontSize:13, padding:"1px 3px", color:C.faint }} onClick={e => { e.stopPropagation(); setInlineEdit({id:ing.id,field:"name",value:ing.name}); }}>✏️</button>
-                      <span style={{ flex:1 }} />
-                    </>
-                  )}
+                  <span style={{ fontWeight:600, fontSize:15 }}>{ing.name}</span>
+                  <span style={{ flex:1 }} />
                   <div style={{ color:C.faint, fontSize:16 }}>›</div>
                 </div>
                 <div style={{ display:"flex", gap:4, flexWrap:"wrap" }}>
                   <span style={S.badge(tc.color,tc.bg)}>{(TIER_SUBTYPES[ing.tier]||[]).length ? `${ing.tier} · ${ing.stapleType||DEFAULT_SUBTYPE(ing.tier)}` : ing.tier}</span>
                   <span style={S.badge(C.muted,"#F3F4F6")}>{ing.storageLocation}</span>
                   {ing.defaultQuantity && <span style={S.badge(C.muted,"#F3F4F6")}>{ing.defaultQuantity}</span>}
-                  {ing.optional && <span style={S.badge(C.muted,"#F3F4F6")}>optional</span>}
                 </div>
               </div>
             );
@@ -4387,269 +4261,6 @@ function ManageItems({ db, persistDB }) {
         </div>
       )}
       <button style={{ position:"fixed", bottom:80, right:16, background:C.primary, color:"#fff", border:"none", borderRadius:28, padding:"13px 20px", fontSize:15, fontWeight:700, cursor:"pointer", boxShadow:"0 4px 16px rgba(0,0,0,0.25)", zIndex:20 }} onClick={() => setEditing("new")}>+ Item</button>
-    </div>
-  );
-}
-
-// ── Manage Upload ──────────────────────────────────────────────────────────────
-
-function ManageUpload({ db, persistDB }) {
-  const [status, setStatus]         = useState("idle");
-  const [phase, setPhase]           = useState("");
-  const [summary, setSummary]       = useState(null);
-  const [parsedItems, setParsedItems] = useState([]);
-  const [decisions, setDecisions]   = useState({});
-  const [reviewFilter, setReviewFilter] = useState("all");
-  const [editNames, setEditNames] = useState({}); // idx -> edited name
-  const fileRef = useRef();
-
-  const analyze = async file => {
-    setStatus("analyzing"); setPhase("extracting");
-    try {
-      const base64 = await new Promise((res,rej) => { const r=new FileReader(); r.onload=()=>res(r.result.split(",")[1]); r.onerror=rej; r.readAsDataURL(file); });
-      const isPDF  = file.type==="application/pdf" || file.name.toLowerCase().endsWith(".pdf");
-      const block  = isPDF ? {type:"document",source:{type:"base64",media_type:"application/pdf",data:base64}} : {type:"image",source:{type:"base64",media_type:file.type,data:base64}};
-      const p1 = `This is a Walmart grocery order. Extract every product name and quantity. Return ONLY a JSON array: [{"name":"Tyson Chicken Strips","quantity":"2"}]. No markdown.`;
-
-      const d1 = await (await fetch("https://api.anthropic.com/v1/messages",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({model:"claude-sonnet-4-6",max_tokens:1000,messages:[{role:"user",content:[block,{type:"text",text:p1}]}]})})).json();
-      if (d1.error) throw new Error("API: " + (d1.error.message || "request rejected"));
-      const t1 = d1.content.filter(b=>b.type==="text").map(b=>b.text).join("");
-      const s1 = t1.indexOf("["), e1 = t1.lastIndexOf("]");
-      if (s1 === -1) throw new Error("No items found in file — try a clearer image or PDF");
-      let items;
-      try { items = JSON.parse(t1.substring(s1, e1+1)); } catch(pe) { throw new Error("Could not parse item list — response may have been cut off. Try again."); }
-      if (!items.length) throw new Error("No items found in file");
-
-      setPhase("matching");
-      const ingList  = db.ingredients.map(i=>`${i.id}|||${i.name}`).join("\n");
-      const itemList = items.map((it,i)=>`${i}|||${it.name}`).join("\n");
-      const p2 = `Match these Walmart items to grocery ingredients by meaning. Only match if clearly the same product. For unmatched items, suggest a short plain name (2-4 words, no brand, no size).\n\nWALMART:\n${itemList}\n\nINGREDIENTS:\n${ingList}\n\nReturn ONLY JSON: [{"idx":0,"matchedId":"i001","cleanName":null},{"idx":1,"matchedId":null,"cleanName":"Toilet paper"}]. No markdown.`;
-
-      const d2 = await (await fetch("https://api.anthropic.com/v1/messages",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({model:"claude-sonnet-4-6",max_tokens:1000,messages:[{role:"user",content:p2}]})})).json();
-      if (d2.error) throw new Error("API: " + (d2.error.message || "request rejected"));
-      const t2      = d2.content.filter(b=>b.type==="text").map(b=>b.text).join("");
-      const matches = parseJSONArray(t2);
-      const matchMap = {};
-      matches.forEach(m => { matchMap[m.idx]=m; });
-
-      const withMatch = items.map((item,idx) => {
-        const mid      = matchMap[idx]?.matchedId||null;
-        const cleanName = matchMap[idx]?.cleanName||null;
-        const ming     = mid ? db.ingredients.find(i=>i.id===mid) : null;
-        return {...item, matchedId:mid, matchedName:ming?.name||null, cleanName};
-      });
-      setParsedItems(withMatch);
-      const init = {}, names = {};
-      withMatch.forEach((it,i) => { init[i]=it.matchedId?"keep":"add"; if(!it.matchedId) names[i]=it.cleanName||it.name; });
-      setDecisions(init);
-      setEditNames(names);
-
-      // Reconcile receipt against this week's saved shopping list (ground truth
-      // for what we ordered vs. what we intended). Always the plan actually
-      // being shopped, never "next".
-      const plan       = getCurrentPlan(db);
-      const planItems  = (plan?.items || []).filter(li => li.status === "ordering");
-      const receiptIds = new Set(withMatch.filter(i => i.matchedId).map(i => i.matchedId));
-      const missed     = planItems
-        .filter(li => !receiptIds.has(li.ingredientId))
-        .map(li => { const ing = db.ingredients.find(x => x.id === li.ingredientId); return { id:li.ingredientId, name:ing?.name || "(unknown item)", quantity:li.quantity || "" }; });
-      // Receipt lines with quantity > 1 — flag in case a duplicate slipped in.
-      const multiQty   = withMatch
-        .map((it, idx) => ({ ...it, idx, qn: parseInt(String(it.quantity).replace(/[^0-9]/g, ""), 10) }))
-        .filter(it => it.qn > 1);
-
-      setSummary({
-        total:withMatch.length,
-        matched:withMatch.filter(i=>i.matchedId).length,
-        newCount:withMatch.filter(i=>!i.matchedId).length,
-        missed, multiQty,
-        hadPlan: planItems.length > 0,
-      });
-      setPhase(""); setStatus("summary");
-    } catch(e) {
-      console.error('[Upload]', e);
-      setSummary({ error: e.message || 'Unknown error' }); setPhase(""); setStatus("error");
-    }
-  };
-
-  const apply = () => {
-    const ings = [...db.ingredients];
-    let added=0, kept=0;
-    parsedItems.forEach((item,idx) => {
-      const d = decisions[idx];
-      if (d==="skip") return;
-      if (d==="keep") { kept++; return; }   // already in DB — nothing to change
-      if (d==="add") {
-        const rawName = (editNames[idx] || item.cleanName || item.name || "").trim();
-        const name = rawName.charAt(0).toUpperCase() + rawName.slice(1);
-        ings.push({ id:"i"+Date.now()+Math.random().toString(36).slice(2,5), createdAt:new Date().toISOString(), name, storageLocation:"Unassigned", tier:"specialty", optional:false, defaultQuantity:item.quantity||"" });
-        added++;
-      }
-    });
-    persistDB({...db,ingredients:ings});
-    setSummary(prev=>({...prev,applied:{added,kept}}));
-    setStatus("done");
-  };
-
-  const newCount    = parsedItems.filter((_,i)=>decisions[i]==="add").length;
-  const keepCount   = parsedItems.filter((_,i)=>decisions[i]==="keep").length;
-  const sortedIdx   = parsedItems.map((_,i)=>i).sort((a,b)=>({keep:0,add:1,skip:2}[decisions[a]]??1)-({keep:0,add:1,skip:2}[decisions[b]]??1));
-  const filteredIdx = sortedIdx.filter(idx => {
-    if (reviewFilter==="all")     return true;
-    if (reviewFilter==="matches") return !!parsedItems[idx].matchedId;
-    if (reviewFilter==="new")     return !parsedItems[idx].matchedId && decisions[idx]!=="skip";
-    if (reviewFilter==="skipped") return decisions[idx]==="skip";
-    return true;
-  });
-
-  if (status==="analyzing") return (
-    <div style={S.body}>
-      <div style={{ ...S.card, textAlign:"center", padding:"40px 20px" }}>
-        <div style={{ fontSize:36, marginBottom:12 }}>{phase==="extracting"?"📄":"🔗"}</div>
-        <div style={{ fontWeight:700, fontSize:16, marginBottom:6 }}>{phase==="extracting"?"Reading your order...":"Matching to your list..."}</div>
-        <div style={{ fontSize:13, color:C.muted }}>{phase==="extracting"?"Extracting item names":"Finding what you already track"}</div>
-        <div style={{ display:"flex", justifyContent:"center", gap:6, marginTop:16 }}>
-          {["extracting","matching"].map(p => <div key={p} style={{ width:8, height:8, borderRadius:"50%", background:phase===p?C.primary:C.border }} />)}
-        </div>
-      </div>
-    </div>
-  );
-
-  if (status==="error") return (
-    <div style={S.body}>
-      <div style={{ ...S.card, textAlign:"center", padding:"32px 20px" }}>
-        <div style={{ fontSize:36, marginBottom:12 }}>⚠️</div>
-        <div style={{ fontWeight:700, fontSize:16, color:C.danger, marginBottom:8 }}>Upload failed</div>
-        <div style={{ fontSize:13, color:C.muted, marginBottom:16 }}>{summary?.error}</div>
-        <button style={{ ...S.btn, ...S.btnS, marginBottom:0 }} onClick={() => setStatus("idle")}>Try again</button>
-      </div>
-    </div>
-  );
-
-  if (status==="summary") return (
-    <div style={S.body}>
-      <div style={{ ...S.card, textAlign:"center", padding:"32px 20px" }}>
-        <div style={{ fontSize:40, marginBottom:12 }}>📋</div>
-        <div style={{ fontWeight:700, fontSize:20, marginBottom:16 }}>Upload complete</div>
-        <div style={{ display:"flex", justifyContent:"center", gap:24, marginBottom:24 }}>
-          <div style={{ textAlign:"center" }}><div style={{ fontSize:36, fontWeight:800 }}>{summary.total}</div><div style={{ fontSize:11, color:C.faint, fontWeight:700, textTransform:"uppercase" }}>Found</div></div>
-          <div style={{ width:1, background:C.border }} />
-          <div style={{ textAlign:"center" }}><div style={{ fontSize:36, fontWeight:800, color:C.primary }}>{summary.matched}</div><div style={{ fontSize:11, color:C.faint, fontWeight:700, textTransform:"uppercase" }}>Matched</div></div>
-          <div style={{ width:1, background:C.border }} />
-          <div style={{ textAlign:"center" }}><div style={{ fontSize:36, fontWeight:800, color:C.verified }}>{summary.newCount}</div><div style={{ fontSize:11, color:C.faint, fontWeight:700, textTransform:"uppercase" }}>New</div></div>
-        </div>
-        <button style={{ ...S.btn, ...S.btnP, marginBottom:8 }} onClick={() => setStatus("review")}>Review and approve</button>
-        <button style={{ ...S.btn, ...S.btnS, marginBottom:0 }} onClick={() => setStatus("idle")}>Upload another</button>
-      </div>
-
-      {summary.hadPlan && (
-        <div style={{ ...S.card, border:`1px solid ${summary.missed.length ? C.danger : C.border}` }}>
-          <div style={S.sectionLabel}>Checked against this week's list</div>
-          {summary.missed.length === 0 ? (
-            <div style={{ fontSize:14, color:C.verified, fontWeight:600 }}>✓ Every item on your list is on the receipt — nothing missed.</div>
-          ) : (
-            <>
-              <div style={{ fontSize:14, color:C.danger, fontWeight:700, marginBottom:6 }}>{summary.missed.length} item{summary.missed.length>1?"s":""} on your list but NOT on the receipt</div>
-              <div style={{ fontSize:12, color:C.muted, marginBottom:8 }}>These may have been forgotten in the order — double-check before you finish. (Based on name matching; an item the scan mis-read may show here even if you did order it.)</div>
-              {summary.missed.map(m => (
-                <div key={m.id} style={{ display:"flex", justifyContent:"space-between", padding:"7px 0", borderBottom:`1px solid ${C.border}` }}>
-                  <span style={{ fontSize:14 }}>{m.name}</span>
-                  {m.quantity && <span style={{ fontSize:12, color:C.faint }}>{m.quantity}</span>}
-                </div>
-              ))}
-            </>
-          )}
-        </div>
-      )}
-
-      {summary.multiQty && summary.multiQty.length > 0 && (
-        <div style={{ ...S.card, border:`1px solid ${C.warning}`, background:C.warningLight }}>
-          <div style={{ fontSize:14, color:C.warning, fontWeight:700, marginBottom:6 }}>{summary.multiQty.length} item{summary.multiQty.length>1?"s":""} ordered in quantity &gt; 1</div>
-          <div style={{ fontSize:12, color:C.muted, marginBottom:8 }}>Make sure none of these are accidental duplicates.</div>
-          {summary.multiQty.map(it => (
-            <div key={it.idx} style={{ display:"flex", justifyContent:"space-between", padding:"7px 0", borderBottom:`1px solid ${C.border}` }}>
-              <span style={{ fontSize:14 }}>{it.matchedName || it.name}</span>
-              <span style={{ fontSize:13, color:C.warning, fontWeight:700 }}>×{it.qn}</span>
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-
-  if (status==="review") return (
-    <div style={S.body}>
-      <div style={S.card}>
-        <div style={S.sectionLabel}>Review imported items</div>
-        <div style={{ fontSize:14, color:C.muted, marginBottom:10 }}>{parsedItems.length} items · <span style={{ color:C.primary,fontWeight:700 }}>{keepCount} already tracked</span> · <span style={{ color:C.verified,fontWeight:700 }}>{newCount} new</span></div>
-        <div style={{ display:"flex", gap:6, flexWrap:"wrap" }}>
-          {[["all","All"],["matches","Matches"],["new","New"],["skipped","Skipped"]].map(([v,l]) => <button key={v} style={{ ...S.btnSm, background:reviewFilter===v?C.primary:"#F3F4F6", color:reviewFilter===v?"#fff":C.muted }} onClick={() => setReviewFilter(v)}>{l}</button>)}
-        </div>
-      </div>
-      <div style={{ display:"flex", gap:8, marginBottom:8 }}>
-        <button style={{ ...S.btnSm, flex:1, background:C.primaryLight, color:C.primary }} onClick={() => { const d={...decisions}; parsedItems.forEach((_,i)=>{ if(!parsedItems[i].matchedId) d[i]="add"; }); setDecisions(d); }}>Keep all new</button>
-        <button style={{ ...S.btnSm, flex:1, background:"#F3F4F6", color:C.muted }} onClick={() => { const d={...decisions}; parsedItems.forEach((_,i)=>{ if(!parsedItems[i].matchedId) d[i]="skip"; }); setDecisions(d); }}>Skip all new</button>
-      </div>
-      <div style={S.cardFlat}>
-        {filteredIdx.map((idx,i) => {
-          const item=parsedItems[idx], d=decisions[idx];
-          return (
-            <div key={idx} style={{ ...S.row, ...(i===filteredIdx.length-1?S.rowLast:{}), flexDirection:"column", alignItems:"flex-start", gap:6, opacity:d==="skip"?0.45:1 }}>
-              <div style={{ width:"100%", display:"flex", justifyContent:"space-between", alignItems:"flex-start" }}>
-                <div style={{ flex:1 }}>
-                  <div style={{ fontWeight:600, fontSize:14 }}>{item.name}</div>
-                  {item.matchedName && <div style={{ fontSize:12, color:C.primary, marginTop:1 }}>matches: {item.matchedName}</div>}
-                  {!item.matchedId && d==="add" && (
-                    <div style={{ display:"flex", alignItems:"center", gap:6, marginTop:4 }}>
-                      <span style={{ fontSize:11, color:C.verified, flexShrink:0 }}>Save as:</span>
-                      <input
-                        style={{ fontSize:12, padding:"2px 8px", borderRadius:6, border:`1.5px solid ${C.verified}`, outline:"none", flex:1, color:C.text, background:"#F0FAF4" }}
-                        value={editNames[idx]||""}
-                        onChange={e => setEditNames(prev => ({...prev,[idx]:e.target.value}))}
-                      />
-                    </div>
-                  )}
-                  {item.quantity   && <div style={{ fontSize:12, color:C.faint }}>Qty: {item.quantity}</div>}
-                </div>
-              </div>
-              <div style={{ display:"flex", gap:6, flexWrap:"wrap" }}>
-                {item.matchedId && <button style={{ ...S.btnSm, background:d==="keep"?C.primaryLight:"#F3F4F6", color:d==="keep"?C.primary:C.muted, fontWeight:d==="keep"?700:500 }} onClick={() => setDecisions(p=>({...p,[idx]:"keep"}))}>Keep as is</button>}
-                <button style={{ ...S.btnSm, background:d==="add"?"#E8F5EE":"#F3F4F6", color:d==="add"?C.verified:C.muted, fontWeight:d==="add"?700:500 }} onClick={() => setDecisions(p=>({...p,[idx]:"add"}))}>Add as new</button>
-                {!item.matchedId && <button style={{ ...S.btnSm, background:d==="skip"?C.dangerLight:"#F3F4F6", color:d==="skip"?C.danger:C.muted, fontWeight:d==="skip"?700:500 }} onClick={() => setDecisions(p=>({...p,[idx]:"skip"}))}>Skip</button>}
-              </div>
-            </div>
-          );
-        })}
-      </div>
-      <button style={{ ...S.btn, ...S.btnP }} onClick={apply}>{newCount>0 ? `Add ${newCount} new item${newCount>1?"s":""}` : "Done reviewing"}</button>
-      <button style={{ ...S.btn, ...S.btnS }} onClick={() => setStatus("idle")}>Upload another</button>
-    </div>
-  );
-
-  if (status==="done") return (
-    <div style={S.body}>
-      <div style={{ ...S.card, textAlign:"center", padding:"40px 20px" }}>
-        <div style={{ fontSize:36, marginBottom:12 }}>✅</div>
-        <div style={{ fontWeight:700, fontSize:16, marginBottom:4 }}>Item list updated</div>
-        {summary?.applied && <div style={{ fontSize:13, color:C.muted, marginBottom:8 }}>{summary.applied.added} added · {summary.applied.kept} already tracked</div>}
-        <button style={{ ...S.btn, ...S.btnS, marginTop:16, marginBottom:0 }} onClick={() => setStatus("idle")}>Upload another</button>
-      </div>
-    </div>
-  );
-
-  return (
-    <div style={S.body}>
-      <div style={S.card}>
-        <div style={S.sectionLabel}>Past order import</div>
-        <div style={S.h2}>Upload a Walmart order</div>
-        <div style={S.sub}>Upload a screenshot or PDF of a past Walmart order. AI reads item names and adds anything new to your ingredient list.</div>
-        <input ref={fileRef} type="file" accept="image/*,.pdf" style={{ display:"none" }} onChange={e => e.target.files[0] && analyze(e.target.files[0])} />
-        <button style={{ ...S.btn, ...S.btnP, marginBottom:0 }} onClick={() => fileRef.current.click()}>Choose screenshot or PDF</button>
-      </div>
-      <div style={S.card}>
-        <div style={{ fontWeight:700, fontSize:15 }}>Item list</div>
-        <div style={{ fontSize:13, color:C.muted, marginTop:2 }}>{db.ingredients.length} items in database</div>
-      </div>
     </div>
   );
 }
@@ -4777,13 +4388,6 @@ function ManageConfig({ db, persistDB }) {
             {["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"].map(d => <option key={d} value={d}>{d}</option>)}
           </select>
           <div style={{ fontSize:12, color:C.faint, marginTop:4 }}>Seeds the start date for a brand-new plan. Each plan's own date (editable anytime) is what actually orders its days — not this setting.</div>
-        </FieldGroup>
-        <FieldGroup label="Pickup time">
-          <input style={S.input} value={db.settings.pickupTime} onChange={e => upd("pickupTime",e.target.value)} />
-        </FieldGroup>
-        <FieldGroup label={`Budget limit: $${db.settings.budgetLimit}`}>
-          <input type="range" min={100} max={500} step={10} value={db.settings.budgetLimit} onChange={e => upd("budgetLimit",Number(e.target.value))} style={{ width:"100%" }} />
-          <div style={{ display:"flex", justifyContent:"space-between", fontSize:12, color:C.faint }}><span>$100</span><span style={{ fontWeight:700, color:C.primary }}>${db.settings.budgetLimit}</span><span>$500</span></div>
         </FieldGroup>
       </div>
 
@@ -5474,3 +5078,7 @@ export default function App() {
     </ErrorBoundary>
   );
 }
+
+// Exported for the golden test only (untracked engine/golden/): the export file and
+// the published block the family Shortcut reads must not change during polish.
+export { buildExportDB, buildPublished, stripExportNodes, extractJSON };
