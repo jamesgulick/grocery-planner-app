@@ -166,6 +166,7 @@ src/components/              ← shared bits: Toggle, SearchBar, FieldGroup, Pil
 src/plan/                    ← PlanTab (+ Welcome), PlanMeals, PlanInventory, PlanConfirm
 src/manage/                  ← ManageTab, ManageMeals, MealEditor (+ engine facets, recipe paste), ManageItems, ManageConfig, ManageHelp
 src/tonight/TonightTab.jsx   ← Tonight
+src/ui/tokens.css            ← design tokens (polish Phase 1.6): the only src/ui file with raw colours/sizes; primitives join src/ui as Phase 2 needs them
 src/engine/composeWeek.js    ← the engine: composeWeek + evaluateWeek (validated offline; see below)
 src/engine/assembleInputs.js ← app state → engine inputs, plates, week check, hardened call
 src/ingredientMatch.js       ← the one text→ingredient matcher (recipe paste); not engine

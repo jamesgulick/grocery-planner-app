@@ -22,7 +22,7 @@ const EFFORT_COLORS = {
 };
 
 const S = {
-  app:         { fontFamily:"'Inter',system-ui,sans-serif", background:C.bg, minHeight:"100vh", maxWidth:"100%", margin:"0 auto", color:C.text, paddingBottom:80 },
+  app:         { fontFamily:"var(--font)", background:C.bg, minHeight:"100vh", maxWidth:"100%", margin:"0 auto", color:C.text, paddingBottom:80 },
   header:      { background:C.primary, color:"#E8F5EE", padding:"12px 16px 0", position:"sticky", top:0, zIndex:10 },
   headerTop:   { display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:10 },
   headerTitle: { fontSize:16, fontWeight:700 },

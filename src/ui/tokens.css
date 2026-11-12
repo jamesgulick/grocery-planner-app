@@ -1,0 +1,47 @@
+/* Design tokens (polish Phase 1.6). The ONLY file in the app's new UI layer allowed to
+   hold a raw colour or size: everything in src/ui reads these with var(--…), and
+   `npm run check` fails on a hex value in any other src/ui stylesheet.
+   Values: the polish SPEC §4, as decided 11/11 (palette "Forest & white", advisor
+   canvas Round 4 option 1; lime is retired). The legacy C/S styles stay until each
+   screen is rebuilt from primitives. */
+
+:root {
+  /* Colour */
+  --bg: #F4F4F1;              /* page background */
+  --surface: #FFFFFF;         /* grouped lists, sheets */
+  --divider: #E8E8E4;         /* row separators only (not control outlines: 1.2:1) */
+  --text: #1C1C1E;            /* primary text */
+  --text-muted: #6B6B70;      /* metadata, labels, placeholder */
+  --action: #163A2B;          /* things to tap: primary fill, selected, toggle on, focus */
+  --on-action: #FFFFFF;       /* text and icons on --action only (12.5:1) */
+  --problem: #A8520A;         /* what's wrong only: amber dot + amber text, no tint */
+  --control-border: #86868B;  /* input outlines, unchecked check, secondary pill (3.6:1) */
+
+  /* Type: one font, the system's */
+  --font: -apple-system, system-ui, sans-serif;
+  --screen-title-size: 24px; --screen-title-line: 30px; --screen-title-weight: 700;
+  --heading-size: 20px;      --heading-line: 25px;      --heading-weight: 600;
+  --title-size: 17px;        --title-line: 22px;        --title-weight: 600;
+  --body-size: 15px;         --body-line: 20px;         --body-weight: 400;
+  --meta-size: 14px;         --meta-line: 18px;         --meta-weight: 400;
+  --label-size: 13px;        --label-line: 16px;        --label-weight: 600;
+
+  /* Space, radius, size */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+  --gutter: var(--space-4);
+  --radius-group: 14px;
+  --radius-pill: 20px;
+  --radius-control: 10px;
+  --touch: 44px;              /* minimum tap target, on the control itself */
+  --pill-height: 36px;        /* visible inline pill; its tap area is still --touch */
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+html, body {
+  font-family: var(--font);
+}

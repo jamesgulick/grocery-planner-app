@@ -17,6 +17,17 @@ const run = (label, cmd, args) => {
 };
 
 run("lint", "npx", ["eslint", "src"]);
+
+// Tokens only (polish Phase 1.6): tokens.css is the one stylesheet in src/ui that may
+// hold a raw colour; every other src/ui stylesheet reads var(--…).
+console.log("\n▶ ui stylesheets use tokens");
+if (existsSync("src/ui")) {
+  const bad = readdirSync("src/ui").filter(f => f.endsWith(".css") && f !== "tokens.css")
+    .flatMap(f => readFileSync(`src/ui/${f}`, "utf8").split(/\r?\n/)
+      .map((l, i) => /#[0-9a-fA-F]{3,8}\b/.test(l.replace(/\/\*.*?\*\//g, "")) ? `  src/ui/${f}:${i + 1}: ${l.trim()}` : null).filter(Boolean));
+  if (bad.length) { console.error("✖ raw colour outside tokens.css:\n" + bad.join("\n")); process.exit(1); }
+  console.log("  ✓ only tokens.css holds raw colours");
+}
 run("build", "npx", ["vite", "build"]);
 
 if (!existsSync("engine")) {
