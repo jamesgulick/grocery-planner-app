@@ -206,7 +206,7 @@ function PlanConfirm({ mode = "confirm", onUpdateItem, keptIds = [], checkedIds,
     return (
       <>
       <div style={{ display:"flex", alignItems:"center", gap:10, padding:"11px 0", borderBottom:`1px solid ${C.border}`, opacity:isRemoved?0.4:1 }}>
-        <div style={{ ...S.checkBoxisRemoved, background:isRemoved?"#CCC":"#fff", border:isRemoved?"none":`2px solid ${C.border}`, color:"#888" }}
+        <div style={{ ...S.checkBox(isRemoved), background:isRemoved?"#CCC":"#fff", border:isRemoved?"none":`2px solid ${C.border}`, color:"#888" }}
           onClick={() => { setRemovedIds(prev => prev.includes(ing.id) ? prev.filter(x => x !== ing.id) : [...prev, ing.id]); }}>
           {isRemoved && "✓"}
         </div>
@@ -336,7 +336,7 @@ function PlanConfirm({ mode = "confirm", onUpdateItem, keptIds = [], checkedIds,
             return (
               <React.Fragment key={i.id}>
               <div style={{ display:"flex", alignItems:"center", gap:10, padding:"11px 0", borderBottom:`1px solid ${C.border}`, opacity:isRemoved?0.4:1 }}>
-                <div style={{ ...S.checkBoxisRemoved, background:isRemoved?"#CCC":"#fff", border:isRemoved?"none":`2px solid ${C.border}`, color:"#888" }}
+                <div style={{ ...S.checkBox(isRemoved), background:isRemoved?"#CCC":"#fff", border:isRemoved?"none":`2px solid ${C.border}`, color:"#888" }}
                   onClick={() => { setRemovedIds(prev => prev.includes(i.id) ? prev.filter(x => x !== i.id) : [...prev, i.id]); }}>
                   {isRemoved && "✓"}
                 </div>
