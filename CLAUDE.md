@@ -101,10 +101,12 @@ decision for James to route.
 
 ## What this is
 
-A single-file React grocery-planning web app for coordinating weekly grocery pickup
-orders. It began life inside a Claude artifact sandbox and was migrated to a
-standalone Vite + React project hosted on GitHub Pages. Almost all of the app lives
-in one file: **`src/grocery-app.jsx`**. `src/main.jsx` only mounts it.
+A React grocery-planning web app for coordinating weekly grocery pickup orders. It
+began life inside a Claude artifact sandbox as one file, was migrated to a standalone
+Vite + React project hosted on GitHub Pages, and in polish Phase 1.5 (2026-11-11) was
+split mechanically into modules (no behavior change; see the file map).
+**`src/grocery-app.jsx`** is still the app's root (App, header, tabs, data status);
+`src/main.jsx` only mounts it.
 
 ## Core design philosophy
 
@@ -151,7 +153,19 @@ in one file: **`src/grocery-app.jsx`**. `src/main.jsx` only mounts it.
 ### File map
 
 ```
-src/grocery-app.jsx          ← the app: state, UI, all components, styles
+src/grocery-app.jsx          ← app root: App, header, tabs, data-status ladder, load/recovery
+src/app/globals.js           ← constants (days, tiers, locations, PLAN_STEPS, storage keys/preview slot), date helpers
+src/app/exportData.js        ← export file, backup download, preview-import guard, the family `published` block
+src/app/seed.js              ← seed meals/items, DEFAULT_SETTINGS, DEFAULT_DB
+src/app/plans.js             ← active-plan accessors, plan-model migration, auto-retire
+src/app/storage.js           ← localStorage load/save, recovery snapshot, preview seeding
+src/app/weather.js           ← Open-Meteo forecast (FORECAST_LAT / FORECAST_LON)
+src/app/pills.js, styles.js  ← day pills; the C colours and S styles
+src/app/clipboard.js, fridgeReport.js ← copy helper; the printable fridge report
+src/components/              ← shared bits: Toggle, SearchBar, FieldGroup, PillSelect, WeekSelector, AutoGrowTextarea, RefreshReminder, ItemEditPanel
+src/plan/                    ← PlanTab (+ Welcome), PlanMeals, PlanInventory, PlanConfirm
+src/manage/                  ← ManageTab, ManageMeals, MealEditor (+ engine facets, recipe paste), ManageItems, ManageConfig, ManageHelp
+src/tonight/TonightTab.jsx   ← Tonight
 src/engine/composeWeek.js    ← the engine: composeWeek + evaluateWeek (validated offline; see below)
 src/engine/assembleInputs.js ← app state → engine inputs, plates, week check, hardened call
 src/ingredientMatch.js       ← the one text→ingredient matcher (recipe paste); not engine
@@ -279,21 +293,23 @@ Settings added for the engine: `grillOpen` (grill season, Manage → Config → 
   no forecast, which every consumer treats as neutral, as it does the `{}` returned on
   any failure. Cached 6h in localStorage, one entry per date range. The day-card
   header, the "grill ok" tag and the engine inputs all read it by date. Configure
-  location via `FORECAST_LAT` / `FORECAST_LON` near the top of the file.
+  location via `FORECAST_LAT` / `FORECAST_LON` at the top of `src/app/weather.js`.
 
 ## Conventions & gotchas
 
-- **Whole-file edits, validated before shipping.** Historically this app is
-  delivered as a complete file and checked with a bundler before commit. With Vite,
-  run `npm run build` (or at least `npm run dev` and load the page) to confirm it
-  compiles before committing.
+- **Validated before shipping: `npm run check`.** It runs ESLint (undefined names,
+  JSX components not in scope or not imported, a same-scope name used before it is declared) and
+  the production build, plus — when the untracked `engine/` workspace is on disk —
+  the engine hash, the harness and the golden export test. Then load the affected
+  screen. Since the module split, a name used in a module must be imported there;
+  lint catches a missing import, the build does not.
 - **Cross-component scope errors don't show at build time.** A variable defined in
   one component and referenced in a sibling that only receives it via props will
   pass the bundler but throw `ReferenceError` at runtime. This exact bug happened
   with `initMaxStep`. When moving code between components, recompute from available
   props rather than assuming a name is in scope.
 - **Temporal-dead-zone (use-before-declaration) errors are a RECURRING bug here and
-  the bundler does NOT catch them.** This is a large single-file component with many
+  the bundler does NOT catch them.** These are large components with many
   hooks; it's easy to reference a `const`/`let` (e.g. a `useState` pair, a computed
   value) *above* the line that declares it. `const`/`let` do not hoist, so this
   throws `Cannot access 'X' before initialization` at runtime — and in minified prod
@@ -416,7 +432,7 @@ garbage-collect the unreferenced objects. Far cheaper never to commit it.
   or planned meals change. Sent texts and the published family list keep the old name.
 - **Change what the engine is given** (a new input from app state): edit
   `assembleInputs.js`; the contract says what each input may contain.
-- **Change the Meals-step display or actions:** `PlanMeals` in `grocery-app.jsx`; keep
+- **Change the Meals-step display or actions:** `PlanMeals` in `src/plan/PlanMeals.jsx`; keep
   `mealPlan` names as the day's content and let `reconcilePlates` maintain `plates`.
 - **Change the step flow:** edit `PLAN_STEPS` AND the draft-migration mapping + version
   stamp together.
