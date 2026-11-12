@@ -5,7 +5,7 @@ import { TIME_LEVELS, seedTimeLevel, presentOn, abbrOfISO, mealRecency, extraDay
 // The validated week-composition engine (REFACTOR S1). Shipped unchanged; called only
 // through runComposeWeek, which assembles and guards its inputs.
 import { composeWeek, evaluateWeek, CONSTANTS as ENGINE } from "./engine/composeWeek.js";
-import { analyseRecipe, analyseLine, matchIngredient as matchIngredientText, cleanName, ignoreTermFor, DEFAULT_PANTRY_IGNORE } from "./ingredientMatch.js";
+import { analyseRecipe, analyseLine, cleanName, ignoreTermFor, DEFAULT_PANTRY_IGNORE } from "./ingredientMatch.js";
 import { renameMeal, mealNameProblem } from "./mealRename.js";
 
 // ── Globals ────────────────────────────────────────────────────────────────────
@@ -567,7 +567,8 @@ const DEFAULT_DB = { settings:DEFAULT_SETTINGS, meals:SEED_MEALS, ingredients:SE
 // plan shape (db.plans.current / db.plans.next — see SPEC-two-plan-model.md):
 // { step, maxStep, timeLevels, presence, mealPlan, checkedIds, dayNotes, dayPills,
 //   notesTouched, stapleFlags, quantities, weather, startedAt, _stepsVer,
-//   meals, items, cartItems, cartIngredientIds, dismissedShared, notes,
+//   meals, items, dismissedShared, notes,   (older plans may also carry cartItems /
+//   cartIngredientIds, written by the cut Prep tab; nothing reads them)
 //   weekStartDate }
 // timeLevels: { dayAbbr: "none"|"some"|"much" } (B1). presence: per-night
 // overrides only, { dayAbbr: { name: bool } } (B2) — see presentOn.
@@ -585,7 +586,7 @@ const DEFAULT_DB = { settings:DEFAULT_SETTINGS, meals:SEED_MEALS, ingredients:SE
 // follows that choice.
 //
 // SPEC-active-plan-app-wide.md (this reverses an earlier rule — read it if
-// you're wondering why): every week-scoped surface (Plan, Prep, the Tonight
+// you're wondering why): every week-scoped surface (Plan, the Tonight
 // tab's "MEAL SCHEDULE" card, the fridge report) now follows getActivePlan,
 // not just the Plan tab. The two-plan model achieves safety not by PINNING
 // execution surfaces to "current" but by LABELING — a persistent <WeekSelector>
@@ -606,9 +607,7 @@ const getActivePlan = db => {
 };
 const getCurrentPlan = db => db.plans?.current || null;
 
-// Overwrite the plan at the active slot. Used by both the Plan-tab flow and
-// Prep (marking what's in-cart is a write against whichever week the owner
-// has selected — see SPEC-active-plan-app-wide.md bug #1). Reconcile and the
+// Overwrite the plan at the active slot (the Plan-tab flow). Reconcile and the
 // family export never write plans; they only read getCurrentPlan.
 const writeActivePlan = (db, plan) => {
   const key = db.activePlan || "current";
@@ -1177,7 +1176,7 @@ function PillSelect({ options, value, onChange }) {
 // app-wide.md). This band IS the safety mechanism for db.activePlan's
 // stickiness: since the active week persists across tabs/sessions until the
 // owner changes it, this label is what keeps that stickiness from silently
-// misleading. Render it at the top of every week-scoped surface (Plan, Prep,
+// misleading. Render it at the top of every week-scoped surface (Plan,
 // Tonight's MEAL SCHEDULE) so which week is on screen is always visible.
 // Renders whenever a current plan exists, even with no next plan to switch
 // to — the "Week of XX/XX" label is a load-bearing orientation cue (most
@@ -1213,157 +1212,11 @@ function WeekSelector({ db, persistDB }) {
   );
 }
 
-// ── PREP TAB ───────────────────────────────────────────────────────────────────
-
-function PrepTab({ db, persistDB }) {
-  // Follows db.activePlan (SPEC-active-plan-app-wide.md), same as Plan — the
-  // <WeekSelector> below shows which week. This also fixes backlog bug #1
-  // (cart across current/next): the cart now matches whichever week is
-  // selected, instead of always writing to current regardless.
-  const activePlan        = getActivePlan(db);
-  const cartItems         = activePlan?.cartItems || [];
-  const cartIngredientIds = activePlan?.cartIngredientIds || [];
-  const [bulkText, setBulkText]       = useState("");
-  const [cartSearch, setCartSearch]   = useState("");
-
-  const freshPlanBase = () => ({ weekStartDate:new Date().toISOString().split("T")[0], notes:"", meals:{}, items:[], cartItems:[], cartIngredientIds:[] });
-
-  const updatePlan = updates => {
-    const base = activePlan || freshPlanBase();
-    persistDB(writeActivePlan(db, { ...base, ...updates }));
-  };
-
-  // Quick-add a brand-new ingredient from Prep search and mark it in-cart in one
-  // step. Uses sensible defaults (Unassigned location, specialty tier) — James
-  // refines location/tier later in Manage. Creating the ingredient AND updating
-  // the plan's cartIngredientIds must happen in a single persist so neither is lost.
-  const addNewIngredient = rawName => {
-    const name = rawName.trim();
-    if (!name) return;
-    const newIng = { id:"i"+Date.now()+Math.random().toString(36).slice(2,5), createdAt:new Date().toISOString(), name:name.charAt(0).toUpperCase()+name.slice(1), storageLocation:"Unassigned", tier:"specialty", defaultQuantity:"" };
-    const base = activePlan || freshPlanBase();
-    const updatedPlan = { ...base, cartIngredientIds:[...new Set([...(base.cartIngredientIds||[]), newIng.id])] };
-    persistDB(writeActivePlan({ ...db, ingredients:[...db.ingredients, newIng] }, updatedPlan));
-    setCartSearch("");
-  };
-
-  // Match a typed/pasted line to a real ingredient, so it populates
-  // cartIngredientIds (which the Inventory + List steps actually honor) rather
-  // than free-text cartItems (which nothing reads). Uses the app's one text matcher
-  // (ingredientMatch.js: words, plurals and word order, full matches only).
-  const matchIngredient = q => matchIngredientText(q, db.ingredients);
-
-  // Strip leading numbering (1. / 1)), bullets (- * •), and whitespace from a
-  // pasted line.
-  const stripListFormatting = line => line.trim().replace(/^[-*•]\s*/, "").replace(/^\d+[.)]\s*/, "").trim();
-
-  const [bulkSummary, setBulkSummary] = useState(null);
-  const markPastedItems = () => {
-    const lines = bulkText.split("\n").map(stripListFormatting).filter(Boolean);
-    if (!lines.length) return;
-    const nextIds = new Set(cartIngredientIds);
-    let marked = 0, already = 0;
-    const unmatched = [];
-    lines.forEach(line => {
-      const hit = matchIngredient(line);
-      if (!hit) { unmatched.push(line); return; }
-      if (nextIds.has(hit.id)) { already++; return; }
-      nextIds.add(hit.id);
-      marked++;
-    });
-    if (marked > 0) updatePlan({ cartIngredientIds: [...nextIds] });
-    const parts = [`Marked ${marked}`];
-    if (already) parts.push(`${already} already in cart`);
-    if (unmatched.length) parts.push(`Couldn't match ${unmatched.length}: ${unmatched.map(u => `"${u}"`).join(", ")}`);
-    setBulkSummary(parts.join(" · "));
-    setBulkText("");
-    setTimeout(() => setBulkSummary(null), 8000);
-  };
-
-  return (
-    <div>
-      <WeekSelector db={db} persistDB={persistDB} />
-      <div style={S.body}>
-      <div style={S.card}>
-        <div style={S.h2}>Prep</div>
-        <div style={S.sub}>Mark what you've already bought so it drops off the shopping list.</div>
-      </div>
-
-      <div style={S.card}>
-        <div style={S.sectionLabel}>Already in cart</div>
-        <div style={{ fontSize:13, color:C.muted, marginBottom:10 }}>Tap what you've already bought — like reading off your Walmart cart. These drop off the shopping list.</div>
-
-        <input style={{ ...S.input, marginBottom:8 }} placeholder="Search ingredients to mark..." value={cartSearch} onChange={e => setCartSearch(e.target.value)} />
-        {cartSearch.trim() && (
-          <div style={{ maxHeight:260, overflowY:"auto", border:`1px solid ${C.border}`, borderRadius:8, marginBottom:10 }}>
-            {db.ingredients
-              .filter(i => i.name.toLowerCase().includes(cartSearch.toLowerCase()))
-              .sort((a,b) => a.name.localeCompare(b.name))
-              .slice(0, 40)
-              .map(i => {
-                const on = cartIngredientIds.includes(i.id);
-                return (
-                  <button key={i.id} style={{ display:"flex", alignItems:"center", gap:10, width:"100%", textAlign:"left", background:on?C.primaryLight:"#fff", border:"none", borderBottom:`1px solid ${C.border}`, padding:"10px 12px", cursor:"pointer", fontSize:14 }}
-                    onClick={() => updatePlan({ cartIngredientIds: on ? cartIngredientIds.filter(x => x !== i.id) : [...new Set([...cartIngredientIds, i.id])] })}>
-                    <span style={{ width:18, color:on?C.verified:C.faint, fontWeight:700 }}>{on ? "✓" : "＋"}</span>
-                    <span style={{ flex:1 }}>{i.name}</span>
-                    <span style={{ fontSize:11, color:C.faint }}>{i.storageLocation}</span>
-                  </button>
-                );
-              })}
-            {db.ingredients.filter(i => i.name.toLowerCase().includes(cartSearch.toLowerCase())).length === 0 && (
-              <div style={{ padding:"12px", fontSize:13, color:C.faint, textAlign:"center" }}>No matching ingredient</div>
-            )}
-            {!db.ingredients.some(i => i.name.toLowerCase() === cartSearch.trim().toLowerCase()) && (
-              <button style={{ display:"flex", alignItems:"center", gap:10, width:"100%", textAlign:"left", background:"#F0F7F2", border:"none", borderTop:`1px solid ${C.border}`, padding:"10px 12px", cursor:"pointer", fontSize:14, color:C.primary, fontWeight:600 }}
-                onClick={() => addNewIngredient(cartSearch)}>
-                <span style={{ width:18, fontWeight:700 }}>＋</span>
-                <span style={{ flex:1 }}>Add "{cartSearch.trim()}" as new ingredient</span>
-              </button>
-            )}
-          </div>
-        )}
-
-        {(cartIngredientIds.length > 0 || cartItems.length > 0) && (
-          <div style={{ marginTop:6 }}>
-            <div style={{ fontSize:12, color:C.muted, marginBottom:6, fontWeight:600 }}>{cartIngredientIds.length + cartItems.length} items already in cart</div>
-            {cartIngredientIds.map(id => {
-              const ing = db.ingredients.find(i => i.id === id);
-              if (!ing) return null;
-              return (
-                <div key={id} style={{ display:"flex", alignItems:"center", gap:8, padding:"7px 0", borderBottom:`1px solid ${C.border}` }}>
-                  <span style={{ color:C.verified }}>✓</span>
-                  <div style={{ flex:1, fontSize:14 }}>{ing.name}</div>
-                  <button style={{ background:"none", border:"none", color:C.faint, cursor:"pointer", fontSize:18 }} onClick={() => updatePlan({ cartIngredientIds:cartIngredientIds.filter(i => i !== id) })}>×</button>
-                </div>
-              );
-            })}
-            {cartItems.map((item, idx) => (
-              <div key={idx} style={{ display:"flex", alignItems:"center", gap:8, padding:"7px 0", borderBottom:`1px solid ${C.border}` }}>
-                <span style={{ color:C.muted }}>·</span>
-                <div style={{ flex:1, fontSize:14 }}>{item}</div>
-                <button style={{ background:"none", border:"none", color:C.faint, cursor:"pointer", fontSize:18 }} onClick={() => updatePlan({ cartItems:cartItems.filter((_, i) => i !== idx) })}>×</button>
-              </div>
-            ))}
-          </div>
-        )}
-
-        <div style={{ marginTop:10 }}>
-          <textarea style={{ ...S.input, height:80, resize:"vertical", marginBottom:8 }} placeholder="Paste a list — one item per line — to mark them in cart" value={bulkText} onChange={e => setBulkText(e.target.value)} />
-          <button style={{ ...S.btn, ...S.btnP, marginBottom:0 }} onClick={markPastedItems}>Mark items</button>
-        </div>
-        {bulkSummary && <div style={{ fontSize:12, marginTop:6, color:C.verified }}>{bulkSummary}</div>}
-      </div>
-      </div>
-    </div>
-  );
-}
-
 // ── PLAN TAB ───────────────────────────────────────────────────────────────────
 
 function PlanTab({ db, persistDB, onGoToImport, onGoToUnassigned }) {
   // The plan the owner is currently EDITING — follows db.activePlan (current or
-  // next), unlike Prep/Tonight which are pinned to current. This plan object
+  // next), unlike Tonight's cards, which are pinned to today. This plan object
   // doubles as both the live-editing draft and the committed record (they were
   // merged by the two-plan-model migration).
   const draft = getActivePlan(db);
@@ -1574,7 +1427,7 @@ function PlanTab({ db, persistDB, onGoToImport, onGoToUnassigned }) {
     const seedDate = nextDateForShoppingDay(db.settings?.shoppingDay || "Wednesday");
     const freshPlan = {
       weekStartDate: seedDate, notes:"", meals:{}, items:[],
-      cartItems: draft?.cartItems || [], cartIngredientIds: draft?.cartIngredientIds || [], dismissedShared: [],
+      dismissedShared: [],
       // Auto-populate day notes from this week's baked-in schedule so a new plan
       // never starts blank. notesTouched tracks manual edits so a later refresh
       // can tell "never edited" from "deliberately changed".
@@ -1602,7 +1455,7 @@ function PlanTab({ db, persistDB, onGoToImport, onGoToUnassigned }) {
     const nextStart  = addDaysISO(anchor, 7 + extraDaysOf(draft));   // after any extra days
     const freshPlan = {
       weekStartDate: nextStart, notes:"", meals:{}, items:[],
-      cartItems:[], cartIngredientIds:[], dismissedShared:[],
+      dismissedShared:[],
       step:1, maxStep:1, timeLevels:seedTimeLevels(), presence:{}, mealPlan:freshMeals, plates:{}, checkedIds:[], removedIds:[], addedItems:[], dayNotes:{ ...defaultNotes }, dayPills:{}, notesTouched:false, _stepsVer:4, stapleFlags:{}, quantities:{}, weather:"hot", startedAt:new Date().toISOString(),
     };
     persistDB({ ...db, plans: { ...db.plans, next: freshPlan }, activePlan: "next" });
@@ -1676,7 +1529,7 @@ function PlanTab({ db, persistDB, onGoToImport, onGoToUnassigned }) {
       <StepNav />
       <div style={S.body}>
         {step === 1 && <PlanMeals   mealPlan={mealPlan} plates={plates} setMealPlan={setMealPlanP} commitMealToPlan={commitMealToPlan} timeLevels={timeLevels} setTimeLevels={setTimeLevelsP} presence={presence} setPresence={setPresenceP} weekStartDate={draft?.weekStartDate} adventurousWeek={!!draft?.adventurousWeek} setAdventurousWeek={v => saveDraft({ adventurousWeek: v })} meals={meals} onNext={() => goToStep(2)} days={days} daysFull={daysFull} dayNotes={dayNotes} setDayNotes={setDayNotesP} dayPills={dayPills} setDayPills={setDayPillsP} db={db} persistDB={persistDB} extraDays={extraDays} canExtend={canExtend} setExtraDays={setExtraDays} />}
-        {step === 2 && <PlanInventory checkedIds={checkedIds} setCheckedIds={setCheckedIdsP} stapleFlags={stapleFlags} setStapleFlags={setStapleFlagsP} quantities={quantities} setQuantities={setQuantitiesP} mealPlan={mealPlan} meals={meals} ingredients={ingredients} onNext={() => goToStep(3)} days={days} cartIngredientIds={draft?.cartIngredientIds || []} onUpdateItem={updateItem} keptIds={keptIds} />}
+        {step === 2 && <PlanInventory checkedIds={checkedIds} setCheckedIds={setCheckedIdsP} stapleFlags={stapleFlags} setStapleFlags={setStapleFlagsP} quantities={quantities} setQuantities={setQuantitiesP} mealPlan={mealPlan} meals={meals} ingredients={ingredients} onNext={() => goToStep(3)} days={days} onUpdateItem={updateItem} keptIds={keptIds} />}
         {step === 3 && <PlanConfirm mode="confirm" onUpdateItem={updateItem} keptIds={keptIds} checkedIds={checkedIds} removedIds={removedIds} setRemovedIds={setRemovedIdsP} addedItems={addedItems} setAddedItems={setAddedItemsP} stapleFlags={stapleFlags} quantities={quantities} setQuantities={setQuantitiesP} mealPlan={mealPlan} meals={meals} ingredients={ingredients} onNext={() => goToStep(4)} db={db} persistDB={persistDB} days={days} daysFull={daysFull} />}
         {step === 4 && <PlanConfirm mode="sparky" onUpdateItem={updateItem} keptIds={keptIds} checkedIds={checkedIds} removedIds={removedIds} setRemovedIds={setRemovedIdsP} addedItems={addedItems} setAddedItems={setAddedItemsP} stapleFlags={stapleFlags} quantities={quantities} setQuantities={setQuantitiesP} mealPlan={mealPlan} meals={meals} ingredients={ingredients} onFinish={finishPlan} db={db} persistDB={persistDB} days={days} daysFull={daysFull} />}
         {step > 1 && (
@@ -2484,7 +2337,7 @@ function PlanMeals({ mealPlan, plates, setMealPlan, commitMealToPlan, timeLevels
   );
 }
 
-function PlanInventory({ checkedIds, setCheckedIds, stapleFlags, setStapleFlags, quantities, setQuantities, mealPlan, meals, ingredients, onNext, days, cartIngredientIds = [], onUpdateItem, keptIds = [] }) {
+function PlanInventory({ checkedIds, setCheckedIds, stapleFlags, setStapleFlags, quantities, setQuantities, mealPlan, meals, ingredients, onNext, days, onUpdateItem, keptIds = [] }) {
   const [locIdx, setLocIdx] = useState(0);
   const [editId, setEditId] = useState(null);     // item whose "⋯ edit" panel is open
   const [moveNote, setMoveNote] = useState(null); // what happened to an item moved to another location
@@ -2496,7 +2349,6 @@ function PlanInventory({ checkedIds, setCheckedIds, stapleFlags, setStapleFlags,
   const plannedNames   = Object.values(mealPlan).flat();
   const plannedMealIds = meals.filter(m => plannedNames.includes(m.name)).map(m => m.id);
   const mealIngIds     = new Set(meals.filter(m => plannedMealIds.includes(m.id)).flatMap(m => m.ingredients||[]));
-  const inPrep         = new Set(cartIngredientIds);
   const locIngs        = ingredients.filter(i => i.storageLocation === loc);
   const alwaysHere     = locIngs.filter(i => i.tier === "always");
   // Staples split by consumption rate. Unset stapleType defaults to "weekly"
@@ -2513,7 +2365,7 @@ function PlanInventory({ checkedIds, setCheckedIds, stapleFlags, setStapleFlags,
   // here, flagged as In cart, rather than vanishing from the inventory view).
   // keptIds: specialty items chosen to buy this week that no planned meal needs (an item
   // re-filed as specialty while on the list stays on it).
-  const mealHere       = locIngs.filter(i => i.tier === "specialty" && (mealIngIds.has(i.id) || inPrep.has(i.id) || keptIds.includes(i.id)));
+  const mealHere       = locIngs.filter(i => i.tier === "specialty" && (mealIngIds.has(i.id) || keptIds.includes(i.id)));
 
   const toggleChecked = id => setCheckedIds(prev => prev.includes(id) ? prev.filter(x => x!==id) : [...prev, id]);
   const multiMeal = multiMealCounts(mealPlan, meals);
@@ -2574,7 +2426,7 @@ function PlanInventory({ checkedIds, setCheckedIds, stapleFlags, setStapleFlags,
     // Re-filed as specialty: specialty items only show when a planned meal needs one, or
     // when kept because they were already on the list. Say which, rather than let an
     // unneeded one vanish.
-    if (patch.tier === "specialty" && ing.tier !== "specialty" && !mealIngIds.has(ing.id) && !inPrep.has(ing.id) && !onListNow(ing)) {
+    if (patch.tier === "specialty" && ing.tier !== "specialty" && !mealIngIds.has(ing.id) && !onListNow(ing)) {
       setEditId(null);
       setMoveNote(`${ing.name} is now specialty. Specialty items only come up when a planned meal needs one, so it's off this week's list.`);
     }
@@ -2595,7 +2447,6 @@ function PlanInventory({ checkedIds, setCheckedIds, stapleFlags, setStapleFlags,
   );
 
   const StapleRow = ({ ing, accent }) => {
-    const flagged = inPrep.has(ing.id);
     // 1 meal -> name context line; 2+ meals -> the ×N badge above (never both)
     const usedBy  = !multiMeal[ing.id] && (usedByMeal[ing.id] || []).length === 1 ? usedByMeal[ing.id] : [];
     return (
@@ -2604,9 +2455,7 @@ function PlanInventory({ checkedIds, setCheckedIds, stapleFlags, setStapleFlags,
         <div style={{ flex:1, minWidth:0 }}>
           <div style={{ fontSize:14, fontWeight:500 }}>{ing.name}{multiMeal[ing.id] && <span style={{ marginLeft:6, fontSize:11, fontWeight:700, color:"#B45309", background:"#FEF3C7", borderRadius:5, padding:"1px 5px" }}>×{multiMeal[ing.id]} meals</span>}</div>
           {usedBy.length > 0 && <div style={{ fontSize:11, color:accent, fontWeight:600 }}>for {usedBy.join(", ")}</div>}
-          {flagged
-            ? <div style={{ fontSize:11, color:C.verified, fontWeight:600 }}>✓ In cart</div>
-            : <div style={{ fontSize:11, color:stapleFlags[ing.id]?accent:C.faint }}>{stapleFlags[ing.id]?"Adding to list":"Have enough"}</div>}
+          <div style={{ fontSize:11, color:stapleFlags[ing.id]?accent:C.faint }}>{stapleFlags[ing.id]?"Adding to list":"Have enough"}</div>
         </div>
         <QtyEdit ing={ing} />
         <EditBtn ing={ing} />
@@ -2639,7 +2488,6 @@ function PlanInventory({ checkedIds, setCheckedIds, stapleFlags, setStapleFlags,
                     <div style={{ flex:1, minWidth:0 }}>
                       <div style={{ fontSize:14, fontWeight:500, textDecoration:skipped?"line-through":"none", color:skipped?C.muted:"inherit" }}>{ing.name}{multiMeal[ing.id] && <span style={{ marginLeft:6, fontSize:11, fontWeight:700, color:"#B45309", background:"#FEF3C7", borderRadius:5, padding:"1px 5px" }}>×{multiMeal[ing.id]} meals</span>}</div>
                       {!multiMeal[ing.id] && (usedByMeal[ing.id]||[]).length === 1 && <div style={{ fontSize:11, color:C.accent, fontWeight:600 }}>for {usedByMeal[ing.id][0]}</div>}
-                      {inPrep.has(ing.id) && <div style={{ fontSize:11, color:C.verified, fontWeight:600 }}>✓ In cart</div>}
                     </div>
                     {!skipped && <QtyEdit ing={ing} />}
                     <EditBtn ing={ing} />
@@ -2687,9 +2535,7 @@ function PlanInventory({ checkedIds, setCheckedIds, stapleFlags, setStapleFlags,
                       <div style={S.checkBox(inStock)}>{inStock && "✓"}</div>
                       <div style={{ flex:1, minWidth:0 }}>
                         <div style={{ fontSize:14, textDecoration:inStock?"line-through":"none" }}>{ing.name}{multiMeal[ing.id] && <span style={{ marginLeft:6, fontSize:11, fontWeight:700, color:"#B45309", background:"#FEF3C7", borderRadius:5, padding:"1px 5px" }}>×{multiMeal[ing.id]} meals</span>}</div>
-                        {inPrep.has(ing.id)
-                          ? <div style={{ fontSize:11, color:C.verified, fontWeight:600 }}>✓ In cart</div>
-                          : <div style={{ fontSize:11, color:inStock?C.verified:C.faint }}>{inStock?"Have it — skipping":"Need it — will order"}</div>}
+                        <div style={{ fontSize:11, color:inStock?C.verified:C.faint }}>{inStock?"Have it — skipping":"Need it — will order"}</div>
                       </div>
                     </div>
                     <div onClick={e => e.stopPropagation()} style={{ display:"flex", alignItems:"center", gap:8 }}><QtyEdit ing={ing} /><EditBtn ing={ing} /></div>
@@ -2734,8 +2580,6 @@ function PlanConfirm({ mode = "confirm", onUpdateItem, keptIds = [], checkedIds,
   const [keepSel, setKeepSel]   = useState(() => new Set()); // amounts ticked to become the usual
 
   const activePlan         = getActivePlan(db);
-  const cartIngredientIds = activePlan?.cartIngredientIds || [];
-  const cartItems         = activePlan?.cartItems || [];
   const dismissedShared   = activePlan?.dismissedShared || [];
   // Dismiss a shared-item flag for THIS list only (e.g. butter — a package always
   // covers several meals). Lives on the plan record, so it survives leaving and
@@ -2764,7 +2608,7 @@ function PlanConfirm({ mode = "confirm", onUpdateItem, keptIds = [], checkedIds,
   // toggled "have enough" is absent here, so it won't show under a meal that
   // uses it — the inventory judgment wins.
   const orderingIds   = new Set(allNeeded.map(i => i.id));
-  const activeCount   = allNeeded.filter(i => !removedIds.includes(i.id) && !cartIngredientIds.includes(i.id)).length + addedItems.length;
+  const activeCount   = allNeeded.filter(i => !removedIds.includes(i.id)).length + addedItems.length;
 
   // "⋯ edit item": the item's profile (how often, where kept, usual amount), written to
   // the item itself. This week's amount stays the amount chip's job.
@@ -2774,7 +2618,7 @@ function PlanConfirm({ mode = "confirm", onUpdateItem, keptIds = [], checkedIds,
   // from the items' usual ones. Nothing is pre-ticked (most changes are one-offs).
   // "Just this week" dismisses it for this exact set of changes (kept on the plan), so it
   // comes back only if an amount changes again.
-  const changedAmounts = allNeeded.filter(i => !removedIds.includes(i.id) && !cartIngredientIds.includes(i.id)
+  const changedAmounts = allNeeded.filter(i => !removedIds.includes(i.id)
     && quantities[i.id] !== undefined && quantities[i.id] !== (i.defaultQuantity || ""));
   const changedSig = changedAmounts.map(i => `${i.id}=${quantities[i.id]}`).sort().join("|");
   const showKeepCard = mode === "confirm" && changedAmounts.length > 0 && activePlan?.usualPromptDismissed !== changedSig;
@@ -2800,8 +2644,7 @@ function PlanConfirm({ mode = "confirm", onUpdateItem, keptIds = [], checkedIds,
       if (!ing) return null;
       // "ordering" only when it is on the list being sent (orderingIds, not dropped here):
       // a staple left at "have enough" or an item dropped on this step is not on the order.
-      const status = cartIngredientIds.includes(id) ? "in cart"
-                   : checkedIds.includes(id)        ? "in stock"
+      const status = checkedIds.includes(id)        ? "in stock"
                    : orderingIds.has(id) && !removedIds.includes(id) ? "ordering"
                    : "not on list";
       return { id, name:ing.name, loc:ing.storageLocation || "", n:multiMeal[id], status, dismissed:dismissedShared.includes(id) };
@@ -2826,7 +2669,7 @@ function PlanConfirm({ mode = "confirm", onUpdateItem, keptIds = [], checkedIds,
   const BATCH_SIZE = 10;
   const listLines = (() => {
     const lines = [];
-    allNeeded.filter(i => !removedIds.includes(i.id) && !cartIngredientIds.includes(i.id)).forEach(i => {
+    allNeeded.filter(i => !removedIds.includes(i.id)).forEach(i => {
       const q = quantities[i.id] !== undefined ? quantities[i.id] : (i.defaultQuantity || "");
       lines.push(q ? `${i.name} — ${q}` : i.name);
     });
@@ -2888,7 +2731,7 @@ function PlanConfirm({ mode = "confirm", onUpdateItem, keptIds = [], checkedIds,
     const today     = new Date().toISOString().split("T")[0];
     const updated   = activePlan
       ? { ...activePlan, meals:mealPlan, items:listItems }
-      : { weekStartDate:today, notes:"", cartItems:[], cartIngredientIds:[], dismissedShared:[], meals:mealPlan, items:listItems };
+      : { weekStartDate:today, notes:"", dismissedShared:[], meals:mealPlan, items:listItems };
     persistDB(writeActivePlan(db, updated));
   };
 
@@ -2921,21 +2764,19 @@ function PlanConfirm({ mode = "confirm", onUpdateItem, keptIds = [], checkedIds,
 
   const ItemRow = ({ ing }) => {
     const isRemoved = removedIds.includes(ing.id);
-    const inCart    = cartIngredientIds.includes(ing.id);
     const custom    = quantities[ing.id] !== undefined && quantities[ing.id] !== (ing.defaultQuantity || "");
     return (
       <>
-      <div style={{ display:"flex", alignItems:"center", gap:10, padding:"11px 0", borderBottom:`1px solid ${C.border}`, opacity:(isRemoved||inCart)?0.4:1 }}>
-        <div style={{ ...S.checkBox(isRemoved||inCart), background:(isRemoved||inCart)?"#CCC":"#fff", border:(isRemoved||inCart)?"none":`2px solid ${C.border}`, color:"#888" }}
-          onClick={() => { if(!inCart) setRemovedIds(prev => prev.includes(ing.id) ? prev.filter(x => x !== ing.id) : [...prev, ing.id]); }}>
-          {(isRemoved||inCart) && "✓"}
+      <div style={{ display:"flex", alignItems:"center", gap:10, padding:"11px 0", borderBottom:`1px solid ${C.border}`, opacity:isRemoved?0.4:1 }}>
+        <div style={{ ...S.checkBoxisRemoved, background:isRemoved?"#CCC":"#fff", border:isRemoved?"none":`2px solid ${C.border}`, color:"#888" }}
+          onClick={() => { setRemovedIds(prev => prev.includes(ing.id) ? prev.filter(x => x !== ing.id) : [...prev, ing.id]); }}>
+          {isRemoved && "✓"}
         </div>
         <div style={{ flex:1, minWidth:0 }}>
-          <div style={{ fontSize:14, textDecoration:(isRemoved||inCart)?"line-through":"none" }}>{ing.name}</div>
-          {inCart && <div style={{ fontSize:11, color:C.verified, fontWeight:600 }}>Already in cart</div>}
-          {custom && !inCart && !isRemoved && <div style={{ fontSize:11, color:C.faint }}>this week {quantities[ing.id] || "none"} · usual {ing.defaultQuantity || "none"}</div>}
+          <div style={{ fontSize:14, textDecoration:isRemoved?"line-through":"none" }}>{ing.name}</div>
+          {custom && !isRemoved && <div style={{ fontSize:11, color:C.faint }}>this week {quantities[ing.id] || "none"} · usual {ing.defaultQuantity || "none"}</div>}
         </div>
-        {!inCart && !isRemoved && <QtyChip ing={ing} />}
+        {!isRemoved && <QtyChip ing={ing} />}
         <button style={{ background:"none", border:"none", color:editId === ing.id ? C.primary : C.faint, fontSize:11, cursor:"pointer", padding:"2px 4px", whiteSpace:"nowrap" }} onClick={() => setEditId(editId === ing.id ? null : ing.id)}>⋯ edit</button>
       </div>
       {editId === ing.id && <ItemEditPanel ing={ing} thisWeek={quantities[ing.id]} onUpdate={patch => updateItem(ing.id, patch)} onClose={() => setEditId(null)} />}
@@ -3052,24 +2893,22 @@ function PlanConfirm({ mode = "confirm", onUpdateItem, keptIds = [], checkedIds,
           <div style={{ fontSize:11, color:C.faint, padding:"10px 0 6px", borderBottom:`1px solid ${C.border}` }}>All {activeCount} items A–Z · tap a quantity to adjust for this week</div>
           {[...allNeeded].sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity:"base" })).map(i => {
             const isRemoved = removedIds.includes(i.id);
-            const inCart = cartIngredientIds.includes(i.id);
             const tc = TIER_COLORS[i.tier] || {};
             const custom = quantities[i.id] !== undefined && quantities[i.id] !== (i.defaultQuantity || "");
             return (
               <React.Fragment key={i.id}>
-              <div style={{ display:"flex", alignItems:"center", gap:10, padding:"11px 0", borderBottom:`1px solid ${C.border}`, opacity:(isRemoved||inCart)?0.4:1 }}>
-                <div style={{ ...S.checkBox(isRemoved||inCart), background:(isRemoved||inCart)?"#CCC":"#fff", border:(isRemoved||inCart)?"none":`2px solid ${C.border}`, color:"#888" }}
-                  onClick={() => { if(!inCart) setRemovedIds(prev => prev.includes(i.id) ? prev.filter(x => x !== i.id) : [...prev, i.id]); }}>
-                  {(isRemoved||inCart) && "✓"}
+              <div style={{ display:"flex", alignItems:"center", gap:10, padding:"11px 0", borderBottom:`1px solid ${C.border}`, opacity:isRemoved?0.4:1 }}>
+                <div style={{ ...S.checkBoxisRemoved, background:isRemoved?"#CCC":"#fff", border:isRemoved?"none":`2px solid ${C.border}`, color:"#888" }}
+                  onClick={() => { setRemovedIds(prev => prev.includes(i.id) ? prev.filter(x => x !== i.id) : [...prev, i.id]); }}>
+                  {isRemoved && "✓"}
                 </div>
                 <div style={{ flex:1, minWidth:0 }}>
-                  <div style={{ fontSize:14, textDecoration:(isRemoved||inCart)?"line-through":"none" }}>{i.name}</div>
+                  <div style={{ fontSize:14, textDecoration:isRemoved?"line-through":"none" }}>{i.name}</div>
                   <span style={S.badge(tc.color, tc.bg)}>{i.tier}</span>
                   {multiMeal[i.id] && <span style={{ fontSize:11, fontWeight:700, color:"#B45309", background:"#FEF3C7", borderRadius:5, padding:"1px 5px", marginLeft:4 }}>×{multiMeal[i.id]} meals</span>}
-                  {inCart && <span style={{ fontSize:11, color:C.verified, fontWeight:600, marginLeft:4 }}>in cart</span>}
-                  {custom && !inCart && !isRemoved && <div style={{ fontSize:11, color:C.faint }}>this week {quantities[i.id] || "none"} · usual {i.defaultQuantity || "none"}</div>}
+                  {custom && !isRemoved && <div style={{ fontSize:11, color:C.faint }}>this week {quantities[i.id] || "none"} · usual {i.defaultQuantity || "none"}</div>}
                 </div>
-                {!inCart && !isRemoved && <QtyChip ing={i} />}
+                {!isRemoved && <QtyChip ing={i} />}
                 <button style={{ background:"none", border:"none", color:editId === i.id ? C.primary : C.faint, fontSize:11, cursor:"pointer", padding:"2px 4px", whiteSpace:"nowrap" }} onClick={() => setEditId(editId === i.id ? null : i.id)}>⋯ edit</button>
               </div>
               {editId === i.id && <ItemEditPanel ing={i} thisWeek={quantities[i.id]} onUpdate={patch => updateItem(i.id, patch)} onClose={() => setEditId(null)} />}
@@ -3235,7 +3074,6 @@ const HELP_SECTIONS = [
   ]},
   { t:"Marking things you already have", body:[
     "**Inventory step**: checking an item marks it in-stock and drops it from the list. This is the reliable way.",
-    "**Prep \"already in cart\" box**: matches your text to a real ingredient. If it matches, the item leaves your list. If not, it's kept as a note only — read the confirmation to see which happened.",
   ]},
   { t:"Weekly refresh", body:[
     "The forecast is fetched **live** (Open-Meteo) for the dates of the week you are planning, up to about two weeks ahead — nothing to refresh by hand.",
@@ -4078,7 +3916,7 @@ function ManageItems({ db, persistDB, initialLoc }) {
       onConfirm: () => {
         const ingredients = db.ingredients.filter(i => i.id !== id);
         const meals = db.meals.map(m => ({...m, ingredients:(m.ingredients||[]).filter(i => i !== id)}));
-        persistDB(mapBothPlans({...db, ingredients, meals}, p => ({...p, cartIngredientIds:(p.cartIngredientIds||[]).filter(i => i !== id), items:(p.items||[]).filter(i => i.ingredientId !== id)})));
+        persistDB(mapBothPlans({...db, ingredients, meals}, p => ({...p, items:(p.items||[]).filter(i => i.ingredientId !== id)})));
         setEditing(null);
         setConfirmDelete(null);
       }
@@ -4106,7 +3944,7 @@ function ManageItems({ db, persistDB, initialLoc }) {
       onConfirm: () => {
         const ingredients = db.ingredients.filter(i => !ids.includes(i.id));
         const meals = db.meals.map(m => ({...m, ingredients:(m.ingredients||[]).filter(id => !ids.includes(id))}));
-        persistDB(mapBothPlans({...db, ingredients, meals}, p => ({...p, cartIngredientIds:(p.cartIngredientIds||[]).filter(id => !ids.includes(id)), items:(p.items||[]).filter(i => !ids.includes(i.ingredientId))})));
+        persistDB(mapBothPlans({...db, ingredients, meals}, p => ({...p, items:(p.items||[]).filter(i => !ids.includes(i.ingredientId))})));
         setSelected(new Set());
         setConfirmDelete(null);
       }
@@ -4747,7 +4585,6 @@ function TonightTab({ db, persistDB }) {
 
 const TABS = [
   { id:"tonight", label:"Tonight" },
-  { id:"prep",    label:"Prep" },
   { id:"plan",    label:"Plan" },
   { id:"manage",  label:"Manage" },
 ];
@@ -5039,8 +4876,6 @@ export default function App() {
             </div>
           </div>
         )}
-
-        {tab==="prep"    && <PrepTab    db={db} persistDB={persistDB} />}
         {tab==="plan"    && <PlanTab    key={db.activePlan || "current"} db={db} persistDB={persistDB} onGoToImport={() => { setManageInitialSub("config"); setTab("manage"); }} onGoToUnassigned={() => { setManageInitialSub("items"); setManageItemsLoc("Unassigned"); setTab("manage"); }} />}
         {tab==="manage"  && <ManageTab  db={db} persistDB={persistDB} initialSub={manageInitialSub} initialItemsLoc={manageItemsLoc} />}
         {tab==="tonight" && <TonightTab db={db} persistDB={persistDB} />}

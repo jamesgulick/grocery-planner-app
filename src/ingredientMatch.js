@@ -1,5 +1,5 @@
 // Ingredient text matching — one matcher for every place the app turns pasted or typed
-// text into ingredient items (recipe paste in the meal editor, Prep's cart paste).
+// text into ingredient items (recipe paste in the meal editor).
 // Pure and node-testable. Matches on WORDS, not raw text: case, punctuation, plurals,
 // quantities, units and preparation words are normalised away before comparing.
 
@@ -160,7 +160,8 @@ export function ignoreTermFor(line) {
   return rawWords(head(stripListFormatting(line))).filter(w => !UNITS.has(singular(w)) && !PREP.has(singular(w))).join(" ");
 }
 
-// Single best item for a short typed/pasted phrase (Prep's cart paste): full matches only.
+// Single best item for a short typed/pasted phrase: full matches only. (Its caller,
+// the Prep tab's cart paste, was cut in polish Phase 1; kept for the next one-line paste.)
 export function matchIngredient(text, ingredients) {
   const t = stripListFormatting(text);
   const index = indexItems(ingredients);
