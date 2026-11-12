@@ -3,10 +3,11 @@ import React, { useState } from "react";
 import { multiMealCounts } from "../app/pills.js";
 import { getActivePlan, writeActivePlan } from "../app/plans.js";
 import { C, S, TIER_COLORS } from "../app/styles.js";
-import { Toggle } from "../components/common.jsx";
+import { Check, Toggle } from "../components/common.jsx";
 import { ItemEditPanel } from "../components/ItemEditPanel.jsx";
+import { isExplicitNo, isOrdering, isRelevant } from "./ordering.js";
 
-function PlanConfirm({ mode = "confirm", onUpdateItem, keptIds = [], checkedIds, removedIds, setRemovedIds, addedItems, setAddedItems, stapleFlags, quantities = {}, setQuantities, mealPlan, meals, ingredients, onNext, onFinish, db, persistDB, days, daysFull }) {
+function PlanConfirm({ mode = "confirm", onUpdateItem, keptIds = [], checkedIds, setOrdering, addedOff = [], setAddedOff, addedItems, setAddedItems, stapleFlags, quantities = {}, setQuantities, mealPlan, meals, ingredients, onNext, onFinish, db, persistDB, days, daysFull }) {
   const [newItem, setNewItem]   = useState("");
   const [view, setView]         = useState("meal");
   const [copied, setCopied]     = useState(false);
@@ -36,18 +37,37 @@ function PlanConfirm({ mode = "confirm", onUpdateItem, keptIds = [], checkedIds,
   const mealIngIds   = new Set(plannedMeals.flatMap(m => m.ingredients||[]));
   const multiMeal    = multiMealCounts(mealPlan, meals);
 
+  // CHECKED = ORDERING (Phase 1b, SPEC §3b). One buy-or-not decision per item, shared
+  // with Inventory (ordering.js); unchecking here writes the same decision Inventory does.
+  const st       = { checkedIds, stapleFlags, mealIngIds, keptIds };
+  const relevant = ingredients.filter(i => isRelevant(i, st));
+  const buying   = ing => isOrdering(ing, st);
+  // What you see is fixed when you arrive: rows on the list stay in place (dimmed when
+  // unchecked, never moved) and the "Skipped in Inventory" group holds the explicit no's
+  // from before you got here. Nothing moves between them while you're on the screen.
+  // Each visit is a fresh mount (this step renders only while it is the current one).
+  const [arrival] = useState(() => ({
+    listed:  new Set(relevant.filter(buying).map(i => i.id)),
+    skipped: new Set(relevant.filter(i => isExplicitNo(i, st)).map(i => i.id)),
+  }));
+  const [showSkipped, setShowSkipped] = useState(false);
+  const inArrival = i => arrival.listed.has(i.id);
+
   const seen = new Set();
   const dedup = arr => arr.filter(i => { if(seen.has(i.id)) return false; seen.add(i.id); return true; });
-  const alwaysNeeded  = dedup(ingredients.filter(i => i.tier==="always" && !checkedIds.includes(i.id)));
-  const stapleNeeded  = dedup(ingredients.filter(i => i.tier==="staple" && stapleFlags[i.id] && !checkedIds.includes(i.id)));
-  const mealNeeded    = dedup(ingredients.filter(i => (mealIngIds.has(i.id) || keptIds.includes(i.id)) && i.tier==="specialty" && !checkedIds.includes(i.id)));
-  const allNeeded     = [...alwaysNeeded, ...stapleNeeded, ...mealNeeded];
-  // Authoritative set of what's actually being ordered. Every view (by-meal,
-  // flat, copy, save) filters against this so they can't disagree. A staple
-  // toggled "have enough" is absent here, so it won't show under a meal that
-  // uses it — the inventory judgment wins.
+  const alwaysNeeded  = dedup(ingredients.filter(i => i.tier==="always" && inArrival(i)));
+  const stapleNeeded  = dedup(ingredients.filter(i => i.tier==="staple" && inArrival(i)));
+  const mealNeeded    = dedup(ingredients.filter(i => i.tier==="specialty" && inArrival(i)));
+  const allListed     = [...alwaysNeeded, ...stapleNeeded, ...mealNeeded];
+  const skippedRows   = ingredients.filter(i => arrival.skipped.has(i.id)).sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity:"base" }));
+  // Authoritative set of what's actually being ordered right now. Count, copy, save and
+  // the shared check all read this, so they can't disagree with the checkboxes.
+  const byTier        = arr => [...arr.filter(i => i.tier==="always"), ...arr.filter(i => i.tier==="staple"), ...arr.filter(i => i.tier==="specialty")];
+  const allNeeded     = byTier(relevant.filter(buying));
   const orderingIds   = new Set(allNeeded.map(i => i.id));
-  const activeCount   = allNeeded.filter(i => !removedIds.includes(i.id)).length + addedItems.length;
+  const addedOn       = addedItems.filter(x => !addedOff.includes(x));
+  const activeCount   = allNeeded.length + addedOn.length;
+  const toggleAdded   = item => setAddedOff(prev => prev.includes(item) ? prev.filter(x => x !== item) : [...prev, item]);
 
   // "⋯ edit item": the item's profile (how often, where kept, usual amount), written to
   // the item itself. This week's amount stays the amount chip's job.
@@ -57,8 +77,8 @@ function PlanConfirm({ mode = "confirm", onUpdateItem, keptIds = [], checkedIds,
   // from the items' usual ones. Nothing is pre-ticked (most changes are one-offs).
   // "Just this week" dismisses it for this exact set of changes (kept on the plan), so it
   // comes back only if an amount changes again.
-  const changedAmounts = allNeeded.filter(i => !removedIds.includes(i.id)
-    && quantities[i.id] !== undefined && quantities[i.id] !== (i.defaultQuantity || ""));
+  const changedAmounts = allNeeded.filter(i =>
+    quantities[i.id] !== undefined && quantities[i.id] !== (i.defaultQuantity || ""));
   const changedSig = changedAmounts.map(i => `${i.id}=${quantities[i.id]}`).sort().join("|");
   const showKeepCard = mode === "confirm" && changedAmounts.length > 0 && activePlan?.usualPromptDismissed !== changedSig;
   const keepAsUsual = () => {
@@ -84,7 +104,7 @@ function PlanConfirm({ mode = "confirm", onUpdateItem, keptIds = [], checkedIds,
       // "ordering" only when it is on the list being sent (orderingIds, not dropped here):
       // a staple left at "have enough" or an item dropped on this step is not on the order.
       const status = checkedIds.includes(id)        ? "in stock"
-                   : orderingIds.has(id) && !removedIds.includes(id) ? "ordering"
+                   : orderingIds.has(id) ? "ordering"
                    : "not on list";
       return { id, name:ing.name, loc:ing.storageLocation || "", n:multiMeal[id], status, dismissed:dismissedShared.includes(id) };
     })
@@ -108,11 +128,11 @@ function PlanConfirm({ mode = "confirm", onUpdateItem, keptIds = [], checkedIds,
   const BATCH_SIZE = 10;
   const listLines = (() => {
     const lines = [];
-    allNeeded.filter(i => !removedIds.includes(i.id)).forEach(i => {
+    allNeeded.forEach(i => {
       const q = quantities[i.id] !== undefined ? quantities[i.id] : (i.defaultQuantity || "");
       lines.push(q ? `${i.name} — ${q}` : i.name);
     });
-    addedItems.forEach(i => lines.push(i));
+    addedOn.forEach(i => lines.push(i));
     return lines;
   })();
   const batches = [];
@@ -200,25 +220,39 @@ function PlanConfirm({ mode = "confirm", onUpdateItem, keptIds = [], checkedIds,
     );
   };
 
-  const ItemRow = ({ ing }) => {
-    const isRemoved = removedIds.includes(ing.id);
-    const custom    = quantities[ing.id] !== undefined && quantities[ing.id] !== (ing.defaultQuantity || "");
+  // One row for every list (by meal, flat, skipped group). Checked = ordering; an
+  // unchecked row stays exactly where it is, dimmed, so it can be re-decided in context.
+  const ItemRow = ({ ing, flat }) => {
+    const on     = buying(ing);
+    const custom = quantities[ing.id] !== undefined && quantities[ing.id] !== (ing.defaultQuantity || "");
+    const tc     = TIER_COLORS[ing.tier] || {};
     return (
       <>
-      <div style={{ display:"flex", alignItems:"center", gap:10, padding:"11px 0", borderBottom:`1px solid ${C.border}`, opacity:isRemoved?0.4:1 }}>
-        <div style={{ ...S.checkBox(isRemoved), background:isRemoved?"#CCC":"#fff", border:isRemoved?"none":`2px solid ${C.border}`, color:"#888" }}
-          onClick={() => { setRemovedIds(prev => prev.includes(ing.id) ? prev.filter(x => x !== ing.id) : [...prev, ing.id]); }}>
-          {isRemoved && "✓"}
-        </div>
+      <div style={{ display:"flex", alignItems:"center", gap:10, padding:"11px 0", borderBottom:`1px solid ${C.border}`, opacity:on?1:0.45, cursor:"pointer", transition:"opacity 0.2s" }} onClick={() => setOrdering(ing, !on)}>
+        <Check checked={on} onChange={v => setOrdering(ing, v)} label={`Order ${ing.name}`} />
         <div style={{ flex:1, minWidth:0 }}>
-          <div style={{ fontSize:14, textDecoration:isRemoved?"line-through":"none" }}>{ing.name}</div>
-          {custom && !isRemoved && <div style={{ fontSize:11, color:C.faint }}>this week {quantities[ing.id] || "none"} · usual {ing.defaultQuantity || "none"}</div>}
+          <div style={{ fontSize:14 }}>{ing.name}</div>
+          {flat && <span style={S.badge(tc.color, tc.bg)}>{ing.tier}</span>}
+          {flat && multiMeal[ing.id] && <span style={{ fontSize:11, fontWeight:700, color:"#B45309", background:"#FEF3C7", borderRadius:5, padding:"1px 5px", marginLeft:4 }}>×{multiMeal[ing.id]} meals</span>}
+          {custom && on && <div style={{ fontSize:11, color:C.faint }}>this week {quantities[ing.id] || "none"} · usual {ing.defaultQuantity || "none"}</div>}
         </div>
-        {!isRemoved && <QtyChip ing={ing} />}
-        <button style={{ background:"none", border:"none", color:editId === ing.id ? C.primary : C.faint, fontSize:11, cursor:"pointer", padding:"2px 4px", whiteSpace:"nowrap" }} onClick={() => setEditId(editId === ing.id ? null : ing.id)}>⋯ edit</button>
+        <div onClick={e => e.stopPropagation()} style={{ display:"flex", alignItems:"center", gap:8 }}>
+          {on && <QtyChip ing={ing} />}
+          <button style={{ background:"none", border:"none", color:editId === ing.id ? C.primary : C.faint, fontSize:11, cursor:"pointer", padding:"2px 4px", whiteSpace:"nowrap" }} onClick={() => setEditId(editId === ing.id ? null : ing.id)}>⋯ edit</button>
+        </div>
       </div>
       {editId === ing.id && <ItemEditPanel ing={ing} thisWeek={quantities[ing.id]} onUpdate={patch => updateItem(ing.id, patch)} onClose={() => setEditId(null)} />}
       </>
+    );
+  };
+  // Items typed in on this step: the same Check; unchecked ones stay, dimmed (addedOff).
+  const AddedRow = ({ item, flat }) => {
+    const on = !addedOff.includes(item);
+    return (
+      <div style={{ display:"flex", alignItems:"center", gap:10, padding:"11px 0", borderBottom:`1px solid ${C.border}`, opacity:on?1:0.45, cursor:"pointer" }} onClick={() => toggleAdded(item)}>
+        <Check checked={on} onChange={() => toggleAdded(item)} label={`Order ${item}`} />
+        <div style={{ flex:1, fontSize:14 }}>{item}{flat && <span style={{ fontSize:11, color:C.faint }}> (added)</span>}</div>
+      </div>
     );
   };
 
@@ -228,7 +262,7 @@ function PlanConfirm({ mode = "confirm", onUpdateItem, keptIds = [], checkedIds,
       <div style={S.card}>
         <div style={S.sectionLabel}>Confirm & adjust</div>
         <div style={S.h2}>{activeCount} items to buy</div>
-        <div style={{ fontSize:13, color:C.muted, marginTop:4 }}>Tune quantities for this week, drop anything you don't need. Check shared items below.</div>
+        <div style={{ fontSize:13, color:C.muted, marginTop:4 }}>Everything checked gets ordered. Uncheck anything you don't need; it stays here, dimmed, so you can change your mind. Tune amounts, and check shared items below.</div>
         <div style={{ display:"flex", gap:8, marginTop:8 }}>
           <button style={{ ...S.btnSm, flex:1, background:view==="meal"?C.primary:"#F3F4F6", color:view==="meal"?"#fff":C.muted }} onClick={() => setView("meal")}>By meal</button>
           <button style={{ ...S.btnSm, flex:1, background:view==="flat"?C.primary:"#F3F4F6", color:view==="flat"?"#fff":C.muted }} onClick={() => setView("flat")}>Flat list</button>
@@ -261,23 +295,17 @@ function PlanConfirm({ mode = "confirm", onUpdateItem, keptIds = [], checkedIds,
         <div style={S.card}>
           <div style={{ fontSize:12, fontWeight:700, color:"#B45309", marginBottom:4 }}>⚠ Used across multiple meals</div>
           <div style={{ fontSize:12, color:C.muted, marginBottom:8, lineHeight:1.4 }}>
-            Each feeds several meals — including ones you have or already bought. Easy to under-buy when you've mentally checked it off. Tap any you know are fine (like butter) to cross them off.
+            Each feeds several meals — including ones you have or already bought. Easy to under-buy when you've mentally checked it off. Uncheck any you know are fine (like butter); the checked ones go to Sparky as a double check.
           </div>
-          <div style={{ background:"#FEF9EF", border:`1px solid #FCE7C3`, borderRadius:8, padding:"8px 10px" }}>
+          <div style={{ background:"#FEF9EF", border:`1px solid #FCE7C3`, borderRadius:8, padding:"4px 10px" }}>
             {sharedItems.map(s => {
-              const sc = s.status === "in cart" ? C.verified : s.status === "ordering" ? "#B45309" : C.muted;
+              const sc = s.status === "ordering" ? "#B45309" : C.muted;
               return (
-                <div key={s.id} style={{ display:"flex", justifyContent:"space-between", alignItems:"center", fontSize:13, padding:"3px 0", opacity:s.dismissed?0.45:1 }}>
-                  <span style={{ display:"flex", alignItems:"center", gap:8, flex:1, minWidth:0, cursor:"pointer" }} onClick={() => toggleDismissShared(s.id)}>
-                    <span style={{ fontSize:13, color:C.faint }}>{s.dismissed ? "○" : "✕"}</span>
-                    <span style={{ textDecoration:s.dismissed?"line-through":"none" }}>{s.name}{s.loc && s.loc !== "Unassigned" && <span style={{ color:C.faint, fontWeight:400 }}> ({s.loc})</span>}</span>
-                  </span>
-                  {s.dismissed
-                    ? <span style={{ fontSize:11, color:C.faint }}>fine — tap to restore</span>
-                    : <span style={{ display:"flex", gap:8, alignItems:"center" }}>
-                        <span style={{ fontSize:11, color:sc, fontWeight:600 }}>{s.status}</span>
-                        <span style={{ fontWeight:700, color:"#B45309" }}>×{s.n}</span>
-                      </span>}
+                <div key={s.id} style={{ display:"flex", alignItems:"center", gap:10, fontSize:13, padding:"6px 0", opacity:s.dismissed?0.45:1, cursor:"pointer" }} onClick={() => toggleDismissShared(s.id)}>
+                  <Check checked={!s.dismissed} onChange={() => toggleDismissShared(s.id)} label={`Double-check ${s.name}`} />
+                  <span style={{ flex:1, minWidth:0 }}>{s.name}{s.loc && s.loc !== "Unassigned" && <span style={{ color:C.faint, fontWeight:400 }}> ({s.loc})</span>}</span>
+                  <span style={{ fontSize:11, color:sc, fontWeight:600 }}>{s.status}</span>
+                  <span style={{ fontWeight:700, color:"#B45309" }}>×{s.n}</span>
                 </div>
               );
             })}
@@ -300,10 +328,9 @@ function PlanConfirm({ mode = "confirm", onUpdateItem, keptIds = [], checkedIds,
             </>
           )}
           {plannedMeals.map(meal => {
-            // Show only ingredients actually being ordered (a staple marked "have
-            // enough" is excluded). Skip always/staple items here since they each
-            // have their own section above — this section is the meal-specific buy.
-            const ings = ingredients.filter(i => (meal.ingredients||[]).includes(i.id) && orderingIds.has(i.id) && i.tier === "specialty");
+            // The meal-specific buy: specialty items on the list when you arrived (always
+            // and staple items have their own sections above).
+            const ings = ingredients.filter(i => (meal.ingredients||[]).includes(i.id) && inArrival(i) && i.tier === "specialty");
             if (!ings.length) return null;
             return (
               <div key={meal.id} style={{ marginBottom:12 }}>
@@ -316,50 +343,30 @@ function PlanConfirm({ mode = "confirm", onUpdateItem, keptIds = [], checkedIds,
             <div style={{ marginBottom:12 }}>
               <div style={{ background:C.primary, color:"#E8F5EE", padding:"8px 14px", borderRadius:10, fontSize:13, fontWeight:700, marginBottom:4 }}>Added items</div>
               <div style={{ ...S.card, padding:"0 16px" }}>
-                {addedItems.map((item, idx) => (
-                  <div key={idx} style={{ display:"flex", alignItems:"center", gap:10, padding:"11px 0", borderBottom:`1px solid ${C.border}` }}>
-                    <div style={{ ...S.checkBox(false), border:`2px solid ${C.border}`, color:"#888" }} />
-                    <div style={{ flex:1, fontSize:14 }}>{item}</div>
-                  </div>
-                ))}
+                {addedItems.map((item, idx) => <AddedRow key={idx} item={item} />)}
               </div>
             </div>
           )}
         </>
       ) : (
         <div style={{ ...S.card, padding:"0 16px" }}>
-          <div style={{ fontSize:11, color:C.faint, padding:"10px 0 6px", borderBottom:`1px solid ${C.border}` }}>All {activeCount} items A–Z · tap a quantity to adjust for this week</div>
-          {[...allNeeded].sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity:"base" })).map(i => {
-            const isRemoved = removedIds.includes(i.id);
-            const tc = TIER_COLORS[i.tier] || {};
-            const custom = quantities[i.id] !== undefined && quantities[i.id] !== (i.defaultQuantity || "");
-            return (
-              <React.Fragment key={i.id}>
-              <div style={{ display:"flex", alignItems:"center", gap:10, padding:"11px 0", borderBottom:`1px solid ${C.border}`, opacity:isRemoved?0.4:1 }}>
-                <div style={{ ...S.checkBox(isRemoved), background:isRemoved?"#CCC":"#fff", border:isRemoved?"none":`2px solid ${C.border}`, color:"#888" }}
-                  onClick={() => { setRemovedIds(prev => prev.includes(i.id) ? prev.filter(x => x !== i.id) : [...prev, i.id]); }}>
-                  {isRemoved && "✓"}
-                </div>
-                <div style={{ flex:1, minWidth:0 }}>
-                  <div style={{ fontSize:14, textDecoration:isRemoved?"line-through":"none" }}>{i.name}</div>
-                  <span style={S.badge(tc.color, tc.bg)}>{i.tier}</span>
-                  {multiMeal[i.id] && <span style={{ fontSize:11, fontWeight:700, color:"#B45309", background:"#FEF3C7", borderRadius:5, padding:"1px 5px", marginLeft:4 }}>×{multiMeal[i.id]} meals</span>}
-                  {custom && !isRemoved && <div style={{ fontSize:11, color:C.faint }}>this week {quantities[i.id] || "none"} · usual {i.defaultQuantity || "none"}</div>}
-                </div>
-                {!isRemoved && <QtyChip ing={i} />}
-                <button style={{ background:"none", border:"none", color:editId === i.id ? C.primary : C.faint, fontSize:11, cursor:"pointer", padding:"2px 4px", whiteSpace:"nowrap" }} onClick={() => setEditId(editId === i.id ? null : i.id)}>⋯ edit</button>
-              </div>
-              {editId === i.id && <ItemEditPanel ing={i} thisWeek={quantities[i.id]} onUpdate={patch => updateItem(i.id, patch)} onClose={() => setEditId(null)} />}
-              </React.Fragment>
-            );
-          })}
-          {addedItems.map((item, idx) => (
-            <div key={idx} style={{ display:"flex", alignItems:"center", gap:10, padding:"11px 0", borderBottom:`1px solid ${C.border}` }}>
-              <div style={{ ...S.checkBox(false), border:`2px solid ${C.border}`, color:"#888" }} />
-              <div style={{ flex:1, fontSize:14 }}>{item} <span style={{ fontSize:11, color:C.faint }}>(added)</span></div>
-            </div>
-          ))}
-          {allNeeded.length===0 && addedItems.length===0 && <div style={{ textAlign:"center", color:C.faint, padding:24 }}>No items — add ingredients to meals in Manage tab</div>}
+          <div style={{ fontSize:11, color:C.faint, padding:"10px 0 6px", borderBottom:`1px solid ${C.border}` }}>{allListed.length + addedItems.length} items A–Z · tap a quantity to adjust for this week</div>
+          {[...allListed].sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity:"base" })).map(i => <ItemRow key={i.id} ing={i} flat />)}
+          {addedItems.map((item, idx) => <AddedRow key={idx} item={item} flat />)}
+          {allListed.length===0 && addedItems.length===0 && <div style={{ textAlign:"center", color:C.faint, padding:24 }}>No items — add ingredients to meals in Manage tab</div>}
+        </div>
+      )}
+
+      {skippedRows.length > 0 && (
+        <div style={{ ...S.card, padding:"0 16px" }}>
+          <button style={{ display:"flex", alignItems:"center", width:"100%", gap:8, background:"none", border:"none", padding:"12px 0", cursor:"pointer", textAlign:"left" }} onClick={() => setShowSkipped(v => !v)} aria-expanded={showSkipped}>
+            <span style={{ flex:1 }}>
+              <span style={{ display:"block", fontSize:14, fontWeight:600, color:C.text }}>Skipped in Inventory ({skippedRows.length})</span>
+              <span style={{ display:"block", fontSize:12, color:C.faint }}>Unchecked before you got here. Check one to add it back.</span>
+            </span>
+            <span style={{ fontSize:16, color:C.faint }}>{showSkipped ? "▾" : "▸"}</span>
+          </button>
+          {showSkipped && <div style={{ borderTop:`1px solid ${C.border}` }}>{skippedRows.map(i => <ItemRow key={i.id} ing={i} flat={view === "flat"} />)}</div>}
         </div>
       )}
 

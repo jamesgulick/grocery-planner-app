@@ -1,6 +1,7 @@
 // Split verbatim from grocery-app.jsx in polish Phase 1.5; see CLAUDE.md's file map.
 import { extraDaysOf, seedTimeLevel } from "../engine/assembleInputs.js";
 import { DAYS_ALL, addDaysISO, todayLocalISO } from "./globals.js";
+import { foldRemovedIds } from "../plan/ordering.js";
 
 // outbox shape (written by Tonight's "Queue for Shortcut", cut in polish Phase 1;
 // older DBs may still carry one, nothing reads it):
@@ -106,6 +107,7 @@ const mapBothPlans = (db, fn) => ({
 // at _planModelVer >= 1 is returned unchanged. mealHistory is untouched.
 const PLAN_MODEL_VER = 1;
 const PLAN_INPUTS_VER = 1;   // timeLevels + presence (see the plan-inputs block below)
+const PLAN_ORDER_VER = 1;    // checked = buying: removedIds folded away (polish Phase 1b)
 const migrateDB = db => {
   if (!db) return db;
   let out = db;
@@ -225,6 +227,17 @@ const migrateDB = db => {
       ? { current: upgradePlan(out.plans.current), next: upgradePlan(out.plans.next) }
       : out.plans;
     out = { ...out, settings, plans, _planInputsVer: PLAN_INPUTS_VER };
+  }
+
+  // Checked = buying (polish Phase 1b, SPEC §3b). The Confirm step's separate drop list
+  // (removedIds) is retired: Confirm now writes the same per-item decision Inventory does.
+  // Any drops still on a plan fold into that decision (see foldRemovedIds). Idempotent
+  // via _planOrderVer; an older export imported later is folded the same way.
+  if ((out._planOrderVer || 0) < PLAN_ORDER_VER) {
+    const plans = out.plans && !Array.isArray(out.plans)
+      ? { current: foldRemovedIds(out.plans.current, out.ingredients), next: foldRemovedIds(out.plans.next, out.ingredients) }
+      : out.plans;
+    out = { ...out, plans, _planOrderVer: PLAN_ORDER_VER };
   }
 
   return out;

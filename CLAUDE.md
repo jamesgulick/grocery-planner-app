@@ -245,6 +245,17 @@ Pre-migration DBs carry two older single-slot concepts (db.planDraft live-editin
   the plan are written in one save. `usualPromptDismissed` records the set of amount
   changes the Confirm "keep as usual?" card was dismissed for.
 - The plan-inputs migration (easy pills → timeLevels, the Partner away map and the away-member toggle → presence / an open-ended away period) is stamped by `_planInputsVer`.
+- **Checked = buying** (polish Phase 1b). Each item has ONE buy-or-not decision for the
+  week, read and written by both Inventory and Confirm through `src/plan/ordering.js`
+  (`isOrdering`, `isExplicitNo`, `orderingPatch`) and PlanTab's `setOrdering`, which
+  saves `checkedIds` and `stapleFlags` together. The fields keep their old meanings
+  (always/meal item: in `checkedIds` = not buying; staple: `stapleFlags[id] === true` =
+  buying, `false` = an explicit no, absent = untouched). Every row uses the one `Check`
+  control (components/common.jsx). Confirm fixes its rows on arrival: unchecked rows stay
+  in place, dimmed; the "Skipped in Inventory" group holds the explicit no's (untouched
+  staples are not skips). Items typed in on Confirm that are then unchecked go in
+  `addedOff`. The old Confirm drop list `removedIds` is retired; the `_planOrderVer`
+  migration folds any left on a plan into the decision.
 
 Settings added for the engine: `grillOpen` (grill season, Manage → Config → Cooking), `awayRanges`, `learnMode`. `awayMemberHome` (who got family texts) lost its last consumer when polish Phase 1 cut the Tonight text queue; old DBs may carry it, and only the plan-inputs migration reads it.
 
@@ -332,7 +343,7 @@ Settings added for the engine: `grillOpen` (grill season, Manage → Config → 
 - **Some identifiers carry historical names** (e.g. `memberOk`, `awayMemberHome`) from a
   refactor that genericized personal data. They're just variable names. (`awayHome` and
   `awayMemberHome` now survive only inside the plan-inputs migration that converts them.)
-  **Ephemeral component-local state dies across a re-rendered-instance transition, and the bundler does NOT catch it.** PlanConfirm is rendered as TWO instances — mode="confirm" (step 3) and mode="sparky" (step 4). Any state held in a local useState inside that component is discarded when the flow moves between the two instances, because they're different mounts. This has bitten the project at least twice: the removed set (confirm-step removals) and then the added set both vanished on the Confirm→Sparky transition. Any state that must survive that transition has to be lifted to the persisted plan object (as removedIds / added-items were), not kept component-local. When adding state to PlanConfirm, ask: does this need to survive the confirm↔sparky switch? If yes, lift it.
+  **Ephemeral component-local state dies across a re-rendered-instance transition, and the bundler does NOT catch it.** PlanConfirm is rendered as TWO instances — mode="confirm" (step 3) and mode="sparky" (step 4). Any state held in a local useState inside that component is discarded when the flow moves between the two instances, because they're different mounts. This has bitten the project at least twice: the removed set (confirm-step removals) and then the added set both vanished on the Confirm→Sparky transition. Any state that must survive that transition has to be lifted to the persisted plan object (as the buy decision, added items and `addedOff` are), not kept component-local. (The one deliberate exception: Confirm's arrival snapshot of which rows are listed or skipped is meant to reset on every visit.) When adding state to PlanConfirm, ask: does this need to survive the confirm↔sparky switch? If yes, lift it.
 
 ## THE REPO MUST BE PUBLIC — and what that forces (READ BEFORE ANY COMMIT)
 

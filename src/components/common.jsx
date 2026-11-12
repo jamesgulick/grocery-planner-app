@@ -122,4 +122,17 @@ function AutoGrowTextarea({ value, onChange, placeholder, style }) {
   );
 }
 
-export { AutoGrowTextarea, FieldGroup, PillSelect, RefreshReminder, SearchBar, Toggle, WeekSelector };
+// The one selection control (polish Phase 1b): checked = buying / keep. A real
+// checkbox-role button with a 44px tap target around the 24px box. Stops the click
+// so a row that is itself tappable doesn't toggle twice.
+function Check({ checked, onChange, label }) {
+  return (
+    <button type="button" role="checkbox" aria-checked={!!checked} aria-label={label}
+      onClick={e => { e.stopPropagation(); onChange(!checked); }}
+      style={{ background:"none", border:"none", padding:10, margin:-10, cursor:"pointer", display:"flex", flexShrink:0 }}>
+      <span style={S.checkBox(!!checked)}>{checked && "✓"}</span>
+    </button>
+  );
+}
+
+export { AutoGrowTextarea, Check, FieldGroup, PillSelect, RefreshReminder, SearchBar, Toggle, WeekSelector };

@@ -3,10 +3,11 @@ import React, { useEffect, useState } from "react";
 import { INVENTORY_LOCS } from "../app/globals.js";
 import { multiMealCounts } from "../app/pills.js";
 import { C, S } from "../app/styles.js";
-import { Toggle } from "../components/common.jsx";
+import { Check } from "../components/common.jsx";
 import { ItemEditPanel } from "../components/ItemEditPanel.jsx";
+import { isOrdering } from "./ordering.js";
 
-function PlanInventory({ checkedIds, setCheckedIds, stapleFlags, setStapleFlags, quantities, setQuantities, mealPlan, meals, ingredients, onNext, days, onUpdateItem, keptIds = [] }) {
+function PlanInventory({ checkedIds, stapleFlags, setOrdering, quantities, setQuantities, mealPlan, meals, ingredients, onNext, days, onUpdateItem, keptIds = [] }) {
   const [locIdx, setLocIdx] = useState(0);
   const [editId, setEditId] = useState(null);     // item whose "⋯ edit" panel is open
   const [moveNote, setMoveNote] = useState(null); // what happened to an item moved to another location
@@ -36,7 +37,10 @@ function PlanInventory({ checkedIds, setCheckedIds, stapleFlags, setStapleFlags,
   // re-filed as specialty while on the list stays on it).
   const mealHere       = locIngs.filter(i => i.tier === "specialty" && (mealIngIds.has(i.id) || keptIds.includes(i.id)));
 
-  const toggleChecked = id => setCheckedIds(prev => prev.includes(id) ? prev.filter(x => x!==id) : [...prev, id]);
+  // Checked = buying (Phase 1b): every row has the one Check; see ordering.js.
+  const st        = { checkedIds, stapleFlags, mealIngIds, keptIds };
+  const buying    = ing => isOrdering(ing, st);
+  const toggle    = ing => setOrdering(ing, !buying(ing));
   const multiMeal = multiMealCounts(mealPlan, meals);
 
   // ingredient id -> names of planned meals that use it (for context on promoted rows)
@@ -84,9 +88,6 @@ function PlanInventory({ checkedIds, setCheckedIds, stapleFlags, setStapleFlags,
   // leaving the walk. The panel opens under the row; changes persist to the item, so a
   // re-filed item re-sections live. An item moved to ANOTHER location leaves this view,
   // so the note at the top says where it went and whether it's still on the list.
-  const onListNow = ing => ing.tier === "staple" ? !!stapleFlags[ing.id] && !checkedIds.includes(ing.id)
-    : ing.tier === "specialty" ? (mealIngIds.has(ing.id) || keptIds.includes(ing.id)) && !checkedIds.includes(ing.id)
-    : !checkedIds.includes(ing.id);
   const updateItem = (ing, patch) => {
     if (!onUpdateItem) return;
     onUpdateItem(ing.id, patch);
@@ -95,7 +96,7 @@ function PlanInventory({ checkedIds, setCheckedIds, stapleFlags, setStapleFlags,
     // Re-filed as specialty: specialty items only show when a planned meal needs one, or
     // when kept because they were already on the list. Say which, rather than let an
     // unneeded one vanish.
-    if (patch.tier === "specialty" && ing.tier !== "specialty" && !mealIngIds.has(ing.id) && !onListNow(ing)) {
+    if (patch.tier === "specialty" && ing.tier !== "specialty" && !mealIngIds.has(ing.id) && !buying(ing)) {
       setEditId(null);
       setMoveNote(`${ing.name} is now specialty. Specialty items only come up when a planned meal needs one, so it's off this week's list.`);
     }
@@ -104,7 +105,7 @@ function PlanInventory({ checkedIds, setCheckedIds, stapleFlags, setStapleFlags,
       setEditId(null);
       const toIdx = LOCS.indexOf(to);
       setMoveNote(toIdx >= 0 && toIdx < locIdx
-        ? `${ing.name} moved to ${to}. You've already been through ${to}; it's ${onListNow(ing) ? "still on" : "not on"} this week's list.`
+        ? `${ing.name} moved to ${to}. You've already been through ${to}; it's ${buying(ing) ? "still on" : "not on"} this week's list.`
         : toIdx > locIdx ? `${ing.name} moved to ${to}. It'll come up there.` : `${ing.name} moved to ${to}.`);
     }
   };
@@ -115,25 +116,31 @@ function PlanInventory({ checkedIds, setCheckedIds, stapleFlags, setStapleFlags,
     <ItemEditPanel ing={ing} thisWeek={quantities[ing.id]} onUpdate={patch => updateItem(ing, patch)} onClose={() => setEditId(null)} />
   );
 
-  const StapleRow = ({ ing, accent }) => {
-    // 1 meal -> name context line; 2+ meals -> the ×N badge above (never both)
+  // One row shape for every section. `dimOff`: an unchecked always or meal item is a
+  // skip, so it dims; an unchecked staple is the normal "have enough", so it doesn't.
+  const ItemRow = ({ ing, accent, dimOff }) => {
+    const on      = buying(ing);
+    const dim     = dimOff && !on;
+    // 1 meal -> name context line; 2+ meals -> the ×N badge (never both)
     const usedBy  = !multiMeal[ing.id] && (usedByMeal[ing.id] || []).length === 1 ? usedByMeal[ing.id] : [];
     return (
       <>
-      <div key={ing.id} style={{ display:"flex", alignItems:"center", padding:"10px 0", borderBottom:`1px solid ${C.border}`, gap:8 }}>
+      <div style={{ display:"flex", alignItems:"center", padding:"10px 0", borderBottom:`1px solid ${C.border}`, gap:10, cursor:"pointer", opacity:dim?0.45:1, transition:"opacity 0.2s" }} onClick={() => toggle(ing)}>
+        <Check checked={on} onChange={v => setOrdering(ing, v)} label={`Buy ${ing.name}`} />
         <div style={{ flex:1, minWidth:0 }}>
           <div style={{ fontSize:14, fontWeight:500 }}>{ing.name}{multiMeal[ing.id] && <span style={{ marginLeft:6, fontSize:11, fontWeight:700, color:"#B45309", background:"#FEF3C7", borderRadius:5, padding:"1px 5px" }}>×{multiMeal[ing.id]} meals</span>}</div>
           {usedBy.length > 0 && <div style={{ fontSize:11, color:accent, fontWeight:600 }}>for {usedBy.join(", ")}</div>}
-          <div style={{ fontSize:11, color:stapleFlags[ing.id]?accent:C.faint }}>{stapleFlags[ing.id]?"Adding to list":"Have enough"}</div>
         </div>
-        <QtyEdit ing={ing} />
-        <EditBtn ing={ing} />
-        <Toggle value={!!stapleFlags[ing.id]} onChange={v => setStapleFlags(prev => ({...prev,[ing.id]:v}))} />
+        <div onClick={e => e.stopPropagation()} style={{ display:"flex", alignItems:"center", gap:8 }}>
+          {!dim && <QtyEdit ing={ing} />}
+          <EditBtn ing={ing} />
+        </div>
       </div>
       <EditPanel ing={ing} />
       </>
     );
   };
+  const StapleRow = ({ ing, accent }) => <ItemRow ing={ing} accent={accent} />;
 
   return (
     <div>
@@ -148,28 +155,8 @@ function PlanInventory({ checkedIds, setCheckedIds, stapleFlags, setStapleFlags,
         <div style={{ ...S.card, padding:"0 16px" }}>
           {alwaysHere.length > 0 && (
             <>
-              <div style={{ fontSize:11, fontWeight:700, color:C.accent, padding:"10px 0 4px", textTransform:"uppercase", letterSpacing:"0.06em" }}>Always buy — tap to skip for this week</div>
-              {alwaysHere.map(ing => {
-                const skipped = checkedIds.includes(ing.id);
-                return (
-                  <React.Fragment key={ing.id}>
-                  <div style={{ display:"flex", alignItems:"center", padding:"10px 0", borderBottom:`1px solid ${C.border}`, gap:8, opacity:skipped?0.5:1, transition:"opacity 0.2s" }}>
-                    <div style={{ flex:1, minWidth:0 }}>
-                      <div style={{ fontSize:14, fontWeight:500, textDecoration:skipped?"line-through":"none", color:skipped?C.muted:"inherit" }}>{ing.name}{multiMeal[ing.id] && <span style={{ marginLeft:6, fontSize:11, fontWeight:700, color:"#B45309", background:"#FEF3C7", borderRadius:5, padding:"1px 5px" }}>×{multiMeal[ing.id]} meals</span>}</div>
-                      {!multiMeal[ing.id] && (usedByMeal[ing.id]||[]).length === 1 && <div style={{ fontSize:11, color:C.accent, fontWeight:600 }}>for {usedByMeal[ing.id][0]}</div>}
-                    </div>
-                    {!skipped && <QtyEdit ing={ing} />}
-                    <EditBtn ing={ing} />
-                    <button
-                      onClick={() => setCheckedIds(prev => skipped ? prev.filter(id => id !== ing.id) : [...prev, ing.id])}
-                      style={{ border:"none", background:"none", cursor:"pointer", fontSize:12, fontWeight:600, padding:"4px 6px", color:skipped?C.faint:C.accent, whiteSpace:"nowrap" }}>
-                      {skipped ? "Skipped — tap to add" : "✓ On list"}
-                    </button>
-                  </div>
-                  <EditPanel ing={ing} />
-                  </React.Fragment>
-                );
-              })}
+              <div style={{ fontSize:11, fontWeight:700, color:C.accent, padding:"10px 0 4px", textTransform:"uppercase", letterSpacing:"0.06em" }}>Always buy — uncheck to skip this week</div>
+              {alwaysHere.map(ing => <ItemRow key={ing.id} ing={ing} accent={C.accent} dimOff />)}
             </>
           )}
           {weeklyHere.length > 0 && (
@@ -188,31 +175,14 @@ function PlanInventory({ checkedIds, setCheckedIds, stapleFlags, setStapleFlags,
           {slowHere.length > 0 && (
             <>
               <div style={{ fontSize:11, fontWeight:700, color:C.muted, padding:"14px 0 2px", textTransform:"uppercase", letterSpacing:"0.06em" }}>Slow staples — quick scan, usually fine</div>
-              <div style={{ fontSize:11, color:C.faint, paddingBottom:4 }}>Only flag if you noticed it low. If you already added it in prep, it's marked below.</div>
+              <div style={{ fontSize:11, color:C.faint, paddingBottom:4 }}>Only check one if you noticed it running low.</div>
               {slowHere.map(ing => <StapleRow key={ing.id} ing={ing} accent={C.primary} />)}
             </>
           )}
           {mealHere.length > 0 && (
             <>
-              <div style={{ fontSize:11, fontWeight:700, color:C.muted, padding:"10px 0 4px", textTransform:"uppercase", letterSpacing:"0.06em" }}>Meal ingredients — check if you already have it</div>
-              {mealHere.map(ing => {
-                const inStock = checkedIds.includes(ing.id);
-                return (
-                  <React.Fragment key={ing.id}>
-                  <div style={{ display:"flex", alignItems:"center", gap:8, padding:"10px 0", borderBottom:`1px solid ${C.border}`, opacity:inStock?0.4:1, transition:"opacity 0.2s" }}>
-                    <div style={{ display:"flex", alignItems:"center", gap:10, flex:1, minWidth:0, cursor:"pointer" }} onClick={() => toggleChecked(ing.id)}>
-                      <div style={S.checkBox(inStock)}>{inStock && "✓"}</div>
-                      <div style={{ flex:1, minWidth:0 }}>
-                        <div style={{ fontSize:14, textDecoration:inStock?"line-through":"none" }}>{ing.name}{multiMeal[ing.id] && <span style={{ marginLeft:6, fontSize:11, fontWeight:700, color:"#B45309", background:"#FEF3C7", borderRadius:5, padding:"1px 5px" }}>×{multiMeal[ing.id]} meals</span>}</div>
-                        <div style={{ fontSize:11, color:inStock?C.verified:C.faint }}>{inStock?"Have it — skipping":"Need it — will order"}</div>
-                      </div>
-                    </div>
-                    <div onClick={e => e.stopPropagation()} style={{ display:"flex", alignItems:"center", gap:8 }}><QtyEdit ing={ing} /><EditBtn ing={ing} /></div>
-                  </div>
-                  <EditPanel ing={ing} />
-                  </React.Fragment>
-                );
-              })}
+              <div style={{ fontSize:11, fontWeight:700, color:C.muted, padding:"10px 0 4px", textTransform:"uppercase", letterSpacing:"0.06em" }}>Meal ingredients — uncheck what you already have</div>
+              {mealHere.map(ing => <ItemRow key={ing.id} ing={ing} accent={C.accent} dimOff />)}
             </>
           )}
         </div>

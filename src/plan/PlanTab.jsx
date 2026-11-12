@@ -9,6 +9,7 @@ import { RefreshReminder, WeekSelector } from "../components/common.jsx";
 import { PlanConfirm } from "./PlanConfirm.jsx";
 import { PlanInventory } from "./PlanInventory.jsx";
 import { PlanMeals } from "./PlanMeals.jsx";
+import { orderingPatch } from "./ordering.js";
 
 // ── PLAN TAB ───────────────────────────────────────────────────────────────────
 
@@ -60,7 +61,7 @@ function PlanTab({ db, persistDB, onGoToImport, onGoToUnassigned }) {
   // rebuilt from mealPlan via reconcilePlates, never edited on their own.
   const [plates, setPlates]           = useState(draft?.plates || {});
   const [checkedIds, setCheckedIds]   = useState(draft?.checkedIds || []);
-  const [removedIds, setRemovedIds]   = useState(draft?.removedIds || []);
+  const [addedOff, setAddedOff]       = useState(draft?.addedOff || []);  // items added on Confirm, then unchecked (kept, dimmed)
   const [addedItems, setAddedItems]   = useState(draft?.addedItems || []);
   const [dayNotes, setDayNotes]       = useState(draft?.dayNotes || {});
   const [dayPills, setDayPills]       = useState(draft?.dayPills || {});
@@ -81,7 +82,7 @@ function PlanTab({ db, persistDB, onGoToImport, onGoToUnassigned }) {
   const saveDraft = (patch = {}, opts = {}) => {
     const next = {
       ...draft,
-      step, maxStep, timeLevels, presence, mealPlan, plates, checkedIds, removedIds, addedItems, dayNotes, dayPills, stapleFlags, quantities, weather,
+      step, maxStep, timeLevels, presence, mealPlan, plates, checkedIds, addedOff, addedItems, dayNotes, dayPills, stapleFlags, quantities, weather,
       _stepsVer: 4,
       startedAt: draft?.startedAt || new Date().toISOString(),
       ...patch,
@@ -118,7 +119,7 @@ function PlanTab({ db, persistDB, onGoToImport, onGoToUnassigned }) {
     setCheckedIds(nChecked); setStapleFlags(nFlags);
     const next = {
       ...draft,
-      step, maxStep, timeLevels, presence, mealPlan, plates, checkedIds: nChecked, removedIds, addedItems, dayNotes, dayPills, stapleFlags: nFlags, quantities, weather,
+      step, maxStep, timeLevels, presence, mealPlan, plates, checkedIds: nChecked, addedOff, addedItems, dayNotes, dayPills, stapleFlags: nFlags, quantities, weather,
       keptIds: nKept, _stepsVer: 4, startedAt: draft?.startedAt || new Date().toISOString(),
     };
     persistDB(writeActivePlan({ ...db, ingredients: nextIngredients }, next));
@@ -145,7 +146,14 @@ function PlanTab({ db, persistDB, onGoToImport, onGoToUnassigned }) {
     setMealPlan(nv); setPlates(np); saveDraft({ mealPlan: nv, plates: np });
   };
   const setCheckedIdsP  = v => { const nv = typeof v === "function" ? v(checkedIds)  : v; setCheckedIds(nv);  saveDraft({ checkedIds: nv }); };
-  const setRemovedIdsP  = v => { const nv = typeof v === "function" ? v(removedIds)  : v; setRemovedIds(nv);  saveDraft({ removedIds: nv }); };
+  const setAddedOffP    = v => { const nv = typeof v === "function" ? v(addedOff)    : v; setAddedOff(nv);    saveDraft({ addedOff: nv }); };
+  // Checked = buying (Phase 1b): Inventory and Confirm both set the one decision per item;
+  // checkedIds and stapleFlags change together in a single save.
+  const setOrdering = (ing, on) => {
+    const next = orderingPatch(ing, on, { checkedIds, stapleFlags });
+    setCheckedIds(next.checkedIds); setStapleFlags(next.stapleFlags);
+    saveDraft({ checkedIds: next.checkedIds, stapleFlags: next.stapleFlags });
+  };
   const setAddedItemsP  = v => { const nv = typeof v === "function" ? v(addedItems)  : v; setAddedItems(nv);  saveDraft({ addedItems: nv }); };
   const setDayNotesP    = v => { const nv = typeof v === "function" ? v(dayNotes)    : v; setDayNotes(nv);    saveDraft({ dayNotes: nv }); };
   const setDayPillsP    = v => { const nv = typeof v === "function" ? v(dayPills)    : v; setDayPills(nv);    saveDraft({ dayPills: nv }); };
@@ -185,7 +193,7 @@ function PlanTab({ db, persistDB, onGoToImport, onGoToUnassigned }) {
     }
     const nextPlates = reconcilePlates(mealPlan, newMealPlan, plates, meals);
     setPlates(nextPlates);
-    const nextDraft = { ...draft, step, maxStep, timeLevels, presence, mealPlan:newMealPlan, plates:nextPlates, checkedIds, removedIds, addedItems, dayNotes, stapleFlags, quantities, weather, startedAt: draft?.startedAt || new Date().toISOString() };
+    const nextDraft = { ...draft, step, maxStep, timeLevels, presence, mealPlan:newMealPlan, plates:nextPlates, checkedIds, addedOff, addedItems, dayNotes, stapleFlags, quantities, weather, startedAt: draft?.startedAt || new Date().toISOString() };
     persistDB(writeActivePlan({ ...db, meals }, nextDraft));
   };
 
@@ -204,7 +212,7 @@ function PlanTab({ db, persistDB, onGoToImport, onGoToUnassigned }) {
     setPlates({});
     setMealPlan(freshMeals);
     setCheckedIds([]);
-    setRemovedIds([]);
+    setAddedOff([]);
     setDayNotes({});
     setStapleFlags({});
     setQuantities({});
@@ -229,7 +237,7 @@ function PlanTab({ db, persistDB, onGoToImport, onGoToUnassigned }) {
       // Auto-populate day notes from this week's baked-in schedule so a new plan
       // never starts blank. notesTouched tracks manual edits so a later refresh
       // can tell "never edited" from "deliberately changed".
-      step:1, maxStep:1, timeLevels:freshLevels, presence:{}, mealPlan:freshMeals, plates:{}, checkedIds:[], removedIds:[], addedItems:[], dayNotes:{ ...defaultNotes }, dayPills:{}, notesTouched:false, _stepsVer:4, stapleFlags:{}, quantities:{}, weather:"hot", startedAt:new Date().toISOString(),
+      step:1, maxStep:1, timeLevels:freshLevels, presence:{}, mealPlan:freshMeals, plates:{}, checkedIds:[], addedOff:[], addedItems:[], dayNotes:{ ...defaultNotes }, dayPills:{}, notesTouched:false, _stepsVer:4, stapleFlags:{}, quantities:{}, weather:"hot", startedAt:new Date().toISOString(),
     };
 
     persistDB(writeActivePlan({ ...db, mealHistory }, freshPlan));
@@ -254,7 +262,7 @@ function PlanTab({ db, persistDB, onGoToImport, onGoToUnassigned }) {
     const freshPlan = {
       weekStartDate: nextStart, notes:"", meals:{}, items:[],
       dismissedShared:[],
-      step:1, maxStep:1, timeLevels:seedTimeLevels(), presence:{}, mealPlan:freshMeals, plates:{}, checkedIds:[], removedIds:[], addedItems:[], dayNotes:{ ...defaultNotes }, dayPills:{}, notesTouched:false, _stepsVer:4, stapleFlags:{}, quantities:{}, weather:"hot", startedAt:new Date().toISOString(),
+      step:1, maxStep:1, timeLevels:seedTimeLevels(), presence:{}, mealPlan:freshMeals, plates:{}, checkedIds:[], addedOff:[], addedItems:[], dayNotes:{ ...defaultNotes }, dayPills:{}, notesTouched:false, _stepsVer:4, stapleFlags:{}, quantities:{}, weather:"hot", startedAt:new Date().toISOString(),
     };
     persistDB({ ...db, plans: { ...db.plans, next: freshPlan }, activePlan: "next" });
   };
@@ -327,9 +335,9 @@ function PlanTab({ db, persistDB, onGoToImport, onGoToUnassigned }) {
       <StepNav />
       <div style={S.body}>
         {step === 1 && <PlanMeals   mealPlan={mealPlan} plates={plates} setMealPlan={setMealPlanP} commitMealToPlan={commitMealToPlan} timeLevels={timeLevels} setTimeLevels={setTimeLevelsP} presence={presence} setPresence={setPresenceP} weekStartDate={draft?.weekStartDate} adventurousWeek={!!draft?.adventurousWeek} setAdventurousWeek={v => saveDraft({ adventurousWeek: v })} meals={meals} onNext={() => goToStep(2)} days={days} daysFull={daysFull} dayNotes={dayNotes} setDayNotes={setDayNotesP} dayPills={dayPills} setDayPills={setDayPillsP} db={db} persistDB={persistDB} extraDays={extraDays} canExtend={canExtend} setExtraDays={setExtraDays} />}
-        {step === 2 && <PlanInventory checkedIds={checkedIds} setCheckedIds={setCheckedIdsP} stapleFlags={stapleFlags} setStapleFlags={setStapleFlagsP} quantities={quantities} setQuantities={setQuantitiesP} mealPlan={mealPlan} meals={meals} ingredients={ingredients} onNext={() => goToStep(3)} days={days} onUpdateItem={updateItem} keptIds={keptIds} />}
-        {step === 3 && <PlanConfirm mode="confirm" onUpdateItem={updateItem} keptIds={keptIds} checkedIds={checkedIds} removedIds={removedIds} setRemovedIds={setRemovedIdsP} addedItems={addedItems} setAddedItems={setAddedItemsP} stapleFlags={stapleFlags} quantities={quantities} setQuantities={setQuantitiesP} mealPlan={mealPlan} meals={meals} ingredients={ingredients} onNext={() => goToStep(4)} db={db} persistDB={persistDB} days={days} daysFull={daysFull} />}
-        {step === 4 && <PlanConfirm mode="sparky" onUpdateItem={updateItem} keptIds={keptIds} checkedIds={checkedIds} removedIds={removedIds} setRemovedIds={setRemovedIdsP} addedItems={addedItems} setAddedItems={setAddedItemsP} stapleFlags={stapleFlags} quantities={quantities} setQuantities={setQuantitiesP} mealPlan={mealPlan} meals={meals} ingredients={ingredients} onFinish={finishPlan} db={db} persistDB={persistDB} days={days} daysFull={daysFull} />}
+        {step === 2 && <PlanInventory checkedIds={checkedIds} setCheckedIds={setCheckedIdsP} stapleFlags={stapleFlags} setOrdering={setOrdering} quantities={quantities} setQuantities={setQuantitiesP} mealPlan={mealPlan} meals={meals} ingredients={ingredients} onNext={() => goToStep(3)} days={days} onUpdateItem={updateItem} keptIds={keptIds} />}
+        {step === 3 && <PlanConfirm mode="confirm" onUpdateItem={updateItem} keptIds={keptIds} checkedIds={checkedIds} setOrdering={setOrdering} addedOff={addedOff} setAddedOff={setAddedOffP} addedItems={addedItems} setAddedItems={setAddedItemsP} stapleFlags={stapleFlags} quantities={quantities} setQuantities={setQuantitiesP} mealPlan={mealPlan} meals={meals} ingredients={ingredients} onNext={() => goToStep(4)} db={db} persistDB={persistDB} days={days} daysFull={daysFull} />}
+        {step === 4 && <PlanConfirm mode="sparky" onUpdateItem={updateItem} keptIds={keptIds} checkedIds={checkedIds} setOrdering={setOrdering} addedOff={addedOff} setAddedOff={setAddedOffP} addedItems={addedItems} setAddedItems={setAddedItemsP} stapleFlags={stapleFlags} quantities={quantities} setQuantities={setQuantitiesP} mealPlan={mealPlan} meals={meals} ingredients={ingredients} onFinish={finishPlan} db={db} persistDB={persistDB} days={days} daysFull={daysFull} />}
         {step > 1 && (
           <button style={{ background:"none", border:`1px solid ${C.border}`, borderRadius:10, padding:"10px 16px", fontSize:14, color:C.muted, cursor:"pointer", width:"100%", marginTop:4 }} onClick={() => goToStep(step - 1)}>
             ← Back
