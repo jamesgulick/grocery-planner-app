@@ -51,6 +51,7 @@ function PlanConfirm({ mode = "confirm", onUpdateItem, keptIds = [], checkedIds,
     skipped: new Set(relevant.filter(i => isExplicitNo(i, st)).map(i => i.id)),
   }));
   const [showSkipped, setShowSkipped] = useState(false);
+  const [showEliminated, setShowEliminated] = useState(false);
   const inArrival = i => arrival.listed.has(i.id);
 
   const seen = new Set();
@@ -111,6 +112,7 @@ function PlanConfirm({ mode = "confirm", onUpdateItem, keptIds = [], checkedIds,
     .filter(Boolean)
     .sort((a, b) => b.n - a.n || a.name.localeCompare(b.name));
   const activeShared = sharedItems.filter(s => !s.dismissed);
+  const eliminatedShared = sharedItems.filter(s => s.dismissed);
   const locSuffix = s => s.loc && s.loc !== "Unassigned" ? ` (${s.loc})` : "";
   // Sparky-directed version: Sparky knows the cart but NOT the meal plan, so we
   // give it the per-item meal counts, ask it to report the cart quantity of each
@@ -295,21 +297,38 @@ function PlanConfirm({ mode = "confirm", onUpdateItem, keptIds = [], checkedIds,
         <div style={S.card}>
           <div style={{ fontSize:12, fontWeight:700, color:"#B45309", marginBottom:4 }}>⚠ Used across multiple meals</div>
           <div style={{ fontSize:12, color:C.muted, marginBottom:8, lineHeight:1.4 }}>
-            Each feeds several meals — including ones you have or already bought. Easy to under-buy when you've mentally checked it off. Uncheck any you know are fine (like butter); the checked ones go to Sparky as a double check.
+            Each feeds several meals — including ones you have or already bought. Easy to under-buy when you've mentally checked it off. Tap ✕ on any you know are fine (like butter); the rest go to Sparky as a double check.
           </div>
-          <div style={{ background:"#FEF9EF", border:`1px solid #FCE7C3`, borderRadius:8, padding:"4px 10px" }}>
-            {sharedItems.map(s => {
-              const sc = s.status === "ordering" ? "#B45309" : C.muted;
-              return (
-                <div key={s.id} style={{ display:"flex", alignItems:"center", gap:10, fontSize:13, padding:"6px 0", opacity:s.dismissed?0.45:1, cursor:"pointer" }} onClick={() => toggleDismissShared(s.id)}>
-                  <Check checked={!s.dismissed} onChange={() => toggleDismissShared(s.id)} label={`Double-check ${s.name}`} />
+          {activeShared.length > 0 && (
+            <div style={{ background:"#FEF9EF", border:`1px solid #FCE7C3`, borderRadius:8, padding:"2px 0 2px 10px" }}>
+              {activeShared.map(s => (
+                <div key={s.id} style={{ display:"flex", alignItems:"center", gap:10, fontSize:13, minHeight:44 }}>
                   <span style={{ flex:1, minWidth:0 }}>{s.name}{s.loc && s.loc !== "Unassigned" && <span style={{ color:C.faint, fontWeight:400 }}> ({s.loc})</span>}</span>
-                  <span style={{ fontSize:11, color:sc, fontWeight:600 }}>{s.status}</span>
+                  <span style={{ fontSize:11, color:s.status === "ordering" ? "#B45309" : C.muted, fontWeight:600 }}>{s.status}</span>
                   <span style={{ fontWeight:700, color:"#B45309" }}>×{s.n}</span>
+                  {/* Delete affordance (11/11): eliminates the concern for this week; it never touches the order. */}
+                  <button type="button" aria-label={`Remove ${s.name} from the double check`} onClick={() => toggleDismissShared(s.id)}
+                    style={{ width:44, height:44, flexShrink:0, background:"none", border:"none", cursor:"pointer", color:C.muted, fontSize:16, lineHeight:1 }}>✕</button>
                 </div>
-              );
-            })}
-          </div>
+              ))}
+            </div>
+          )}
+          {activeShared.length === 0 && <div style={{ fontSize:12, color:C.faint }}>All cleared — nothing goes to Sparky's double check.</div>}
+          {eliminatedShared.length > 0 && (
+            <>
+              <button type="button" onClick={() => setShowEliminated(v => !v)} aria-expanded={showEliminated}
+                style={{ display:"flex", alignItems:"center", gap:6, background:"none", border:"none", padding:"0", minHeight:44, cursor:"pointer", fontSize:12, color:C.muted }}>
+                Eliminated ({eliminatedShared.length}) <span>{showEliminated ? "▾" : "▸"}</span>
+              </button>
+              {showEliminated && eliminatedShared.map(s => (
+                <div key={s.id} style={{ display:"flex", alignItems:"center", gap:10, fontSize:13, minHeight:44, color:C.muted }}>
+                  <span style={{ flex:1, minWidth:0 }}>{s.name} <span style={{ color:C.faint }}>×{s.n}</span></span>
+                  <button type="button" onClick={() => toggleDismissShared(s.id)}
+                    style={{ minHeight:44, padding:"0 4px", background:"none", border:"none", cursor:"pointer", fontSize:12, fontWeight:600, color:C.primary }}>Restore</button>
+                </div>
+              ))}
+            </>
+          )}
         </div>
       )}
 
