@@ -40,6 +40,15 @@
   --touch: 44px;              /* minimum tap target, on the control itself */
   --pill-height: 36px;        /* visible inline pill; its tap area is still --touch */
   --safe-bottom: env(safe-area-inset-bottom, 0px);
+
+  /* Bars: the TabBar and StickyActionBar only (decided 11/11). Translucent with a light
+     blur; content scrolls beneath. 0.92 is the most see-through that keeps full
+     contrast: worst case (solid near-black content under the bar, before blur) gives
+     --text-muted 4.5:1 and --action 10.7:1. No glass or blur anywhere else. Where
+     backdrop-filter is unsupported the bars use --surface instead. */
+  --bar-bg: rgba(255, 255, 255, 0.92);
+  --bar-blur: blur(20px) saturate(180%);
+  --bar-border: var(--divider);
 }
 
 html, body {
