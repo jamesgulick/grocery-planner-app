@@ -154,7 +154,7 @@ in one file: **`src/grocery-app.jsx`**. `src/main.jsx` only mounts it.
 src/grocery-app.jsx          ← the app: state, UI, all components, styles
 src/engine/composeWeek.js    ← the engine: composeWeek + evaluateWeek (validated offline; see below)
 src/engine/assembleInputs.js ← app state → engine inputs, plates, week check, hardened call
-src/ingredientMatch.js       ← the one text→ingredient matcher (recipe paste, Prep's cart paste); not engine
+src/ingredientMatch.js       ← the one text→ingredient matcher (recipe paste); not engine
 src/mealRename.js            ← renames a meal everywhere plans and history name it; not engine
 src/main.jsx                 ← mounts <App/> to #root
 src/index.css                ← base styles
@@ -232,7 +232,7 @@ Pre-migration DBs carry two older single-slot concepts (db.planDraft live-editin
   changes the Confirm "keep as usual?" card was dismissed for.
 - The plan-inputs migration (easy pills → timeLevels, the Partner away map and the away-member toggle → presence / an open-ended away period) is stamped by `_planInputsVer`.
 
-Settings added for the engine: `grillOpen` (grill season, Manage → Config → Cooking), `awayRanges`, `learnMode`. `awayMemberHome` survives, relabelled, and now ONLY decides who gets family texts.
+Settings added for the engine: `grillOpen` (grill season, Manage → Config → Cooking), `awayRanges`, `learnMode`. `awayMemberHome` (who got family texts) lost its last consumer when polish Phase 1 cut the Tonight text queue; old DBs may carry it, and only the plan-inputs migration reads it.
 
 ## Key subsystems
 
@@ -314,8 +314,8 @@ Settings added for the engine: `grillOpen` (grill season, Manage → Config → 
   were blocked. On GitHub Pages these limits are gone, but the copy pattern is
   harmless and can stay.
 - **Some identifiers carry historical names** (e.g. `memberOk`, `awayMemberHome`) from a
-  refactor that genericized personal data. They're just variable names. (`awayHome`
-  now survives only inside the plan-inputs migration that converts it.)
+  refactor that genericized personal data. They're just variable names. (`awayHome` and
+  `awayMemberHome` now survive only inside the plan-inputs migration that converts them.)
   **Ephemeral component-local state dies across a re-rendered-instance transition, and the bundler does NOT catch it.** PlanConfirm is rendered as TWO instances — mode="confirm" (step 3) and mode="sparky" (step 4). Any state held in a local useState inside that component is discarded when the flow moves between the two instances, because they're different mounts. This has bitten the project at least twice: the removed set (confirm-step removals) and then the added set both vanished on the Confirm→Sparky transition. Any state that must survive that transition has to be lifted to the persisted plan object (as removedIds / added-items were), not kept component-local. When adding state to PlanConfirm, ask: does this need to survive the confirm↔sparky switch? If yes, lift it.
 
 ## THE REPO MUST BE PUBLIC — and what that forces (READ BEFORE ANY COMMIT)

@@ -543,7 +543,7 @@ const SEED_MEALS = [
 ];
 
 const DEFAULT_SETTINGS = {
-  shoppingDay:"Wednesday", awayMemberHome:true,
+  shoppingDay:"Wednesday",
   // Date-range away periods for meal planning (REFACTOR B2): [{ id, name, from, to }],
   // ISO dates, either end may be null (open). See presentOn.
   awayRanges:[],
@@ -556,7 +556,8 @@ const DEFAULT_SETTINGS = {
 
 const DEFAULT_DB = { settings:DEFAULT_SETTINGS, meals:SEED_MEALS, ingredients:SEED_INGREDIENTS, plans:{ current:null, next:null }, activePlan:"current", _planModelVer:1, outbox:null, published:null, mealHistory:[], _isSeed:true, dataChangedAt:null, lastExportedAt:null };
 
-// outbox shape (legacy single-slot, still used by in-app TonightTab queue):
+// outbox shape (written by Tonight's "Queue for Shortcut", cut in polish Phase 1;
+// older DBs may still carry one, nothing reads it):
 // { message, recipients:[phone...], mode:"group"|"individual", label, queuedAt, sent:false }
 //
 // published shape (v2) — generic menu the mid-week Shortcut reads. Flat list of
@@ -745,7 +746,8 @@ const migrateDB = db => {
   //   B2: the Partner-only per-day awayHome map → per-night presence overrides;
   //       the persistent away-member toggle, when off, → an open-ended away
   //       period, so planning sees the same absence it did before. The toggle
-  //       itself stays: it still decides who gets family texts.
+  //       itself stayed to decide who got family texts, until polish Phase 1 cut the
+  //       text queue; old DBs may still carry it, nothing reads it after this migration.
   if ((out._planInputsVer || 0) < PLAN_INPUTS_VER) {
     const contacts   = out.settings?.familyContacts || [];
     const partner    = contacts.find(f => f.isPartner);
@@ -4208,15 +4210,10 @@ function ManageConfig({ db, persistDB }) {
 
       <div style={S.card}>
         <div style={S.sectionLabel}>Family</div>
-        <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"10px 0", borderBottom:`1px solid ${C.border}` }}>
-          <div><div style={{ fontWeight:600 }}>{(db.settings.familyContacts||[]).find(f=>f.canBeAway)?.name || "Away member"} gets family texts</div><div style={{ fontSize:12, color:C.faint }}>Off leaves them out of family texts (e.g. at college). Meal planning uses Away periods below.</div></div>
-          <Toggle value={db.settings.awayMemberHome} onChange={v => upd("awayMemberHome",v)} />
-        </div>
         <AwayPeriods contacts={db.settings.familyContacts || []} ranges={db.settings.awayRanges || []} onChange={r => upd("awayRanges", r)} />
         {(db.settings.familyContacts||[]).map((f,i,arr) => (
           <div key={f.name} style={{ ...S.row, padding:"10px 0", ...(i===arr.length-1?S.rowLast:{}) }}>
-            <div style={{ flex:1 }}><div style={{ fontWeight:600 }}>{f.name}</div><div style={{ fontSize:12, color:C.faint }}>{f.phone||"No number set"}</div></div>
-            {f.canBeAway && !db.settings.awayMemberHome && <span style={S.badge(C.muted,"#F3F4F6")}>away</span>}
+            <div style={{ flex:1 }}><div style={{ fontWeight:600 }}>{f.name}</div></div>
           </div>
         ))}
       </div>
@@ -4426,11 +4423,6 @@ function buildFridgeReportHTML(db) {
 // ── TONIGHT TAB ────────────────────────────────────────────────────────────────
 
 function TonightTab({ db, persistDB }) {
-  const awayMemberHome    = db.settings?.awayMemberHome !== false;
-  const contacts     = db.settings?.familyContacts || DEFAULT_SETTINGS.familyContacts;
-  const activeFamily = contacts.filter(f => !f.canBeAway || awayMemberHome);
-  const [recipient, setRecipient] = useState("all");
-  const [queued, setQueued] = useState(false);
 
   // TONIGHT/TOMORROW are DATE-anchored (SPEC-active-plan-app-wide.md): always
   // the real today/tomorrow, resolved by which plan's week actually contains
@@ -4475,9 +4467,6 @@ function TonightTab({ db, persistDB }) {
     setTimeout(() => setTonightCopied(null), 4000);
   };
 
-  // Write a ready-to-send entry into db.outbox. The app resolves recipients
-  // (applying the away-member rule) and the message here, so the Shortcut that
-  // reads this only has to send it — no parsing or logic on the Shortcut side.
   const openFridgeReport = () => {
     const html = buildFridgeReportHTML(db);
     const url  = URL.createObjectURL(new Blob([html], { type:"text/html" }));
@@ -4485,23 +4474,6 @@ function TonightTab({ db, persistDB }) {
     setTimeout(() => URL.revokeObjectURL(url), 60000);
   };
 
-  const queueForShortcut = () => {
-    const message = buildMessage();
-    let recipients, mode, label;
-    if (recipient === "all") {
-      recipients = activeFamily.map(f => f.phone).filter(Boolean);
-      mode = "group";
-      label = "Everyone (" + activeFamily.map(f=>f.name).join(", ") + ")";
-    } else {
-      const person = activeFamily.find(f => f.name === recipient);
-      recipients = person?.phone ? [person.phone] : [];
-      mode = "individual";
-      label = person?.name || recipient;
-    }
-    persistDB({ ...db, outbox: { message, recipients, mode, label, queuedAt:new Date().toISOString(), sent:false } });
-    setQueued(true);
-    setTimeout(() => setQueued(false), 3000);
-  };
 
   return (
     <div>
@@ -4551,28 +4523,12 @@ function TonightTab({ db, persistDB }) {
       </div>
 
       <div style={S.card}>
-        <div style={S.sectionLabel}>Send to</div>
-        {[{name:"all",label:"Everyone (Family Dinner)"}, ...activeFamily].map((opt,i,arr) => (
-          <div key={opt.name} style={{ display:"flex", alignItems:"center", gap:12, padding:"11px 0", borderBottom:i===arr.length-1?"none":`1px solid ${C.border}`, cursor:"pointer" }} onClick={() => setRecipient(opt.name)}>
-            <div style={{ width:20, height:20, borderRadius:"50%", border:`2px solid ${recipient===opt.name?C.primary:C.border}`, display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>
-              {recipient===opt.name && <div style={{ width:10, height:10, borderRadius:"50%", background:C.primary }} />}
-            </div>
-            <div style={{ fontWeight:600 }}>{opt.label||opt.name}</div>
-          </div>
-        ))}
-        <button style={{ ...S.btn, ...S.btnP, marginTop:14, marginBottom:8 }} onClick={sendTonight}>📋 Copy tonight's dinner</button>
+        <div style={S.sectionLabel}>Tell the family</div>
+        <button style={{ ...S.btn, ...S.btnP, marginBottom:tonightCopied ? 8 : 0 }} onClick={sendTonight}>{tonightCopied ? "✓ Copied tonight's dinner" : "📋 Copy tonight's dinner"}</button>
         {tonightCopied && (
-          <div style={{ marginBottom:8 }}>
+          <div>
             <div style={{ fontSize:12, color:C.verified, fontWeight:600, marginBottom:4 }}>✓ Copied — paste into Messages</div>
             <textarea readOnly value={tonightCopied} onFocus={e => e.target.select()} style={{ ...S.input, height:60, fontSize:12, resize:"none", marginBottom:0, fontFamily:"inherit" }} />
-          </div>
-        )}
-        <button style={{ ...S.btn, background:queued?"#2D6A4F":"#4A90D9", color:"#fff", marginBottom:0 }} onClick={queueForShortcut}>
-          {queued ? "✓ Queued — run your Shortcut" : "📲 Queue for Shortcut to send"}
-        </button>
-        {db.outbox && !db.outbox.sent && (
-          <div style={{ fontSize:11, color:C.faint, marginTop:8, lineHeight:1.4 }}>
-            Outbox ready: {db.outbox.label} · {db.outbox.recipients.length} recipient{db.outbox.recipients.length!==1?"s":""}. Export to iCloud, then run your send Shortcut.
           </div>
         )}
       </div>
