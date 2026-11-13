@@ -117,6 +117,12 @@ export const TabBar = ({ tabs, active, onSelect }) => (
 );
 export const TabBarSpacer = () => <div className="ui-tabbar-spacer" aria-hidden="true" />;
 
+// ── Sticky action bar: pinned just above the tab bar, translucent like it (decided 11/11).
+// The screen leaves room for it at the end of its content.
+export const ActionBar = ({ children }) => (
+  <div className="ui-actionbar"><div className="ui-actionbar-inner">{children}</div></div>
+);
+
 // ── Top bar for tabs other than Home ─────────────────────────────────────────
 export const TopBar = ({ title, children }) => (
   <header className="ui-topbar"><h1 className="ui-heading">{title}</h1><div className="ui-icons">{children}</div></header>

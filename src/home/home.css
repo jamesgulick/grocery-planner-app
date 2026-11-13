@@ -36,3 +36,5 @@
 
 .home-share { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-3); }
 .home-share .ui-tile-button:disabled { opacity: 0.45; cursor: default; }
+.home-share .ui-tile-button { background: var(--bg); }   /* tiles read as tiles on the white bar */
+.home-share-spacer { height: calc(var(--block-button) + var(--space-4) + 1px); flex: none; margin-top: calc(-1 * var(--space-5)); }

@@ -1,6 +1,7 @@
 // Home (polish Phase 2, canvas "Home A · Tonight-first", decisions 11/12–11/13): today's date
 // as the screen title, Tonight, then "Coming up": a rolling 7 days from tomorrow that runs past
-// the end of the week. Each week in it starts with a pale-green week row (Not planned · Plan /
+// the end of the week, and on to the end of a planned week it reaches (11/13: show all of next
+// week's meals). Each week in it starts with a pale-green week row (Not planned · Plan /
 // Up next: <step> · Continue + step bar / Ordered · pickup <day>), followed by its planned days
 // (away info by name, plate concerns in amber, verbatim). Then Fridge report / Share with
 // family. No time icons, no app name, no instructional copy.
@@ -11,7 +12,7 @@ import { copyToClipboard } from "../app/clipboard.js";
 import { buildFridgeReportHTML } from "../app/fridgeReport.js";
 import { planDays, todayLocalISO, weekLabel } from "../app/globals.js";
 import { draftPlanText } from "../app/shareText.js";
-import { Group, Icon, IconButton, PillButton, Section } from "../ui/kit.jsx";
+import { ActionBar, Group, Icon, IconButton, PillButton, Section } from "../ui/kit.jsx";
 import "./home.css";
 
 const ABBR = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
@@ -127,11 +128,15 @@ export function HomeScreen({ db, dataDot, onOpenData, onOpenSettings, onOpenPlan
     const find = weekFinder(plans, shoppingDay);
     const tonightWeek = find(today);
     const groups = [];
-    for (let n = 1; n <= LIST_DAYS; n++) {
-      const iso = addDaysISO(today, n);
+    let iso = addDaysISO(today, 1);
+    const last = addDaysISO(today, LIST_DAYS);
+    for (;;) {
       const w = find(iso);
       if (groups[groups.length - 1]?.week !== w) groups.push({ week: w, rows: [] });
       if (w.plan) groups[groups.length - 1].rows.push({ iso, key: dayKeyForDate(w.plan, iso) });
+      iso = addDaysISO(iso, 1);
+      // Past the rolling window, keep going only to the end of a planned week already begun.
+      if (iso > last && !(w.plan && iso < w.end && find(iso) === w)) break;
     }
     return { tonightWeek, groups };
   }, [plans, shoppingDay, today]);
@@ -248,11 +253,15 @@ export function HomeScreen({ db, dataDot, onOpenData, onOpenSettings, onOpenPlan
           </Group>
         </Section>
 
+        <div className="home-share-spacer" aria-hidden="true" />
+      </main>
+
+      <ActionBar>
         <div className="home-share">
           <button type="button" className="ui-tile-button" onClick={openFridgeReport}><Icon name="print" size={18} />Fridge report</button>
           <button type="button" className="ui-tile-button" onClick={shareWithFamily} disabled={!sharePlan}><Icon name="share" size={18} />{shared ? "Copied" : "Share with family"}</button>
         </div>
-      </main>
+      </ActionBar>
     </div>
   );
 }
