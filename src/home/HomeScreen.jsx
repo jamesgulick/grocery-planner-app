@@ -47,9 +47,16 @@ function awayLines(rows, plan, db) {
 export function HomeScreen({ db, dataDot, onOpenData, onOpenSettings, onOpenPlan }) {
   const today = todayLocalISO();
   const plans = db.plans || {};
-  const planKey = dayKeyForDate(plans.next, today) ? "next" : dayKeyForDate(plans.current, today) ? "current" : null;
+  // The week shown: the plan whose week contains today; failing that, the next week that
+  // starts after today (a week planned ahead of shopping day starts in the future, and the
+  // gap between two weeks has no "today" plan either). `upcoming` = no plan covers today.
+  const coversToday = dayKeyForDate(plans.next, today) ? "next" : dayKeyForDate(plans.current, today) ? "current" : null;
+  const upcomingKey = coversToday ? null
+    : ["current", "next"].filter(k => plans[k]?.weekStartDate > today).sort((a, b) => plans[a].weekStartDate.localeCompare(plans[b].weekStartDate))[0] || null;
+  const planKey = coversToday || upcomingKey;
+  const upcoming = !coversToday && !!upcomingKey;
   const plan = planKey ? plans[planKey] : null;
-  const nextPlan = planKey === "current" ? plans.next : null;
+  const nextPlan = coversToday === "current" ? plans.next : null;
 
   const dates = plan ? weekDates(plan.weekStartDate, extraDaysOf(plan)) : {};
   const todayKey = plan ? dayKeyForDate(plan, today) : null;
@@ -123,7 +130,7 @@ export function HomeScreen({ db, dataDot, onOpenData, onOpenSettings, onOpenPlan
         </Section>
 
         {rows.length > 0 && (
-          <Section label="Rest of the week">
+          <Section label={upcoming ? "Coming up" : "Rest of the week"}>
             <Group>
               {rows.map(({ key, iso }) => {
                 const d = dishesFor(plan, key);
@@ -144,7 +151,7 @@ export function HomeScreen({ db, dataDot, onOpenData, onOpenSettings, onOpenPlan
           </Section>
         )}
 
-        {planKey !== "next" && (
+        {(!plan || coversToday === "current") && (
           <Group>
             <div className="home-next">
               <span className="home-next-text">
