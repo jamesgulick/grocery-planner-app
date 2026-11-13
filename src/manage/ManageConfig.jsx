@@ -1,6 +1,7 @@
 // Split verbatim from grocery-app.jsx in polish Phase 1.5; see CLAUDE.md's file map.
 import { useRef, useState } from "react";
 import { copyToClipboard } from "../app/clipboard.js";
+import { prepareImport } from "../app/dataIO.js";
 import { buildBackupPayload, buildExportDB, downloadBackup, previewImportOk, stripExportNodes } from "../app/exportData.js";
 import { extractJSON } from "../app/globals.js";
 import { planCount } from "../app/plans.js";
@@ -93,16 +94,10 @@ function ManageConfig({ db, persistDB }) {
   // confirmation (counts + as-of from the imported _meta.dataChangedAt)
   // instead of a bare "Imported!" alert.
   const applyImport = imp => {
-    if (!imp.meals || !imp.ingredients) throw new Error("Invalid format");
-    if (!previewImportOk(imp)) return false;
-    const asOf = imp._meta?.dataChangedAt || null;
-    const parsed = {
-      ...stripExportNodes(imp),
-      settings: { ...DEFAULT_SETTINGS, ...(imp.settings || {}) },
-      _isSeed: false,
-    };
-    persistDB(parsed);
-    setImportSuccess({ meals: parsed.meals.length, items: parsed.ingredients.length, asOf });
+    const prepared = prepareImport(imp);
+    if (!prepared) return false;
+    persistDB(prepared.db);
+    setImportSuccess(prepared.summary);
     return true;
   };
 
@@ -200,4 +195,4 @@ function ManageConfig({ db, persistDB }) {
   );
 }
 
-export { ManageConfig, formatAsOf };
+export { AwayPeriods, ManageConfig, formatAsOf };

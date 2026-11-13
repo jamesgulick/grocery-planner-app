@@ -1,0 +1,25 @@
+/* Home (polish Phase 2). Tokens only, like src/ui. */
+.home { font-family: var(--font); color: var(--text); }
+.home-header { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--space-2); padding: var(--space-3) var(--space-2) var(--space-1) var(--space-5); }
+.home-titles { display: flex; flex-direction: column; min-width: 0; padding-top: var(--space-2); }
+.home-main { padding: 0 var(--gutter); display: flex; flex-direction: column; gap: var(--space-5); }
+
+.home-tonight { font: inherit; text-align: left; border: 0; cursor: pointer; background: var(--surface); color: var(--text); border-radius: var(--radius-group); padding: var(--space-4); display: flex; flex-direction: column; gap: var(--space-1); }
+.home-tonight:active { background: var(--pressed); }
+.home-tonight-main { font-size: var(--tonight-size); line-height: var(--tonight-line); font-weight: 700; letter-spacing: -0.02em; }
+.home-sub { font-size: var(--meta-size); line-height: var(--meta-line); color: var(--text-muted); }
+.home-concern { font-size: var(--meta-size); line-height: var(--meta-line); font-weight: 600; color: var(--problem); }
+
+.ui-row.home-day { align-items: flex-start; }   /* beats .ui-row, which loads after this file */
+.home-day-abbr { width: var(--day-col); flex: none; padding-top: var(--space-3); font-size: var(--label-size); font-weight: 700; color: var(--text-muted); }
+.home-day-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; padding: var(--space-3) 0; }
+.home-day-main { font-size: var(--body-size); line-height: var(--body-line); }
+.home-day .ui-chevron { padding-top: var(--space-3); }
+
+.home-next, .home-firstrun { display: flex; align-items: center; gap: var(--space-3); min-height: var(--row-height); padding: var(--space-1) var(--space-3) var(--space-1) var(--space-4); }
+.home-firstrun span { flex: 1; min-width: 0; font-size: var(--body-size); }
+.home-next-text { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.home-next-title { font-size: var(--body-size); font-weight: 600; }
+
+.home-share { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-3); }
+.home-share .ui-tile-button:disabled { opacity: 0.45; cursor: default; }

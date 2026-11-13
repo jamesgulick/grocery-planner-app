@@ -8,16 +8,22 @@ import { DEFAULT_DB } from "./app/seed.js";
 import { clearRecovery, getStorageHealth, loadDB, loadRecovery, saveDB, saveRecovery, seedPreviewFromLive } from "./app/storage.js";
 import { C, S } from "./app/styles.js";
 import { formatAsOf } from "./manage/ManageConfig.jsx";
-import { ManageTab } from "./manage/ManageTab.jsx";
+import { ManageItems } from "./manage/ManageItems.jsx";
+import { ManageMeals } from "./manage/ManageMeals.jsx";
 import { PlanTab } from "./plan/PlanTab.jsx";
-import { TonightTab } from "./tonight/TonightTab.jsx";
+import { HomeScreen } from "./home/HomeScreen.jsx";
+import { DataSheet } from "./shell/DataSheet.jsx";
+import { SettingsSheet } from "./shell/SettingsSheet.jsx";
+import { IconButton, PillButton, Segmented, TabBar, TabBarSpacer, TopBar } from "./ui/kit.jsx";
+import "./ui/ui.css";
+import "./shell/shell.css";
 
 // ── App shell ──────────────────────────────────────────────────────────────────
 
 const TABS = [
-  { id:"tonight", label:"Tonight" },
-  { id:"plan",    label:"Plan" },
-  { id:"manage",  label:"Manage" },
+  { id:"home",    label:"Home",    icon:"home" },
+  { id:"plan",    label:"Plan",    icon:"plan" },
+  { id:"library", label:"Library", icon:"library" },
 ];
 
 class ErrorBoundary extends React.Component {
@@ -76,7 +82,9 @@ function computeDataStatus(db, storageOk) {
 
 export default function App() {
   const [db, setDB]               = useState(null);
-  const [tab, setTab]             = useState("tonight");
+  const [tab, setTab]             = useState("home");
+  const [sheet, setSheet]         = useState(null);       // "data" | "settings" | null
+  const [libraryView, setLibraryView] = useState("meals"); // Library: Meals | Items
   const [loading, setLoading]     = useState(true);
   const [showOpenSession, setShowOpenSession]   = useState(false);
   const [sessionImport, setSessionImport]       = useState("");
@@ -84,7 +92,6 @@ export default function App() {
   const [sessionError, setSessionError]         = useState("");
   const [saveOk, setSaveOk]                     = useState(true);
   const [recovery, setRecovery]                 = useState(null); // { savedAt, db } awaiting restore
-  const [manageInitialSub, setManageInitialSub] = useState(undefined); // header's Import action lands Manage on Config
   const [manageItemsLoc, setManageItemsLoc]     = useState(undefined); // Welcome's "need location" line lands Items on Unassigned; any tab-bar tap clears it
   const dbRef = useRef(null);
 
@@ -199,14 +206,32 @@ export default function App() {
   }
 
   const dataStatus = computeDataStatus(db, saveOk);
+  const dataDot = dataStatus.severity === "urgent" || dataStatus.action === "backup";
+  const headerIcons = <>
+    <IconButton icon="data" label={dataDot ? "Your data: backup overdue" : "Your data"} dot={dataDot} onClick={() => setSheet("data")} />
+    <IconButton icon="gear" label="Settings" onClick={() => setSheet("settings")} />
+  </>;
+  // Home → Plan: open that week on its Meals step (shell only: the week view and plate sheet
+  // come later). "start-next" lands on Plan's Welcome, where next week is started.
+  const openPlan = key => {
+    const plans = db.plans || {};
+    if (key === "start-next" || !plans[key]) {
+      if (plans.current) persistDB({ ...db, activePlan:"current", plans:{ ...plans, current:{ ...plans.current, step:0 } } }, { background:true });
+      setTab("plan"); return;
+    }
+    const p = plans[key];
+    const step = (p.maxStep ?? p.step ?? 0) >= 1 ? 1 : (p.step ?? 0);
+    persistDB({ ...db, activePlan:key, plans:{ ...plans, [key]:{ ...p, step } } }, { background:true });
+    setTab("plan");
+  };
   const runStatusAction = () => {
     if (dataStatus.action === "export" || dataStatus.action === "backup") downloadBackup(db, persistDB);
-    else if (dataStatus.action === "import") { setManageInitialSub("config"); setTab("manage"); }
+    else if (dataStatus.action === "import") setSheet("data");
   };
 
   return (
     <ErrorBoundary>
-      <div style={S.app}>
+      <div className="shell-app" style={S.app}>
         {IS_PREVIEW && (
           <div style={{ background:"#7A4DFF", color:"#fff", fontSize:12, fontWeight:700, padding:"6px 12px", display:"flex", alignItems:"center", justifyContent:"space-between", gap:10 }}>
             <span>{PREVIEW_SLOT === "v2" ? "V2 PREVIEW" : "PREVIEW"} — separate data; your live app is untouched</span>
@@ -217,44 +242,22 @@ export default function App() {
             >Reset from live</button>
           </div>
         )}
-        <div style={S.header}>
-          <div style={S.headerTop}>
-            <div style={S.headerTitle}>Grocery Planner</div>
-            {dataStatus.severity === "calm" && (
-              <div style={{ display:"flex", alignItems:"center", gap:8 }}>
-                <span style={{ fontSize:11, color:C.accentMuted }}>{dataStatus.calm}</span>
-                <button style={S.statusActionSubtle} onClick={() => downloadBackup(db, persistDB)} title="Back up your data now">Save</button>
-              </div>
-            )}
+        {/* Polish Phase 2 shell. The header status line and backup banner are gone: backup
+            state is the dot on the data icon (and the data sheet). The one loud bar left is
+            storage failing, because data is being lost while it shows. */}
+        {dataStatus.severity === "urgent" && (
+          <div className="ui-banner" role="alert">
+            <span className="ui-banner-dot" aria-hidden="true" />
+            <span>Storage isn't saving. Export your data now.</span>
+            <PillButton inline onClick={() => downloadBackup(db, persistDB)}>Export</PillButton>
           </div>
-
-          {dataStatus.severity === "urgent" && (
-            <div style={{ background:"rgba(211,51,51,0.25)", border:"1px solid rgba(211,51,51,0.5)", borderRadius:8, padding:"8px 10px", marginBottom:10, display:"flex", alignItems:"center", justifyContent:"space-between", gap:10 }}>
-              <span style={{ fontSize:12, fontWeight:700, color:"#FFB3B3" }}>{dataStatus.message}</span>
-              <button style={S.statusAction} onClick={runStatusAction}>{dataStatus.actionLabel}</button>
-            </div>
-          )}
-
-          {dataStatus.severity === "caution" && (
-            <div style={{ marginBottom:10 }}>
-              {dataStatus.calm && <div style={{ fontSize:11, color:C.accentMuted, marginBottom:4 }}>{dataStatus.calm}</div>}
-              <div style={{ background:"rgba(240,176,80,0.22)", border:"1px solid rgba(240,176,80,0.5)", borderRadius:8, padding:"8px 10px", display:"flex", alignItems:"center", justifyContent:"space-between", gap:10 }}>
-                <span style={{ fontSize:12, fontWeight:700, color:"#F0B050" }}>{dataStatus.message}</span>
-                <button style={S.statusAction} onClick={runStatusAction}>{dataStatus.actionLabel}</button>
-              </div>
-            </div>
-          )}
-
-          <div style={S.tabs}>
-            {TABS.map(t => <button key={t.id} style={S.tab(tab===t.id)} onClick={() => { setManageItemsLoc(undefined); setTab(t.id); }}>{t.label}</button>)}
-          </div>
-        </div>
+        )}
 
         {/* Recovery modal — offer to restore the snapshot taken when the app
             was last backgrounded, so closing before export isn't data loss. */}
         {recovery && (
-          <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.5)", zIndex:101, display:"flex", alignItems:"flex-end", justifyContent:"center" }}>
-            <div style={{ background:"#fff", borderRadius:"18px 18px 0 0", padding:20, width:"100%", maxWidth:480 }}>
+          <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.5)", zIndex:301, display:"flex", alignItems:"flex-end", justifyContent:"center" }}>
+            <div style={{ background:"#fff", borderRadius:"18px 18px 0 0", padding:20, paddingBottom:"calc(20px + env(safe-area-inset-bottom, 0px))", width:"100%", maxWidth:480 }}>
               <div style={{ fontSize:18, fontWeight:700, marginBottom:6 }}>Restore unsaved work?</div>
               <div style={{ fontSize:13, color:C.muted, marginBottom:14, lineHeight:1.5 }}>
                 The app saved a snapshot when you last closed it{recovery.savedAt ? ` (${formatSavedAt(recovery.savedAt)})` : ""}. It has more data than what just loaded — looks like changes you didn't export.
@@ -274,8 +277,8 @@ export default function App() {
 
         {/* Open session modal — pull latest from iCloud */}
         {showOpenSession && (
-          <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.5)", zIndex:100, display:"flex", alignItems:"flex-end", justifyContent:"center" }}>
-            <div style={{ background:"#fff", borderRadius:"18px 18px 0 0", padding:20, width:"100%", maxWidth:480, maxHeight:"85vh", overflowY:"auto" }}>
+          <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.5)", zIndex:300, display:"flex", alignItems:"flex-end", justifyContent:"center" }}>
+            <div style={{ background:"#fff", borderRadius:"18px 18px 0 0", padding:20, paddingBottom:"calc(20px + env(safe-area-inset-bottom, 0px))", width:"100%", maxWidth:480, maxHeight:"85vh", overflowY:"auto" }}>
               {sessionPendingConfirm ? (
                 <>
                   <div style={{ fontSize:18, fontWeight:700, marginBottom:6 }}>Load this data?</div>
@@ -307,9 +310,22 @@ export default function App() {
             </div>
           </div>
         )}
-        {tab==="plan"    && <PlanTab    key={db.activePlan || "current"} db={db} persistDB={persistDB} onGoToImport={() => { setManageInitialSub("config"); setTab("manage"); }} onGoToUnassigned={() => { setManageInitialSub("items"); setManageItemsLoc("Unassigned"); setTab("manage"); }} />}
-        {tab==="manage"  && <ManageTab  db={db} persistDB={persistDB} initialSub={manageInitialSub} initialItemsLoc={manageItemsLoc} />}
-        {tab==="tonight" && <TonightTab db={db} persistDB={persistDB} />}
+        {tab==="home" && <HomeScreen db={db} dataDot={dataDot} onOpenData={() => setSheet("data")} onOpenSettings={() => setSheet("settings")} onOpenPlan={openPlan} />}
+        {tab==="plan" && <>
+          <TopBar title="Plan">{headerIcons}</TopBar>
+          <PlanTab key={db.activePlan || "current"} db={db} persistDB={persistDB} onGoToImport={() => setSheet("data")} onGoToUnassigned={() => { setLibraryView("items"); setManageItemsLoc("Unassigned"); setTab("library"); }} />
+        </>}
+        {tab==="library" && <>
+          <TopBar title="Library">{headerIcons}</TopBar>
+          <div className="shell-library-switch">
+            <Segmented label="Library" value={libraryView} onChange={v => { setManageItemsLoc(undefined); setLibraryView(v); }} options={[{ value:"meals", label:"Meals" }, { value:"items", label:"Items" }]} />
+          </div>
+          {libraryView === "meals" ? <ManageMeals db={db} persistDB={persistDB} /> : <ManageItems key={manageItemsLoc || "all"} db={db} persistDB={persistDB} initialLoc={manageItemsLoc} />}
+        </>}
+        <TabBarSpacer />
+        <TabBar tabs={TABS} active={tab} onSelect={id => { setManageItemsLoc(undefined); setTab(id); }} />
+        {sheet === "data" && <DataSheet db={db} persistDB={persistDB} overdue={dataDot} onClose={() => setSheet(null)} />}
+        {sheet === "settings" && <SettingsSheet db={db} persistDB={persistDB} onClose={() => setSheet(null)} />}
       </div>
     </ErrorBoundary>
   );

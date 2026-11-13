@@ -1,0 +1,88 @@
+/* Primitives (polish Phase 2). Every colour and size comes from tokens.css; `npm run check`
+   fails on a raw colour here. Built as each Phase 2 screen needs one (SPEC §4). */
+
+.ui-screen { background: var(--bg); color: var(--text); font-family: var(--font); min-height: 100%; }
+
+/* ── Text ─────────────────────────────────────────────────────────────── */
+.ui-screen-title { margin: 0; font-size: var(--screen-title-size); line-height: var(--screen-title-line); font-weight: var(--screen-title-weight); letter-spacing: -0.02em; color: var(--text); }
+.ui-heading { margin: 0; font-size: var(--heading-size); line-height: var(--heading-line); font-weight: var(--heading-weight); color: var(--text); }
+.ui-section-label { padding: 0 var(--space-2); font-size: var(--label-size); line-height: var(--label-line); font-weight: var(--label-weight); color: var(--text-muted); }
+.ui-meta { font-size: var(--meta-size); line-height: var(--meta-line); color: var(--text-muted); }
+
+/* ── Grouped list + rows ──────────────────────────────────────────────── */
+.ui-section { display: flex; flex-direction: column; gap: var(--space-2); }
+.ui-group { background: var(--surface); border-radius: var(--radius-group); display: flex; flex-direction: column; overflow: hidden; }
+.ui-row { display: flex; align-items: center; gap: var(--space-3); min-height: var(--row-height); padding: 0 var(--space-4); font: inherit; font-size: var(--body-size); line-height: var(--body-line); color: var(--text); background: none; border: 0; text-align: left; width: 100%; box-sizing: border-box; }
+.ui-row + .ui-row { box-shadow: inset 0 1px 0 var(--divider); }
+button.ui-row { cursor: pointer; }
+button.ui-row:active { background: var(--pressed); }
+.ui-row-main { flex: 1; min-width: 0; display: flex; flex-direction: column; padding: var(--space-3) 0; }
+.ui-row-value { color: var(--text-muted); font-size: var(--meta-size); }
+.ui-chevron { color: var(--control-border); flex: none; display: flex; }
+.ui-row-plain { color: var(--text); }
+
+/* ── Buttons ──────────────────────────────────────────────────────────── */
+.ui-pill { font: inherit; font-size: var(--meta-size); font-weight: 700; border-radius: var(--radius-pill); min-height: var(--touch); padding: 0 var(--space-4); cursor: pointer; display: inline-flex; align-items: center; justify-content: center; gap: var(--space-2); flex: none; }
+.ui-pill-primary { background: var(--action); color: var(--on-action); border: 0; }
+.ui-pill-secondary { background: var(--surface); color: var(--action); border: 1px solid var(--control-border); }
+/* 36px visual, 44px tap target on the button itself: transparent top/bottom borders are
+   part of the button's box, and the background stops at them. */
+.ui-pill-inline { min-height: var(--touch); border-top: var(--pill-inset) solid transparent; border-bottom: var(--pill-inset) solid transparent; background-clip: padding-box; }
+.ui-pill:active { opacity: 0.8; }
+.ui-pill:disabled { opacity: 0.45; cursor: default; }
+.ui-block-button { font: inherit; font-size: var(--body-size); font-weight: 700; width: 100%; min-height: var(--block-button); border-radius: var(--radius-control); border: 0; cursor: pointer; background: var(--action); color: var(--on-action); }
+.ui-tile-button { font: inherit; font-size: var(--body-size); font-weight: 600; min-height: var(--block-button); border-radius: var(--radius-control); border: 0; cursor: pointer; background: var(--surface); color: var(--action); display: flex; align-items: center; justify-content: center; gap: var(--space-2); }
+.ui-icon-button { width: var(--touch); height: var(--touch); flex: none; display: inline-flex; align-items: center; justify-content: center; border: 0; background: none; color: var(--text); cursor: pointer; position: relative; padding: 0; }
+.ui-icon-button:active { opacity: 0.6; }
+.ui-dot { position: absolute; top: var(--dot-inset); right: var(--dot-inset); width: var(--dot); height: var(--dot); border-radius: 50%; background: var(--problem); box-shadow: 0 0 0 2px var(--bg); }
+.ui-link { font: inherit; font-size: var(--body-size); font-weight: 600; color: var(--action); background: none; border: 0; padding: 0; min-height: var(--touch-compact); cursor: pointer; display: inline-flex; align-items: center; text-decoration: none; }
+.ui-focus:focus-visible, .ui-row:focus-visible, .ui-pill:focus-visible, .ui-icon-button:focus-visible, .ui-link:focus-visible, .ui-tab:focus-visible, .ui-switch:focus-visible, .ui-seg button:focus-visible, .ui-block-button:focus-visible, .ui-tile-button:focus-visible { outline: 2px solid var(--action); outline-offset: 2px; }
+
+/* ── Switch: the only binary control (settings-row size 51×31) ────────── */
+.ui-switch { width: var(--switch-w); height: var(--switch-h); border-radius: var(--switch-h); border: 0; padding: 0; background: var(--control-border); position: relative; cursor: pointer; flex: none; transition: background 0.15s; }
+.ui-switch[aria-checked="true"] { background: var(--action); }
+.ui-switch::after { content: ""; position: absolute; top: 2px; left: 2px; width: calc(var(--switch-h) - 4px); height: calc(var(--switch-h) - 4px); border-radius: 50%; background: var(--surface); transition: transform 0.15s; }
+.ui-switch[aria-checked="true"]::after { transform: translateX(calc(var(--switch-w) - var(--switch-h))); }
+
+/* ── Segmented choice (white segment on a grey track) ─────────────────── */
+.ui-seg { display: flex; background: var(--track); border-radius: var(--radius-control); padding: 2px; gap: 2px; }
+.ui-seg button { flex: 1; font: inherit; font-size: var(--meta-size); font-weight: 600; min-height: var(--seg-height); border: 0; border-radius: calc(var(--radius-control) - 2px); background: none; color: var(--text); cursor: pointer; }
+.ui-seg button[aria-pressed="true"] { background: var(--surface); box-shadow: 0 1px 2px var(--seg-shadow); }
+
+/* ── Sheet ────────────────────────────────────────────────────────────── */
+.ui-sheet-scrim { position: fixed; inset: 0; background: var(--scrim); z-index: 200; display: flex; align-items: flex-end; justify-content: center; }
+.ui-sheet { background: var(--bg); width: 100%; max-width: var(--app-max); max-height: calc(100% - var(--sheet-top-gap)); border-radius: var(--radius-sheet) var(--radius-sheet) 0 0; display: flex; flex-direction: column; padding-bottom: var(--safe-bottom); transition: transform 0.15s; }
+.ui-sheet-grabber { width: var(--grabber-w); height: var(--grabber-h); border-radius: var(--grabber-h); background: var(--control-border); opacity: 0.6; margin: var(--space-2) auto 0; }   /* centred by margin: its parent (the swipe area) is a block, not flex */
+.ui-sheet-header { display: flex; align-items: center; gap: var(--space-2); padding: var(--space-1) var(--space-2) var(--space-1) var(--space-5); flex: none; touch-action: none; }
+.ui-sheet-header .ui-heading { flex: 1; min-width: 0; }
+.ui-sheet-back { margin-left: calc(-1 * var(--space-4)); }
+.ui-sheet-done { font: inherit; font-size: var(--body-size); font-weight: 700; color: var(--action); background: none; border: 0; min-height: var(--touch); padding: 0 var(--space-3); cursor: pointer; }
+.ui-sheet-body { overflow-y: auto; padding: var(--space-2) var(--space-4) var(--space-5); display: flex; flex-direction: column; gap: var(--space-5); -webkit-overflow-scrolling: touch; }
+
+/* ── Tab bar: translucent, light blur, content scrolls beneath ───────── */
+.ui-tabbar { position: fixed; left: 0; right: 0; bottom: 0; z-index: 100; display: flex; justify-content: center; background: var(--surface); border-top: 1px solid var(--bar-border); padding-bottom: var(--safe-bottom); }
+@supports ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .ui-tabbar { background: var(--bar-bg); -webkit-backdrop-filter: var(--bar-blur); backdrop-filter: var(--bar-blur); }
+}
+.ui-tabbar-inner { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); width: 100%; max-width: var(--app-max); padding: var(--space-1) var(--space-2) 0; box-sizing: border-box; }
+.ui-tab { min-height: var(--tab-height); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; font: inherit; font-size: var(--tab-label-size); font-weight: 600; color: var(--text-muted); background: none; border: 0; cursor: pointer; }
+.ui-tab[aria-current="page"] { color: var(--action); font-weight: 700; }
+.ui-tabbar-spacer { height: calc(var(--tab-height) + var(--space-1) + var(--safe-bottom) + var(--space-4)); }
+
+/* ── Top bar (tabs other than Home) ───────────────────────────────────── */
+.ui-topbar { position: sticky; top: 0; z-index: 50; height: var(--topbar-height); box-sizing: border-box; display: flex; align-items: center; gap: var(--space-2); padding: 0 var(--space-2) 0 var(--gutter); background: var(--bg); }
+.ui-topbar .ui-heading { flex: 1; min-width: 0; }
+.ui-icons { display: flex; flex: none; }
+
+/* ── Banner: storage failing (the one loud bar) ───────────────────────── */
+.ui-banner { display: flex; align-items: center; gap: var(--space-3); padding: var(--space-2) var(--gutter); background: var(--surface); border-bottom: 1px solid var(--divider); font-size: var(--meta-size); font-weight: 600; color: var(--problem); }
+.ui-banner-dot { width: var(--dot); height: var(--dot); border-radius: 50%; background: var(--problem); flex: none; }
+.ui-banner span:nth-child(2) { flex: 1; min-width: 0; }
+
+/* ── Problem text: an amber dot + amber text, never a tint ─────────────── */
+.ui-problem { color: var(--problem); font-weight: 600; }
+.ui-problem-dot { display: inline-block; width: var(--dot); height: var(--dot); border-radius: 50%; background: var(--problem); margin-right: var(--space-2); vertical-align: middle; }
+
+/* ── Text input ───────────────────────────────────────────────────────── */
+.ui-textarea { font: inherit; font-size: var(--meta-size); width: 100%; box-sizing: border-box; min-height: var(--textarea-height); padding: var(--space-3); border-radius: var(--radius-control); border: 1px solid var(--control-border); background: var(--surface); color: var(--text); resize: vertical; }
+.ui-textarea:focus { outline: 2px solid var(--action); outline-offset: 1px; }
