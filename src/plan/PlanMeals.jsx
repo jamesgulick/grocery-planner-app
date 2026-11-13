@@ -3,6 +3,7 @@ import { MAX_EXTRA_DAYS, TIME_LEVELS, abbrOfISO, assembleComposeInputs, checkWee
 import { composeWeek, evaluateWeek } from "../engine/composeWeek.js";
 import { useEffect, useMemo, useState } from "react";
 import { copyToClipboard } from "../app/clipboard.js";
+import { draftPlanText } from "../app/shareText.js";
 import { DAYS_FULL, addDaysISO, todayLocalISO } from "../app/globals.js";
 import { BUILTIN_PILLS, PILL_STYLE, engineGrillOk } from "../app/pills.js";
 import { SEED_MEALS } from "../app/seed.js";
@@ -375,13 +376,7 @@ function PlanMeals({ mealPlan, plates, setMealPlan, commitMealToPlan, timeLevels
   const [draftSms, setDraftSms] = useState(null);
   const [draftCopied, setDraftCopied] = useState(false);
   const textDraftPlan = () => {
-    const lines = days.map((d, i) => {
-      const m = (mealPlan[d] || []).join(", ");
-      return `${daysFull[i]}: ${m || "—"}`;
-    });
-    const msg = "🍽️ Draft dinner plan for the week (still tentative!):\n\n"
-      + lines.join("\n\n")
-      + "\n\n✏️ Let me know if you have other suggestions or preferences";
+    const msg = draftPlanText(days, daysFull, mealPlan);
     // sms: is blocked in this webview — copy the message for pasting instead.
     const copied = copyToClipboard(msg);
     setDraftCopied(true);

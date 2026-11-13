@@ -167,6 +167,9 @@ src/plan/                    ← PlanTab (+ Welcome), PlanMeals, PlanInventory, 
 src/manage/                  ← ManageTab, ManageMeals, MealEditor (+ engine facets, recipe paste), ManageItems, ManageConfig, ManageHelp
 src/tonight/TonightTab.jsx   ← Tonight
 src/ui/tokens.css            ← design tokens (polish Phase 1.6): the only src/ui file with raw colours/sizes; primitives join src/ui as Phase 2 needs them
+src/ui/kit.jsx, ui.css       ← primitives (v2): Icon, Section/Group/Row, PillButton, Switch, Segmented, Sheet, TabBar, TopBar
+src/home/HomeScreen.jsx      ← Home (v2 shell): date title, Tonight, rest of the week, Next week, share
+src/shell/                   ← v2 shell sheets: DataSheet, SettingsSheet; src/app/dataIO.js + shareText.js are shared helpers
 src/engine/composeWeek.js    ← the engine: composeWeek + evaluateWeek (validated offline; see below)
 src/engine/assembleInputs.js ← app state → engine inputs, plates, week check, hardened call
 src/ingredientMatch.js       ← the one text→ingredient matcher (recipe paste); not engine

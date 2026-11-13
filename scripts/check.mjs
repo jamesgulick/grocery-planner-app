@@ -18,13 +18,14 @@ const run = (label, cmd, args) => {
 
 run("lint", "npx", ["eslint", "src"]);
 
-// Tokens only (polish Phase 1.6): tokens.css is the one stylesheet in src/ui that may
-// hold a raw colour; every other src/ui stylesheet reads var(--…).
+// Tokens only (polish Phase 1.6, widened in Phase 2): tokens.css is the one stylesheet in
+// the new UI layer (src/ui, src/home, src/shell) that may hold a raw colour.
 console.log("\n▶ ui stylesheets use tokens");
-if (existsSync("src/ui")) {
-  const bad = readdirSync("src/ui").filter(f => f.endsWith(".css") && f !== "tokens.css")
-    .flatMap(f => readFileSync(`src/ui/${f}`, "utf8").split(/\r?\n/)
-      .map((l, i) => /#[0-9a-fA-F]{3,8}\b/.test(l.replace(/\/\*.*?\*\//g, "")) ? `  src/ui/${f}:${i + 1}: ${l.trim()}` : null).filter(Boolean));
+{
+  const dirs = ["src/ui", "src/home", "src/shell"].filter(d => existsSync(d));
+  const bad = dirs.flatMap(d => readdirSync(d).filter(f => f.endsWith(".css") && !(d === "src/ui" && f === "tokens.css")).map(f => `${d}/${f}`))
+    .flatMap(p => readFileSync(p, "utf8").split(/\r?\n/)
+      .map((l, i) => /#[0-9a-fA-F]{3,8}\b/.test(l.replace(/\/\*.*?\*\//g, "")) ? `  ${p}:${i + 1}: ${l.trim()}` : null).filter(Boolean));
   if (bad.length) { console.error("✖ raw colour outside tokens.css:\n" + bad.join("\n")); process.exit(1); }
   console.log("  ✓ only tokens.css holds raw colours");
 }

@@ -31,7 +31,7 @@ export default [
   // src/ui/tokens.css via var(--…). The list of covered files grows as each screen is
   // rebuilt from primitives (add its path here).
   {
-    files: ["src/ui/**/*.{js,jsx}"],
+    files: ["src/ui/**/*.{js,jsx}", "src/home/**/*.{js,jsx}", "src/shell/**/*.{js,jsx}"],
     rules: {
       "no-restricted-syntax": ["error",
         { selector: "Literal[value=/^#[0-9a-fA-F]{3,8}$/]",

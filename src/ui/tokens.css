@@ -49,6 +49,33 @@
   --bar-bg: rgba(255, 255, 255, 0.92);
   --bar-blur: blur(20px) saturate(180%);
   --bar-border: var(--divider);
+
+  /* Added with the Phase 2 primitives (shell). */
+  --pressed: rgba(28, 28, 30, 0.05);      /* row press feedback */
+  --track: #E6E6E1;                       /* segmented control track */
+  --seg-shadow: rgba(0, 0, 0, 0.12);
+  --scrim: rgba(20, 20, 22, 0.35);        /* behind a sheet */
+  --app-max: 520px;                       /* the app column (matches #root) */
+  --row-height: 52px;
+  --block-button: 48px;
+  --touch-compact: 32px;                  /* inline text links that sit in running text */
+  --pill-inset: 4px;                      /* (44 - 36) / 2 */
+  --dot: 8px;
+  --dot-inset: 9px;
+  --switch-w: 51px;
+  --switch-h: 31px;
+  --seg-height: 32px;
+  --radius-sheet: 18px;
+  --sheet-top-gap: 48px;
+  --grabber-w: 36px;
+  --grabber-h: 5px;
+  --tab-height: 48px;
+  --tab-label-size: 11px;                 /* the one size under 13px: tab labels under icons */
+  --topbar-height: 52px;
+  --textarea-height: 120px;
+  --tonight-size: 26px;                   /* Home: tonight's main, the one display size */
+  --tonight-line: 32px;
+  --day-col: 34px;                        /* weekday column in day lists */
 }
 
 html, body {
