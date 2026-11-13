@@ -272,6 +272,9 @@ function PlanTab({ db, persistDB, onGoToImport, onGoToUnassigned }) {
   // resume to tweak. Retirement is date-driven (autoRetirePlans, on a later app
   // load), not triggered by finishing — this just returns to the welcome screen.
   const finishPlan = () => {
+    // Ordered: Home's week row reads "Ordered · pickup <day>" from this. Set once; later
+    // edits don't clear it (decided 11/12).
+    if (!draft?.orderedAt) saveDraft({ orderedAt: new Date().toISOString() });
     // Return to Welcome. Don't read the raw draft's stored step here — after a
     // mode split/migration the raw value can be out of range; just reset cleanly.
     setStep(0);

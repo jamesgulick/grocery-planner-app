@@ -108,7 +108,7 @@ function ManageMeals({ db, persistDB }) {
           );
         })}
       </div>
-      <button style={{ position:"fixed", bottom:"calc(76px + env(safe-area-inset-bottom, 0px))", right:16, background:C.primary, color:"#fff", border:"none", borderRadius:28, padding:"13px 20px", fontSize:15, fontWeight:700, cursor:"pointer", boxShadow:"0 4px 16px rgba(0,0,0,0.25)", zIndex:20 }} onClick={() => { setNewMealName(""); setEditing("new"); }}>+ Meal</button>
+      <button style={{ position:"fixed", bottom:"calc(88px + env(safe-area-inset-bottom, 0px))", right:16, background:C.primary, color:"#fff", border:"none", borderRadius:28, padding:"13px 20px", fontSize:15, fontWeight:700, cursor:"pointer", boxShadow:"0 4px 16px rgba(0,0,0,0.25)", zIndex:20 }} onClick={() => { setNewMealName(""); setEditing("new"); }}>+ Meal</button>
     </div>
   );
 }

@@ -4,4 +4,4 @@
 .shell-check { color: var(--action); font-weight: 700; }
 .shell-legacy { background: var(--surface); border-radius: var(--radius-group); padding: var(--space-2) var(--space-4); }
 .shell-library-switch { padding: 0 var(--gutter) var(--space-2); }
-.shell-app { background: var(--bg); min-height: 100vh; }
+.shell-app { background: var(--bg); min-height: 100vh; padding-top: var(--safe-top); }

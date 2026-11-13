@@ -51,7 +51,7 @@ button.ui-row:active { background: var(--pressed); }
 
 /* ── Sheet ────────────────────────────────────────────────────────────── */
 .ui-sheet-scrim { position: fixed; inset: 0; background: var(--scrim); z-index: 200; display: flex; align-items: flex-end; justify-content: center; }
-.ui-sheet { background: var(--bg); width: 100%; max-width: var(--app-max); max-height: calc(100% - var(--sheet-top-gap)); border-radius: var(--radius-sheet) var(--radius-sheet) 0 0; display: flex; flex-direction: column; padding-bottom: var(--safe-bottom); transition: transform 0.15s; }
+.ui-sheet { background: var(--bg); width: 100%; max-width: var(--app-max); max-height: calc(100% - var(--sheet-top-gap)); border-radius: var(--radius-sheet) var(--radius-sheet) 0 0; display: flex; flex-direction: column; padding-bottom: var(--bar-bottom); transition: transform 0.15s; }
 .ui-sheet-grabber { width: var(--grabber-w); height: var(--grabber-h); border-radius: var(--grabber-h); background: var(--control-border); opacity: 0.6; margin: var(--space-2) auto 0; }   /* centred by margin: its parent (the swipe area) is a block, not flex */
 .ui-sheet-header { display: flex; align-items: center; gap: var(--space-2); padding: var(--space-1) var(--space-2) var(--space-1) var(--space-5); flex: none; touch-action: none; }
 .ui-sheet-header .ui-heading { flex: 1; min-width: 0; }
@@ -60,17 +60,17 @@ button.ui-row:active { background: var(--pressed); }
 .ui-sheet-body { overflow-y: auto; padding: var(--space-2) var(--space-4) var(--space-5); display: flex; flex-direction: column; gap: var(--space-5); -webkit-overflow-scrolling: touch; }
 
 /* ── Tab bar: translucent, light blur, content scrolls beneath ───────── */
-.ui-tabbar { position: fixed; left: 0; right: 0; bottom: 0; z-index: 100; display: flex; justify-content: center; background: var(--surface); border-top: 1px solid var(--bar-border); padding-bottom: var(--safe-bottom); }
+.ui-tabbar { position: fixed; left: 0; right: 0; bottom: 0; z-index: 100; display: flex; justify-content: center; background: var(--surface); border-top: 1px solid var(--bar-border); padding-bottom: var(--bar-bottom); }
 @supports ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
   .ui-tabbar { background: var(--bar-bg); -webkit-backdrop-filter: var(--bar-blur); backdrop-filter: var(--bar-blur); }
 }
 .ui-tabbar-inner { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); width: 100%; max-width: var(--app-max); padding: var(--space-1) var(--space-2) 0; box-sizing: border-box; }
 .ui-tab { min-height: var(--tab-height); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; font: inherit; font-size: var(--tab-label-size); font-weight: 600; color: var(--text-muted); background: none; border: 0; cursor: pointer; }
 .ui-tab[aria-current="page"] { color: var(--action); font-weight: 700; }
-.ui-tabbar-spacer { height: calc(var(--tab-height) + var(--space-1) + var(--safe-bottom) + var(--space-4)); }
+.ui-tabbar-spacer { height: calc(var(--tab-height) + var(--space-1) + var(--bar-bottom) + var(--space-4)); }
 
 /* ── Top bar (tabs other than Home) ───────────────────────────────────── */
-.ui-topbar { position: sticky; top: 0; z-index: 50; height: var(--topbar-height); box-sizing: border-box; display: flex; align-items: center; gap: var(--space-2); padding: 0 var(--space-2) 0 var(--gutter); background: var(--bg); }
+.ui-topbar { position: sticky; top: var(--safe-top); z-index: 50; height: var(--topbar-height); box-sizing: border-box; display: flex; align-items: center; gap: var(--space-2); padding: 0 var(--space-2) 0 var(--gutter); background: var(--bg); }
 .ui-topbar .ui-heading { flex: 1; min-width: 0; }
 .ui-icons { display: flex; flex: none; }
 

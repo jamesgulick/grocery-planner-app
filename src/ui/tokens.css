@@ -40,6 +40,10 @@
   --touch: 44px;              /* minimum tap target, on the control itself */
   --pill-height: 36px;        /* visible inline pill; its tap area is still --touch */
   --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-top: env(safe-area-inset-top, 0px);
+  /* Bottom-pinned bars and sheets clear the home indicator and the screen's rounded
+     corners: the inset + 8px, never less than 20px (decided 11/13; needs viewport-fit=cover). */
+  --bar-bottom: max(calc(var(--safe-bottom) + var(--space-2)), 20px);
 
   /* Bars: the TabBar and StickyActionBar only (decided 11/11). Translucent with a light
      blur; content scrolls beneath. 0.92 is the most see-through that keeps full
@@ -76,6 +80,9 @@
   --tonight-size: 26px;                   /* Home: tonight's main, the one display size */
   --tonight-line: 32px;
   --day-col: 34px;                        /* weekday column in day lists */
+  --tint: #E9EFEA;                        /* pale green: Home's week rows; on/off chips */
+  --step-off: #DDDDD8;                    /* step bar: a step not done yet */
+  --step-bar-h: 4px;
 }
 
 html, body {

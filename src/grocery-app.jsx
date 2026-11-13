@@ -208,19 +208,20 @@ export default function App() {
   const dataStatus = computeDataStatus(db, saveOk);
   const dataDot = dataStatus.severity === "urgent" || dataStatus.action === "backup";
   const headerIcons = <>
-    <IconButton icon="data" label={dataDot ? "Your data: backup overdue" : "Your data"} dot={dataDot} onClick={() => setSheet("data")} />
+    <IconButton icon="data" label={dataDot ? "Import and export: backup overdue" : "Import and export"} dot={dataDot} onClick={() => setSheet("data")} />
     <IconButton icon="gear" label="Settings" onClick={() => setSheet("settings")} />
   </>;
   // Home → Plan: open that week on its Meals step (shell only: the week view and plate sheet
-  // come later). "start-next" lands on Plan's Welcome, where next week is started.
-  const openPlan = key => {
+  // come later), or on `atStep` (Continue: the first unfinished step). "start-next" lands on
+  // Plan's Welcome, where next week is started.
+  const openPlan = (key, atStep) => {
     const plans = db.plans || {};
     if (key === "start-next" || !plans[key]) {
       if (plans.current) persistDB({ ...db, activePlan:"current", plans:{ ...plans, current:{ ...plans.current, step:0 } } }, { background:true });
       setTab("plan"); return;
     }
     const p = plans[key];
-    const step = (p.maxStep ?? p.step ?? 0) >= 1 ? 1 : (p.step ?? 0);
+    const step = atStep != null ? atStep : (p.maxStep ?? p.step ?? 0) >= 1 ? 1 : (p.step ?? 0);
     persistDB({ ...db, activePlan:key, plans:{ ...plans, [key]:{ ...p, step } } }, { background:true });
     setTab("plan");
   };
