@@ -5,7 +5,9 @@ name: Deploy to GitHub Pages
 #              exists (hotfix previews; storage suffix _preview).
 # V2         = `v2`, built into /v2/ when that branch exists (the polish v2;
 #              storage suffix _v2).
-# Both are best-effort: a failing preview build never blocks the production
+# V1         = the `v1-final` tag, built into /v1/ when the tag exists (the old
+#              app as a fallback after the cutover; LIVE storage keys).
+# All are best-effort: a failing preview build never blocks the production
 # deploy — that preview is simply left out.
 #
 # This workflow always runs from `main` (push to main, or a manual/dispatched run
@@ -97,6 +99,36 @@ jobs:
           npm install
           VITE_PREVIEW=v2 npm run build -- --outDir ../v2-dist
           mv ../v2-dist ../dist/v2
+
+      # ---- v1 fallback (best-effort) --------------------------------------
+      # After the polish cutover the old app stays reachable at /v1/ for a few
+      # weeks: the `v1-final` tag, built with VITE_LEGACY=1 (an "Old version"
+      # banner). Unlike the previews it deliberately uses the LIVE storage keys,
+      # so it opens on real data. Delete the tag to retire it.
+      - name: Check for v1-final tag
+        id: v1
+        run: |
+          if git ls-remote --exit-code --tags origin "refs/tags/v1-final" >/dev/null; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "No v1-final tag; skipping /v1/."
+          fi
+      - uses: actions/checkout@v4
+        if: steps.v1.outputs.exists == 'true'
+        continue-on-error: true
+        with:
+          ref: v1-final
+          path: v1-src
+      - name: Build v1 fallback into dist/v1
+        if: steps.v1.outputs.exists == 'true'
+        continue-on-error: true
+        working-directory: v1-src
+        run: |
+          # Guard: the fallback must say it's the old version.
+          grep -rqF 'VITE_LEGACY' src/ || { echo "v1-final has no fallback banner; refusing."; exit 1; }
+          npm install
+          VITE_LEGACY=1 npm run build -- --outDir ../v1-dist
+          mv ../v1-dist ../dist/v1
 
       - uses: actions/upload-pages-artifact@v3
         with:
