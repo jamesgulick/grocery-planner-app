@@ -140,7 +140,7 @@ split mechanically into modules (no behavior change; see the file map).
   site works at a project subpath (`username.github.io/repo/`) without hardcoding
   the repo name. Don't change this to an absolute base unless you also fix the paths.
 - **Data persistence:** browser `localStorage` under the key `grocery_db`. There is
-  no backend. JSON export/import (Manage tab) moves data between devices.
+  no backend. JSON export/import (the data sheet, from the data icon) moves data between devices.
 - **Preview deploy:** while the `integration/composeWeek` branch exists, every deploy
   (always run from `main`) also builds that branch into `/preview/`, best-effort — a
   broken preview never blocks production. A push to the branch triggers
@@ -149,6 +149,11 @@ split mechanically into modules (no behavior change; see the file map).
   (`VITE_PREVIEW=1`) suffix every storage key with `_preview`, seed from the live DB
   read-only, and show a PREVIEW banner; the workflow refuses to publish a preview
   build that lacks this isolation.
+- **Fallback after the polish cutover (2026-11-12):** while the `v1-final` tag exists,
+  every deploy also builds it into `/v1/` with `VITE_LEGACY=1`: the pre-cutover app with
+  an "Old version (fallback)" banner, deliberately on the LIVE storage keys so it opens
+  on real data. Never edit in both at once. Retire it by deleting the tag (planned after
+  2–3 real weeks). The `/v2/` slot is retired: it builds only while a `v2` branch exists.
 
 ### File map
 
@@ -164,8 +169,8 @@ src/app/pills.js, styles.js  ← day pills; the C colours and S styles
 src/app/clipboard.js, fridgeReport.js ← copy helper; the printable fridge report
 src/components/              ← shared bits: Toggle, SearchBar, FieldGroup, PillSelect, WeekSelector, AutoGrowTextarea, RefreshReminder, ItemEditPanel
 src/plan/                    ← PlanTab (+ Welcome), PlanMeals, PlanInventory, PlanConfirm
-src/manage/                  ← ManageTab, ManageMeals, MealEditor (+ engine facets, recipe paste), ManageItems, ManageConfig, ManageHelp
-src/tonight/TonightTab.jsx   ← Tonight
+src/manage/                  ← ManageMeals, MealEditor (+ engine facets, recipe paste), ManageItems (shown in Library), ManageHelp (Settings › Help), ManageConfig (only AwayPeriods and formatAsOf are still used), ManageTab (unused)
+src/tonight/TonightTab.jsx   ← (unused since the cutover; Home replaced it; kept for the /v1/ era, delete with it)
 src/ui/tokens.css            ← design tokens (polish Phase 1.6): the only src/ui file with raw colours/sizes; primitives join src/ui as Phase 2 needs them
 src/ui/kit.jsx, ui.css       ← primitives (v2): Icon, Section/Group/Row, PillButton, Switch, Segmented, Sheet, TabBar, TopBar
 src/home/HomeScreen.jsx      ← Home (v2 shell): date title, Tonight, rest of the week, Next week, share
@@ -178,7 +183,7 @@ src/main.jsx                 ← mounts <App/> to #root
 src/index.css                ← base styles
 index.html                   ← Vite entry
 vite.config.js               ← React plugin + relative base
-.github/workflows/deploy.yml ← Pages CI (production at /, preview branch at /preview/)
+.github/workflows/deploy.yml ← Pages CI (production at /, preview branch at /preview/, v1-final tag at /v1/)
 .github/workflows/preview-trigger.yml ← a push to the preview branch re-runs the main deploy
 ```
 
@@ -187,6 +192,14 @@ The engine's offline validation harness lives in the untracked `engine/` workspa
 `src/engine/composeWeek.js`. It is a working file: never commit it.
 
 ## The app's workflow
+
+**Shell (live since the polish cutover, 2026-11-12):** bottom tabs **Home · Plan · Library**;
+the header's data icon (dot when a backup is due) opens the data sheet (backup, import
+with a "Load this data?" confirm, reset), the gear opens Settings (Family, Away dates,
+Grill season, Plans start on, Help). **Home** shows today's date, Tonight, the rest of the
+week (or the next planned week under "Coming up" when no week covers today), the Next
+week row, Fridge report and Share with family; its taps open the week's Meals step.
+**Library** is Meals | Items. The Plan tab is the flow below.
 
 Five-step weekly flow, tracked by the `PLAN_STEPS` constant and a `step` index:
 
@@ -236,7 +249,7 @@ Pre-migration DBs carry two older single-slot concepts (db.planDraft live-editin
 **Per-plan engine inputs and plates** (all persisted on the plan, so they survive every step transition):
 - `mealPlan` — day abbr → meal NAMES. Still the day's content: Inventory, Confirm, Tonight, the fridge report, the export and the family Shortcut all read it. Don't change its shape.
 - `plates` — annotates `mealPlan` per day: each dish's meal id, role, `source` (engine / floor-fill / accompaniment / manual), the engine's reasons (`why`), and a **leftovers (`carries`) snapshot taken when the dish was placed**. Never edit it directly: `reconcilePlates` rebuilds it from every `mealPlan` change (unchanged days keep their plate; a day untouched since before plates existed stays unplated). `autoRetirePlans` keeps `plates` in `planTail`, because history reads leftovers ONLY from these snapshots — an unplated past day counts for recency but carries no leftovers.
-- `timeLevels` — day abbr → none/some/much. `presence` — per-night overrides only, `{day: {name: bool}}`; the rest comes from `settings.awayRanges` (date-range away periods, open ends allowed, edited in Manage → Config), else present. `presentOn` resolves it.
+- `timeLevels` — day abbr → none/some/much. `presence` — per-night overrides only, `{day: {name: bool}}`; the rest comes from `settings.awayRanges` (date-range away periods, open ends allowed, edited in Settings › Away dates), else present. `presentOn` resolves it.
 - `adventurousWeek` — per-plan switch.
 - `extraDays` — 0–2 EXTRA days after the week's seven (shopping a day or two later than
   usual). Stored under keys `X1`/`X2`, never a weekday name, so an 8th day can't overwrite
@@ -266,7 +279,7 @@ Pre-migration DBs carry two older single-slot concepts (db.planDraft live-editin
   `addedOff`. The old Confirm drop list `removedIds` is retired; the `_planOrderVer`
   migration folds any left on a plan into the decision.
 
-Settings added for the engine: `grillOpen` (grill season, Manage → Config → Cooking), `awayRanges`, `learnMode`. `awayMemberHome` (who got family texts) lost its last consumer when polish Phase 1 cut the Tonight text queue; old DBs may carry it, and only the plan-inputs migration reads it.
+Settings added for the engine: `grillOpen` (grill season, Settings › Cooking), `awayRanges`, `learnMode`. `awayMemberHome` (who got family texts) lost its last consumer when polish Phase 1 cut the Tonight text queue; old DBs may carry it, and only the plan-inputs migration reads it.
 
 ## Key subsystems
 
