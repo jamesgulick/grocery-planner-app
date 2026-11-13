@@ -1,6 +1,6 @@
 /* Home (polish Phase 2). Tokens only, like src/ui. */
 .home { font-family: var(--font); color: var(--text); }
-.home-header { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--space-2); padding: var(--space-3) var(--space-2) var(--space-1) var(--space-5); }
+.home-header { position: sticky; top: var(--safe-top); z-index: 50; background: var(--bg); display: flex; align-items: flex-start; justify-content: space-between; gap: var(--space-2); padding: var(--space-3) var(--space-2) var(--space-1) var(--space-5); }
 .home-titles { display: flex; flex-direction: column; min-width: 0; padding-top: var(--space-2); }
 .home-main { padding: 0 var(--gutter); display: flex; flex-direction: column; gap: var(--space-5); }
 
