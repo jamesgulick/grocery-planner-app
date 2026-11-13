@@ -256,8 +256,8 @@ export default function App() {
         {/* Recovery modal — offer to restore the snapshot taken when the app
             was last backgrounded, so closing before export isn't data loss. */}
         {recovery && (
-          <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.5)", zIndex:101, display:"flex", alignItems:"flex-end", justifyContent:"center" }}>
-            <div style={{ background:"#fff", borderRadius:"18px 18px 0 0", padding:20, width:"100%", maxWidth:480 }}>
+          <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.5)", zIndex:301, display:"flex", alignItems:"flex-end", justifyContent:"center" }}>
+            <div style={{ background:"#fff", borderRadius:"18px 18px 0 0", padding:20, paddingBottom:"calc(20px + env(safe-area-inset-bottom, 0px))", width:"100%", maxWidth:480 }}>
               <div style={{ fontSize:18, fontWeight:700, marginBottom:6 }}>Restore unsaved work?</div>
               <div style={{ fontSize:13, color:C.muted, marginBottom:14, lineHeight:1.5 }}>
                 The app saved a snapshot when you last closed it{recovery.savedAt ? ` (${formatSavedAt(recovery.savedAt)})` : ""}. It has more data than what just loaded — looks like changes you didn't export.
@@ -277,8 +277,8 @@ export default function App() {
 
         {/* Open session modal — pull latest from iCloud */}
         {showOpenSession && (
-          <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.5)", zIndex:100, display:"flex", alignItems:"flex-end", justifyContent:"center" }}>
-            <div style={{ background:"#fff", borderRadius:"18px 18px 0 0", padding:20, width:"100%", maxWidth:480, maxHeight:"85vh", overflowY:"auto" }}>
+          <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.5)", zIndex:300, display:"flex", alignItems:"flex-end", justifyContent:"center" }}>
+            <div style={{ background:"#fff", borderRadius:"18px 18px 0 0", padding:20, paddingBottom:"calc(20px + env(safe-area-inset-bottom, 0px))", width:"100%", maxWidth:480, maxHeight:"85vh", overflowY:"auto" }}>
               {sessionPendingConfirm ? (
                 <>
                   <div style={{ fontSize:18, fontWeight:700, marginBottom:6 }}>Load this data?</div>
