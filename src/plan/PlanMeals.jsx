@@ -78,6 +78,10 @@ function sideBadge(dish) {
   return <span style={S.tag(C.muted, "#F3F4F6")}>side</span>;
 }
 
+// Time per day, as shown (canvas 11/12: "Time", Little / Some / Lots). Display only: the
+// stored value and the engine's timeLevel stay none / some / much.
+const TIME_LABEL = { none:"Little", some:"Some", much:"Lots" };
+
 function PlanMeals({ mealPlan, plates, setMealPlan, commitMealToPlan, timeLevels, setTimeLevels, presence, setPresence, weekStartDate, adventurousWeek, setAdventurousWeek, meals, onNext, days, daysFull, dayNotes, setDayNotes, dayPills, setDayPills, db, persistDB, extraDays = 0, canExtend = false, setExtraDays }) {
   const [editing, setEditing] = useState(null);
   const [moving,  setMoving]  = useState(null);
@@ -448,13 +452,8 @@ function PlanMeals({ mealPlan, plates, setMealPlan, commitMealToPlan, timeLevels
       <div style={S.card}>
         <div style={S.sectionLabel}>Step 2 - Meal Plan</div>
         <div style={S.h2}>This week's dinners</div>
-        <div style={{ marginBottom:12 }}>
-          <div style={{ fontSize:12, color:C.faint, lineHeight:1.5 }}>
-            Each day uses its own forecast, time to cook, and who's home. Only "much" time allows involved meals. Tap a name to mark them away for that night; longer away periods live in Manage → Config. Grilling needs grill weather and grill season open (Manage → Config). Filling only touches empty days.
-          </div>
-        </div>
         <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", gap:10, padding:"8px 0", marginBottom:8, borderTop:`1px solid ${C.border}` }}>
-          <div><div style={{ fontWeight:600, fontSize:14 }}>Adventurous week</div><div style={{ fontSize:12, color:C.faint }}>Place one meal you haven't tried yet</div></div>
+          <div style={{ fontWeight:600, fontSize:14 }}>Try something new</div>
           <Toggle value={!!adventurousWeek} onChange={v => setAdventurousWeek(v)} />
         </div>
         <button style={{ ...S.btn, ...(totalMeals === 0 ? S.btnP : S.btnS), marginBottom:0 }} onClick={regenerate} disabled={loading}>{loading?"Thinking...":"Fill empty days"}</button>
@@ -502,11 +501,11 @@ function PlanMeals({ mealPlan, plates, setMealPlan, commitMealToPlan, timeLevels
               {dayFc && <span style={{ marginLeft:8, fontWeight:600, color:C.muted, textTransform:"none", letterSpacing:0 }}>{dayFc.icon} {dayFc.hi}° · {dayFc.pop}% rain</span>}
             </div>
             <div style={{ display:"flex", alignItems:"center", gap:4, flexWrap:"wrap", marginBottom:6 }}>
-              <span style={{ fontSize:11, color:C.faint, fontWeight:600, marginRight:2 }}>Time to cook</span>
+              <span style={{ fontSize:11, color:C.faint, fontWeight:600, marginRight:2 }}>Time</span>
               {TIME_LEVELS.map(l => {
                 const on = timeLevel === l;
                 return <button key={l} style={{ ...S.btnSm, padding:"2px 10px", fontSize:11, background:on?C.primaryLight:"#FFF", color:on?C.primary:C.muted, border:`1px solid ${on?C.primary:C.border}`, fontWeight:on?700:500 }}
-                  onClick={() => setTimeLevels(prev => ({ ...prev, [day]: l }))}>{l}</button>;
+                  onClick={() => setTimeLevels(prev => ({ ...prev, [day]: l }))}>{TIME_LABEL[l]}</button>;
               })}
             </div>
             {roster.length > 0 && (

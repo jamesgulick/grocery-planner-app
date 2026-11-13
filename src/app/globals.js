@@ -62,7 +62,7 @@ const DB_KEY           = LIVE_DB_KEY + KEY_SUFFIX;
 const RECOVERY_KEY     = "grocery_recovery" + KEY_SUFFIX;
 const SHORTCUT_GET     = "shortcuts://run-shortcut?name=Get%20My%20Grocery%20Data";
 const SHORTCUT_SAVE    = "shortcuts://run-shortcut?name=Save%20My%20Grocery%20Data";
-const PLAN_STEPS       = ["Welcome","Meals","Inventory","Confirm","Sparky"];
+const PLAN_STEPS       = ["Welcome","Meals","Inventory","Confirm","Order"];   // labels only; renaming one needs no step migration (renumbering does)
 
 // Per-day time to cook (REFACTOR B1) — replaces the old binary `easy` pill and the
 // hidden "shopping day + Mon + Tue are easy" rule. Only "much" unlocks involved

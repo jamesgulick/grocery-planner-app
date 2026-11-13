@@ -11,10 +11,10 @@ function PlanInventory({ checkedIds, stapleFlags, setOrdering, quantities, setQu
   const [locIdx, setLocIdx] = useState(0);
   const [editId, setEditId] = useState(null);     // item whose "⋯ edit" panel is open
   const [moveNote, setMoveNote] = useState(null); // what happened to an item moved to another location
-  useEffect(() => { setMoveNote(null); setEditId(null); }, [locIdx]);
+  const [slowOpen, setSlowOpen] = useState(null);   // slow staples card expanded? null = decide from the data
+  useEffect(() => { setMoveNote(null); setEditId(null); setSlowOpen(null); }, [locIdx]);
   const LOCS    = INVENTORY_LOCS;
   const loc     = LOCS[locIdx];
-  const prompts = { Pantry:"Open your pantry.", Fridge:"Open the fridge.", Freezer:"Open the freezer.", Garage:"Check the garage freezer / storage.", Cabinet:"Check the spice cabinet.", "Medicine Cabinet":"Check the medicine cabinet.", Other:"Check other storage." };
 
   const plannedNames   = Object.values(mealPlan).flat();
   const plannedMealIds = meals.filter(m => plannedNames.includes(m.name)).map(m => m.id);
@@ -42,6 +42,9 @@ function PlanInventory({ checkedIds, stapleFlags, setOrdering, quantities, setQu
   const buying    = ing => isOrdering(ing, st);
   const toggle    = ing => setOrdering(ing, !buying(ing));
   const multiMeal = multiMealCounts(mealPlan, meals);
+  // The slow-staples card opens by itself when one is already checked, and then stays open
+  // for this location, so unchecking it never snaps the card shut under your finger.
+  useEffect(() => { if (!slowOpen && slowHere.some(buying)) setSlowOpen(true); });
 
   // ingredient id -> names of planned meals that use it (for context on promoted rows)
   const usedByMeal = {};
@@ -110,7 +113,7 @@ function PlanInventory({ checkedIds, stapleFlags, setOrdering, quantities, setQu
     }
   };
   const EditBtn = ({ ing }) => !onUpdateItem ? null : (
-    <button style={{ background:"none", border:"none", color:editId === ing.id ? C.primary : C.faint, fontSize:11, cursor:"pointer", padding:"2px 4px", whiteSpace:"nowrap" }} onClick={() => setEditId(editId === ing.id ? null : ing.id)}>⋯ edit</button>
+    <button style={{ background:"none", border:"none", color:editId === ing.id ? C.primary : C.faint, fontSize:18, cursor:"pointer", minWidth:36, minHeight:44, padding:0 }} onClick={() => setEditId(editId === ing.id ? null : ing.id)} aria-label={`Edit ${ing.name}`}>⋯</button>
   );
   const EditPanel = ({ ing }) => editId !== ing.id ? null : (
     <ItemEditPanel ing={ing} thisWeek={quantities[ing.id]} onUpdate={patch => updateItem(ing, patch)} onClose={() => setEditId(null)} />
@@ -147,7 +150,6 @@ function PlanInventory({ checkedIds, stapleFlags, setOrdering, quantities, setQu
       <div style={S.card}>
         <div style={S.sectionLabel}>Step 3 - Inventory - {loc}</div>
         <div style={S.h2}>{loc}</div>
-        <div style={S.sub}>{prompts[loc] || `Check ${loc}.`}</div>
         {moveNote && <div style={{ fontSize:12, lineHeight:1.4, marginTop:8, padding:"6px 8px", borderRadius:6, background:C.primaryLight, color:C.primary }}>{moveNote}</div>}
       </div>
 
@@ -155,34 +157,35 @@ function PlanInventory({ checkedIds, stapleFlags, setOrdering, quantities, setQu
         <div style={{ ...S.card, padding:"0 16px" }}>
           {alwaysHere.length > 0 && (
             <>
-              <div style={{ fontSize:11, fontWeight:700, color:C.accent, padding:"10px 0 4px", textTransform:"uppercase", letterSpacing:"0.06em" }}>Always buy — uncheck to skip this week</div>
+              <div style={{ fontSize:11, fontWeight:700, color:C.muted, padding:"14px 0 4px", textTransform:"uppercase", letterSpacing:"0.06em" }}>Always buy</div>
               {alwaysHere.map(ing => <ItemRow key={ing.id} ing={ing} accent={C.accent} dimOff />)}
             </>
           )}
           {weeklyHere.length > 0 && (
             <>
-              <div style={{ fontSize:11, fontWeight:700, color:"#3730A3", padding:"10px 0 4px", textTransform:"uppercase", letterSpacing:"0.06em" }}>Weekly staples — check these closely, they run out fast</div>
+              <div style={{ fontSize:11, fontWeight:700, color:C.muted, padding:"14px 0 4px", textTransform:"uppercase", letterSpacing:"0.06em" }}>Weekly staples</div>
               {weeklyHere.map(ing => <StapleRow key={ing.id} ing={ing} accent="#3730A3" />)}
             </>
           )}
-          {slowNeededHere.length > 0 && (
+          {(mealHere.length > 0 || slowNeededHere.length > 0) && (
             <>
-              <div style={{ fontSize:11, fontWeight:700, color:C.warning, padding:"14px 0 2px", textTransform:"uppercase", letterSpacing:"0.06em" }}>Slow staples needed this week — check closely</div>
-              <div style={{ fontSize:11, color:C.faint, paddingBottom:4 }}>These last a while, but a meal this week uses them — make sure you have enough.</div>
-              {slowNeededHere.map(ing => <StapleRow key={ing.id} ing={ing} accent={C.warning} />)}
+              <div style={{ fontSize:11, fontWeight:700, color:C.muted, padding:"14px 0 4px", textTransform:"uppercase", letterSpacing:"0.06em" }}>For this week's meals</div>
+              {mealHere.map(ing => <ItemRow key={ing.id} ing={ing} accent={C.accent} dimOff />)}
+              {slowNeededHere.map(ing => <StapleRow key={ing.id} ing={ing} accent={C.accent} />)}
             </>
           )}
           {slowHere.length > 0 && (
             <>
-              <div style={{ fontSize:11, fontWeight:700, color:C.muted, padding:"14px 0 2px", textTransform:"uppercase", letterSpacing:"0.06em" }}>Slow staples — quick scan, usually fine</div>
-              <div style={{ fontSize:11, color:C.faint, paddingBottom:4 }}>Only check one if you noticed it running low.</div>
-              {slowHere.map(ing => <StapleRow key={ing.id} ing={ing} accent={C.primary} />)}
-            </>
-          )}
-          {mealHere.length > 0 && (
-            <>
-              <div style={{ fontSize:11, fontWeight:700, color:C.muted, padding:"10px 0 4px", textTransform:"uppercase", letterSpacing:"0.06em" }}>Meal ingredients — uncheck what you already have</div>
-              {mealHere.map(ing => <ItemRow key={ing.id} ing={ing} accent={C.accent} dimOff />)}
+              <div style={{ fontSize:11, fontWeight:700, color:C.muted, padding:"14px 0 4px", textTransform:"uppercase", letterSpacing:"0.06em" }}>Slow staples</div>
+              {/* Collapsed to one line of names (canvas 11/12, the Skipped-group pattern); it opens by
+                  itself when one is already checked, so a buy is never hidden. */}
+              {slowOpen
+                ? slowHere.map(ing => <StapleRow key={ing.id} ing={ing} accent={C.primary} />)
+                : <button type="button" aria-expanded="false" onClick={() => setSlowOpen(true)}
+                    style={{ display:"flex", alignItems:"center", gap:8, width:"100%", minHeight:44, padding:"0 0 10px", background:"none", border:"none", borderBottom:`1px solid ${C.border}`, cursor:"pointer", textAlign:"left", fontSize:13, color:C.muted }}>
+                    <span style={{ flex:1, minWidth:0, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{slowHere.map(i => i.name).join(", ")}</span>
+                    <span aria-hidden="true">⌄</span>
+                  </button>}
             </>
           )}
         </div>

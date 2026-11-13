@@ -188,7 +188,7 @@ The engine's offline validation harness lives in the untracked `engine/` workspa
 Five-step weekly flow, tracked by the `PLAN_STEPS` constant and a `step` index:
 
 ```
-Welcome → Meals → Inventory → Confirm → Sparky
+Welcome → Meals → Inventory → Confirm → Order
 ```
 
 (Receipt reconcile is no longer a step; it was folded out in step-flow v4.)
@@ -212,12 +212,17 @@ Welcome → Meals → Inventory → Confirm → Sparky
   A **Week check** panel shows the engine's observations for the plan as built
   (concerns always, "ok" briefly, the rest folded), and **Show reasoning** (learn
   mode) shows every reason with its tier and role.
-- **Inventory** — walk storage locations; check off what's in stock (drops from the
-  list). Multi-meal ingredients get a badge.
-- **Confirm** — a "used across multiple meals" check on top, then the tunable
-  shopping list (per-item quantity overrides, drop-toggles).
-- **Sparky** — copy the list (batched) to hand to an external cart-building
-  assistant, plus a shared-item quantity-check prompt.
+- **Inventory** — walk storage locations; checked = buying (see "Checked = buying"
+  below). Sections: Always buy · Weekly staples · For this week's meals · Slow staples
+  (collapsed to one line of names). Multi-meal ingredients get a badge.
+- **Confirm** — the order as a whole: By meal | A–Z, per-item amounts, a "Keep as usual"
+  card for changed amounts, and the collapsed "Skipped in Inventory" group.
+- **Order** (formerly Sparky) — Intro + batch rows to copy to the external cart-building
+  assistant (copied rows dim), and the shared items with × (drop from the cart check,
+  Undo) and "Copy cart check".
+
+Screen design decisions live on the look & feel canvas's dated DECISIONS note (see
+`SPEC-polish-v2-and-phase1.md` §6); one standing rule: no instructional copy.
 
 ### Plan model, draft & step migration
 
