@@ -4,34 +4,58 @@
 import { useRef, useState } from "react";
 import { prepareImport, readFileText } from "../app/dataIO.js";
 import { downloadBackup } from "../app/exportData.js";
-import { extractJSON } from "../app/globals.js";
+import { extractJSON, formatSavedAt } from "../app/globals.js";
 import { DEFAULT_DB } from "../app/seed.js";
 import { BlockButton, Group, PillButton, Row, Section, Sheet } from "../ui/kit.jsx";
 
 const daysSince = iso => Math.floor((Date.now() - new Date(iso).getTime()) / 86400000);
 
 export function DataSheet({ db, persistDB, overdue, onClose }) {
-  const [page, setPage]       = useState("main");   // main | paste | reset
+  const [page, setPage]       = useState("main");   // main | paste | confirm | reset
   const [paste, setPaste]     = useState("");
   const [result, setResult]   = useState(null);     // { ok, text }
+  const [pending, setPending] = useState(null);     // an import read and checked, awaiting "Load it"
   const fileRef = useRef(null);
 
-  const apply = imp => {
+  // An import replaces everything on this device, so it's confirmed first, with the file's
+  // counts and the date its data was last changed (the start-session sheet's pattern).
+  const review = imp => {
     const prepared = prepareImport(imp);
-    if (!prepared) return false;
-    persistDB(prepared.db);
-    const { meals, items } = prepared.summary;
-    setResult({ ok: true, text: `Imported ${meals} meals and ${items} items.` });
-    return true;
+    if (!prepared) return;
+    setPending(prepared);
+    setPage("confirm");
+  };
+  const load = () => {
+    persistDB(pending.db);
+    const { meals, items } = pending.summary;
+    setResult({ ok: true, text: `Loaded ${meals} meals and ${items} items.` });
+    setPending(null); setPaste(""); setPage("main");
   };
   const fromFile = async file => {
-    try { apply(JSON.parse(await readFileText(file))); }
+    try { review(JSON.parse(await readFileText(file))); }
     catch (e) { setResult({ ok: false, text: `Couldn't import that file: ${e.message}` }); }
   };
   const fromPaste = () => {
-    try { if (apply(JSON.parse(extractJSON(paste)))) { setPaste(""); setPage("main"); } }
+    try { review(JSON.parse(extractJSON(paste))); }
     catch (e) { setResult({ ok: false, text: `Couldn't read that: ${e.message}` }); }
   };
+
+  if (page === "confirm" && pending) {
+    const { meals, items, asOf } = pending.summary;
+    const older = asOf && db.dataChangedAt && !db._isSeed && new Date(asOf) < new Date(db.dataChangedAt);
+    return (
+      <Sheet title="Load this data?" onClose={onClose} onBack={() => { setPending(null); setPage("main"); }} doneLabel="Cancel">
+        <Group>
+          <Row title="Meals" value={meals} />
+          <Row title="Items" value={items} />
+          <Row title="Last changed" value={asOf ? formatSavedAt(asOf) : "Unknown"} />
+        </Group>
+        {older && <div className="ui-problem"><span className="ui-problem-dot" aria-hidden="true" />Older than the data on this device ({formatSavedAt(db.dataChangedAt)})</div>}
+        <div className="ui-meta">Replaces everything on this device.</div>
+        <PillButton onClick={load}>Load it</PillButton>
+      </Sheet>
+    );
+  }
 
   const exported = db.lastExportedAt;
   const status = !exported ? "Not backed up yet"
