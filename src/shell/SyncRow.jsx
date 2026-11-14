@@ -3,7 +3,8 @@
 // sits on the plan's Welcome step (phase 1's stand-in for the Calendar step) and in the
 // Data sheet. Send to Claude shares the export with the fixed prompt; Re-import reads the
 // file Claude sent back and opens the one import check before anything is replaced.
-// "last" is the last Re-import that was loaded (db.lastSyncAt, app-only).
+// "last" is the last Re-import that was loaded (db.lastSyncAt, app-only). Loading a
+// Re-import also stamps the backup time: the file came from this phone (decided 11/14).
 import { useRef, useState } from "react";
 import { prepareImport, readFileText } from "../app/dataIO.js";
 import { sendToClaude } from "../app/sendToClaude.js";
@@ -42,7 +43,12 @@ export function SyncRow({ db, persistDB }) {
       {error && <div className="ui-problem">{error}</div>}
       {pending && (
         <ImportCheck device={db} prepared={pending}
-          onLoad={() => { persistDB({ ...pending.db, lastSyncAt: new Date().toISOString() }); setPending(null); setSent(null); }}
+          onLoad={() => {
+            // The file just picked is now a copy of this device: the sync counts as a backup.
+            const now = new Date().toISOString();
+            persistDB({ ...pending.db, lastSyncAt: now, lastExportedAt: now, dataChangedAt: now }, { background: true });
+            setPending(null); setSent(null);
+          }}
           onCancel={() => setPending(null)} />
       )}
     </>
