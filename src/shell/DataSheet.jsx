@@ -4,9 +4,10 @@
 import { useRef, useState } from "react";
 import { prepareImport, readFileText } from "../app/dataIO.js";
 import { downloadBackup } from "../app/exportData.js";
-import { extractJSON, formatSavedAt } from "../app/globals.js";
+import { extractJSON } from "../app/globals.js";
 import { DEFAULT_DB } from "../app/seed.js";
 import { BlockButton, Group, PillButton, Row, Section, Sheet } from "../ui/kit.jsx";
+import { ImportCheck } from "./ImportCheck.jsx";
 
 const daysSince = iso => Math.floor((Date.now() - new Date(iso).getTime()) / 86400000);
 
@@ -17,8 +18,7 @@ export function DataSheet({ db, persistDB, overdue, onClose }) {
   const [pending, setPending] = useState(null);     // an import read and checked, awaiting "Load it"
   const fileRef = useRef(null);
 
-  // An import replaces everything on this device, so it's confirmed first, with the file's
-  // counts and the date its data was last changed (the start-session sheet's pattern).
+  // An import replaces everything on this device, so it's confirmed first: the import check.
   const review = imp => {
     const prepared = prepareImport(imp);
     if (!prepared) return;
@@ -40,22 +40,9 @@ export function DataSheet({ db, persistDB, overdue, onClose }) {
     catch (e) { setResult({ ok: false, text: `Couldn't read that: ${e.message}` }); }
   };
 
-  if (page === "confirm" && pending) {
-    const { meals, items, asOf } = pending.summary;
-    const older = asOf && db.dataChangedAt && !db._isSeed && new Date(asOf) < new Date(db.dataChangedAt);
-    return (
-      <Sheet title="Load this data?" onClose={onClose} onBack={() => { setPending(null); setPage("main"); }} doneLabel="Cancel">
-        <Group>
-          <Row title="Meals" value={meals} />
-          <Row title="Items" value={items} />
-          <Row title="Last changed" value={asOf ? formatSavedAt(asOf) : "Unknown"} />
-        </Group>
-        {older && <div className="ui-problem"><span className="ui-problem-dot" aria-hidden="true" />Older than the data on this device ({formatSavedAt(db.dataChangedAt)})</div>}
-        <div className="ui-meta">Replaces everything on this device.</div>
-        <PillButton onClick={load}>Load it</PillButton>
-      </Sheet>
-    );
-  }
+  if (page === "confirm" && pending) return (
+    <ImportCheck device={db} prepared={pending} onLoad={load} onCancel={() => { setPending(null); setPage("main"); }} />
+  );
 
   const exported = db.lastExportedAt;
   const status = !exported ? "Not backed up yet"

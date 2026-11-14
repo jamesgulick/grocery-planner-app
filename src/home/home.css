@@ -1,6 +1,6 @@
 /* Home (polish Phase 2). Tokens only, like src/ui. */
 .home { font-family: var(--font); color: var(--text); }
-.home-header { position: sticky; top: var(--safe-top); z-index: 50; background: var(--bg); display: flex; align-items: flex-start; justify-content: space-between; gap: var(--space-2); padding: var(--space-3) var(--space-2) var(--space-1) var(--space-5); }
+.home-header { position: sticky; top: var(--safe-top); z-index: 50; background: var(--bg); display: flex; align-items: flex-start; justify-content: space-between; gap: var(--space-2); padding: var(--space-3) var(--space-2) var(--space-1) var(--gutter); }
 .home-titles { display: flex; flex-direction: column; min-width: 0; padding-top: var(--space-2); }
 .home-main { padding: 0 var(--gutter); display: flex; flex-direction: column; gap: var(--space-5); }
 
@@ -13,13 +13,12 @@
 .ui-row.home-day { align-items: flex-start; }   /* beats .ui-row, which loads after this file */
 .home-day-abbr { width: var(--day-col); flex: none; padding-top: var(--space-3); font-size: var(--label-size); font-weight: 700; color: var(--text-muted); }
 .home-day-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; padding: var(--space-3) 0; }
-.home-day-main { font-size: var(--body-size); line-height: var(--body-line); }
-.home-day .ui-chevron { padding-top: var(--space-3); }
+.home-day-main { font-size: var(--body-size); line-height: var(--body-line); font-weight: 600; }   /* main names are bold (decided 11/14) */
 
 .home-firstrun { display: flex; align-items: center; gap: var(--space-3); min-height: var(--row-height); padding: var(--space-1) var(--space-3) var(--space-1) var(--space-4); }
 .home-firstrun span { flex: 1; min-width: 0; font-size: var(--body-size); }
 .home-tonight-none { font-size: var(--title-size); line-height: var(--title-line); color: var(--text-muted); }
-.home-day-empty { color: var(--text-muted); }
+.home-day-empty { color: var(--text-muted); font-weight: 400; }
 
 /* Week rows: pale green, one per week in Coming up; two in a row are split by a white line. */
 .home-week { background: var(--tint); display: flex; flex-direction: column; gap: var(--space-2); padding: var(--space-1) var(--space-2) var(--space-1) 0; }
@@ -37,4 +36,4 @@
 .home-share { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-3); }
 .home-share .ui-tile-button:disabled { opacity: 0.45; cursor: default; }
 .home-share .ui-tile-button { background: var(--bg); }   /* tiles read as tiles on the white bar */
-.home-share-spacer { height: calc(var(--block-button) + var(--space-4) + 1px); flex: none; margin-top: calc(-1 * var(--space-5)); }
+.home-share-spacer { height: calc(var(--touch) + var(--space-4) + 1px); flex: none; margin-top: calc(-1 * var(--space-5)); }

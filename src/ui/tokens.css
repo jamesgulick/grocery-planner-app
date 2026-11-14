@@ -34,11 +34,18 @@
   --space-5: 24px;
   --space-6: 32px;
   --gutter: var(--space-4);
-  --radius-group: 14px;
-  --radius-pill: 20px;
-  --radius-control: 10px;
+  /* Grid (decided 11/14, board "Spacing and grid"): 4px base, scale 4 · 8 · 12 · 16 · 24
+     (2 only inside two-line text stacks). Two left edges: 16 (gutter, card edges, titles,
+     section labels) and 32 (text in cards: 16 card padding). 24 between sections, 8 from a
+     label to its card and between stacked cards. Heights 32 pill · 44 row/tap · 52 primary;
+     segment track 40, segment 34. Radii 8 segment · 12 button · 16 card · 20 sheet · full
+     pill. Dividers start at the row's text edge. */
+  --radius-group: 16px;       /* card */
+  --radius-pill: 999px;       /* full */
+  --radius-control: 12px;     /* button, input */
+  --radius-seg: 8px;          /* segment */
   --touch: 44px;              /* minimum tap target, on the control itself */
-  --pill-height: 36px;        /* visible inline pill; its tap area is still --touch */
+  --pill-height: 32px;        /* visible inline pill; its tap area is still --touch */
   --safe-bottom: env(safe-area-inset-bottom, 0px);
   --safe-top: env(safe-area-inset-top, 0px);
   /* Bottom-pinned bars and sheets clear the home indicator and the screen's rounded
@@ -60,16 +67,17 @@
   --seg-shadow: rgba(0, 0, 0, 0.12);
   --scrim: rgba(20, 20, 22, 0.35);        /* behind a sheet */
   --app-max: 520px;                       /* the app column (matches #root) */
-  --row-height: 52px;
-  --block-button: 48px;
+  --row-height: 44px;
+  --block-button: 52px;                   /* full-width primary action */
   --touch-compact: 32px;                  /* inline text links that sit in running text */
-  --pill-inset: 4px;                      /* (44 - 36) / 2 */
+  --pill-inset: 6px;                      /* (44 - 32) / 2 */
   --dot: 8px;
   --dot-inset: 9px;
   --switch-w: 51px;
   --switch-h: 31px;
-  --seg-height: 32px;
-  --radius-sheet: 18px;
+  --seg-height: 34px;                     /* in a 40px track: 3px padding */
+  --seg-pad: 3px;
+  --radius-sheet: 20px;
   --sheet-top-gap: 48px;
   --grabber-w: 36px;
   --grabber-h: 5px;
@@ -83,6 +91,13 @@
   --tint: #E9EFEA;                        /* pale green: Home's week rows; on/off chips */
   --step-off: #DDDDD8;                    /* step bar: a step not done yet */
   --step-bar-h: 4px;
+  /* Row chevron (decided 11/14): one fixed icon everywhere, never a text glyph. */
+  --chev-w: 8px;
+  --chev-h: 14px;
+  --chev-stroke: 1.8;
+  /* Import check counts. */
+  --count-size: 26px;
+  --caption-size: 12px;                   /* the count's change line under its label */
 }
 
 html, body {

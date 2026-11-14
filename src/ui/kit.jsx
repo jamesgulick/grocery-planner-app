@@ -35,13 +35,22 @@ export const Group = ({ children }) => <div className="ui-group">{children}</div
 
 // A row that opens something is a button with a chevron; one with a trailing control
 // (a switch) is a plain row whose control takes the tap.
+// The row chevron (decided 11/14): one fixed 8×14 icon at the row's right edge, centred on
+// a single-line row and on the first line of a multi-line one (`top`). An inline chevron
+// after a link word is a text "›" instead, styled by the screen.
+export const RowChevron = ({ top }) => (
+  <span className={top ? "ui-chevron ui-chevron-top" : "ui-chevron"}>
+    <svg aria-hidden="true" width="8" height="14" viewBox="0 0 8 14" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M1 1l6 6-6 6" /></svg>
+  </span>
+);
+
 export function Row({ title, sub, value, onClick, trailing, chevron = !!onClick }) {
   const body = (
     <>
       <span className="ui-row-main"><span>{title}</span>{sub && <span className="ui-meta">{sub}</span>}</span>
       {value != null && <span className="ui-row-value">{value}</span>}
       {trailing}
-      {chevron && <span className="ui-chevron"><Icon name="chevron" size={18} /></span>}
+      {chevron && <RowChevron top={!!sub} />}
     </>
   );
   return onClick
@@ -75,7 +84,8 @@ export const Segmented = ({ options, value, onChange, label }) => (
 
 // ── Sheet: grabber, title left, Done (or Cancel) right; tap outside or swipe down closes.
 // `onBack` shows a back chevron for a page pushed inside the sheet.
-export function Sheet({ title, onClose, onBack, doneLabel = "Done", children }) {
+// `sub` is a line under the title; `footer` is pinned under the scrolling body (a primary action).
+export function Sheet({ title, sub, onClose, onBack, doneLabel = "Done", footer, children }) {
   const [drag, setDrag] = useState(0);
   const start = useRef(null);
   useEffect(() => {
@@ -93,11 +103,13 @@ export function Sheet({ title, onClose, onBack, doneLabel = "Done", children }) 
           <div className="ui-sheet-grabber" aria-hidden="true" />
           <div className="ui-sheet-header">
             {onBack && <span className="ui-sheet-back"><IconButton icon="back" label="Back" onClick={onBack} /></span>}
-            <h2 className="ui-heading">{title}</h2>
+            {sub ? <div className="ui-sheet-titles"><h2 className="ui-heading">{title}</h2><span className="ui-meta">{sub}</span></div>
+              : <h2 className="ui-heading">{title}</h2>}
             <button type="button" className="ui-sheet-done" onClick={onClose}>{doneLabel}</button>
           </div>
         </div>
         <div className="ui-sheet-body">{children}</div>
+        {footer && <div className="ui-sheet-footer">{footer}</div>}
       </section>
     </div>
   );

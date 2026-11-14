@@ -4,6 +4,7 @@ import React, { useEffect, useRef, useState } from "react";
 import { buildExportDB, buildPublished, downloadBackup, previewImportOk, stripExportNodes } from "./app/exportData.js";
 import { IS_PREVIEW, PREVIEW_SLOT, extractJSON, formatSavedAt } from "./app/globals.js";
 import { autoRetirePlans, migrateDB, planCount } from "./app/plans.js";
+import { prepareImport } from "./app/dataIO.js";
 import { DEFAULT_DB } from "./app/seed.js";
 import { clearRecovery, getStorageHealth, loadDB, loadRecovery, saveDB, saveRecovery, seedPreviewFromLive } from "./app/storage.js";
 import { C, S } from "./app/styles.js";
@@ -13,6 +14,7 @@ import { ManageMeals } from "./manage/ManageMeals.jsx";
 import { PlanTab } from "./plan/PlanTab.jsx";
 import { HomeScreen } from "./home/HomeScreen.jsx";
 import { DataSheet } from "./shell/DataSheet.jsx";
+import { ImportCheck } from "./shell/ImportCheck.jsx";
 import { SettingsSheet } from "./shell/SettingsSheet.jsx";
 import { IconButton, PillButton, Segmented, TabBar, TabBarSpacer, TopBar } from "./ui/kit.jsx";
 import "./ui/ui.css";
@@ -175,11 +177,9 @@ export default function App() {
 
   const acceptSessionImport = () => {
     try {
-      const raw = JSON.parse(extractJSON(sessionImport));
-      const parsed = stripExportNodes(raw);
-      if (!parsed.meals || !parsed.ingredients) throw new Error("Not a valid grocery database");
-      if (!previewImportOk(raw)) return;
-      setSessionPendingConfirm(parsed);
+      const prepared = prepareImport(JSON.parse(extractJSON(sessionImport)));
+      if (!prepared) return;
+      setSessionPendingConfirm(prepared);
       setSessionError("");
     } catch(e) {
       setSessionError("Could not read that data: " + e.message);
@@ -188,7 +188,7 @@ export default function App() {
 
   const confirmSessionImport = () => {
     // Real external data replacing what's here — not the seed set.
-    persistDB({ ...sessionPendingConfirm, _isSeed: false });
+    persistDB(sessionPendingConfirm.db);
     setSessionPendingConfirm(null);
     setSessionImport("");
     setShowOpenSession(false);
@@ -276,26 +276,14 @@ export default function App() {
           </div>
         )}
 
-        {/* Open session modal — pull latest from iCloud */}
-        {showOpenSession && (
+        {/* Open session modal — pull latest from iCloud. A pasted file goes through the
+            one import check before it replaces anything. */}
+        {showOpenSession && sessionPendingConfirm && (
+          <ImportCheck device={db} prepared={sessionPendingConfirm} onLoad={confirmSessionImport} onCancel={() => setSessionPendingConfirm(null)} />
+        )}
+        {showOpenSession && !sessionPendingConfirm && (
           <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.5)", zIndex:300, display:"flex", alignItems:"flex-end", justifyContent:"center" }}>
             <div style={{ background:"#fff", borderRadius:"18px 18px 0 0", padding:20, paddingBottom:"calc(20px + env(safe-area-inset-bottom, 0px))", width:"100%", maxWidth:480, maxHeight:"85vh", overflowY:"auto" }}>
-              {sessionPendingConfirm ? (
-                <>
-                  <div style={{ fontSize:18, fontWeight:700, marginBottom:6 }}>Load this data?</div>
-                  <div style={{ background:C.primaryLight, borderRadius:10, padding:"14px 16px", marginBottom:16 }}>
-                    <div style={{ display:"flex", justifyContent:"space-around", textAlign:"center" }}>
-                      <div><div style={{ fontSize:28, fontWeight:800, color:C.primary }}>{sessionPendingConfirm.meals.length}</div><div style={{ fontSize:11, color:C.muted, fontWeight:700 }}>MEALS</div></div>
-                      <div><div style={{ fontSize:28, fontWeight:800, color:C.primary }}>{sessionPendingConfirm.ingredients.length}</div><div style={{ fontSize:11, color:C.muted, fontWeight:700 }}>ITEMS</div></div>
-                      <div><div style={{ fontSize:28, fontWeight:800, color:C.primary }}>{planCount(sessionPendingConfirm.plans)}</div><div style={{ fontSize:11, color:C.muted, fontWeight:700 }}>PLANS</div></div>
-                    </div>
-                    {sessionPendingConfirm.savedAt && <div style={{ fontSize:12, color:C.muted, textAlign:"center", marginTop:10 }}>Saved {formatSavedAt(sessionPendingConfirm.savedAt)}</div>}
-                  </div>
-                  <div style={{ fontSize:12, color:C.muted, marginBottom:14 }}>This replaces what's currently on this device.</div>
-                  <button style={{ ...S.btn, ...S.btnP }} onClick={confirmSessionImport}>Yes, load it</button>
-                  <button style={{ ...S.btn, ...S.btnS, marginBottom:0 }} onClick={() => setSessionPendingConfirm(null)}>Back</button>
-                </>
-              ) : (
                 <>
                   <div style={{ fontSize:18, fontWeight:700, marginBottom:6 }}>Start session</div>
                   <div style={{ fontSize:13, color:C.muted, marginBottom:14, lineHeight:1.5 }}>Pull your latest data so this device is current. Run the shortcut to copy GroceryDB, then paste below — or skip to use what's already here.</div>
@@ -307,7 +295,6 @@ export default function App() {
                   <button style={{ ...S.btn, ...S.btnP }} disabled={!sessionImport.trim()} onClick={acceptSessionImport}>Review &amp; load</button>
                   <button style={{ ...S.btn, ...S.btnS, marginBottom:0 }} onClick={() => { setShowOpenSession(false); setSessionImport(""); setSessionError(""); }}>Skip — use what's here</button>
                 </>
-              )}
             </div>
           </div>
         )}

@@ -5,3 +5,18 @@
 .shell-legacy { background: var(--surface); border-radius: var(--radius-group); padding: var(--space-2) var(--space-4); }
 .shell-library-switch { padding: 0 var(--gutter) var(--space-2); }
 .shell-app { background: var(--bg); min-height: 100vh; padding-top: var(--safe-top); }
+
+/* Import check (board "Import check", decided 11/14). */
+.imp-counts { background: var(--tint); border-radius: var(--radius-group); padding: var(--space-3) var(--space-2); display: flex; }
+.imp-count { flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: center; gap: 2px; text-align: center; }
+.imp-count-n { font-size: var(--count-size); line-height: var(--tonight-line); font-weight: 800; color: var(--action); font-variant-numeric: tabular-nums; }
+.imp-count-label { font-size: var(--tab-label-size); font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; color: var(--text-muted); }
+.imp-count-change { font-size: var(--caption-size); line-height: 1.35; color: var(--text-muted); display: flex; flex-direction: column; }
+.imp-count-change.is-problem { color: var(--problem); font-weight: 600; }
+.imp-row { position: relative; display: flex; align-items: baseline; gap: var(--space-3); padding: var(--space-3) var(--space-4); }
+.imp-row + .imp-row::before { content: ""; position: absolute; top: 0; left: var(--space-4); right: 0; height: 1px; background: var(--divider); }
+.imp-row-label { flex: 1; min-width: 0; font-size: var(--body-size); line-height: var(--body-line); }
+.imp-row-value { font-size: var(--meta-size); line-height: var(--meta-line); color: var(--text-muted); text-align: right; display: flex; flex-direction: column; }
+.imp-row.is-problem .imp-row-label, .imp-row.is-problem .imp-row-value { color: var(--problem); font-weight: 600; }
+.imp-row-dot { width: var(--dot); height: var(--dot); border-radius: 50%; background: var(--problem); flex: none; align-self: center; }
+.imp-replaces { padding: 0; margin-top: calc(-1 * var(--space-3)); }

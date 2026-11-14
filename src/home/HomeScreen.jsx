@@ -12,7 +12,7 @@ import { copyToClipboard } from "../app/clipboard.js";
 import { buildFridgeReportHTML } from "../app/fridgeReport.js";
 import { planDays, todayLocalISO, weekLabel } from "../app/globals.js";
 import { draftPlanText } from "../app/shareText.js";
-import { ActionBar, Group, Icon, IconButton, PillButton, Section } from "../ui/kit.jsx";
+import { ActionBar, Group, Icon, IconButton, PillButton, RowChevron, Section } from "../ui/kit.jsx";
 import "./home.css";
 
 const ABBR = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
@@ -243,7 +243,7 @@ export function HomeScreen({ db, dataDot, onOpenData, onOpenSettings, onOpenPlan
                           {(away[iso] || []).length > 0 && <span className="home-sub">{away[iso].join(" · ")}</span>}
                           {(concerns[week.key]?.[key] || []).map((t, i) => <span key={i} className="home-concern">{t}</span>)}
                         </span>
-                        <span className="ui-chevron"><Icon name="chevron" size={18} /></span>
+                        <RowChevron top />
                       </button>
                     );
                   })}

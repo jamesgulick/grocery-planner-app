@@ -1,5 +1,5 @@
 // Turning an imported data file into the app's DB, shared by every import path (the data
-// sheet's file and paste, and Manage → Config): validates it, asks before taking a file
+// sheet's file and paste, the start-session paste, and the old Manage → Config): validates it, asks before taking a file
 // exported from a preview, drops the export-only nodes, fills settings defaults and marks
 // it as real data. Returns { db, summary } to persist, or null when the import was declined.
 import { previewImportOk, stripExportNodes } from "./exportData.js";
@@ -13,7 +13,7 @@ export function prepareImport(imp) {
     settings: { ...DEFAULT_SETTINGS, ...(imp.settings || {}) },
     _isSeed: false,
   };
-  return { db, summary: { meals: db.meals.length, items: db.ingredients.length, asOf: imp._meta?.dataChangedAt || null } };
+  return { db, summary: { meals: db.meals.length, items: db.ingredients.length, asOf: imp._meta?.dataChangedAt || imp.dataChangedAt || imp.savedAt || null } };
 }
 
 export const readFileText = file => new Promise((resolve, reject) => {
