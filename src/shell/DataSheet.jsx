@@ -4,11 +4,11 @@
 import { useRef, useState } from "react";
 import { prepareImport, readFileText } from "../app/dataIO.js";
 import { downloadBackup } from "../app/exportData.js";
-import { sendToClaude } from "../app/sendToClaude.js";
 import { extractJSON } from "../app/globals.js";
 import { DEFAULT_DB } from "../app/seed.js";
 import { BlockButton, Group, PillButton, Row, Section, Sheet } from "../ui/kit.jsx";
 import { ImportCheck } from "./ImportCheck.jsx";
+import { SyncRow } from "./SyncRow.jsx";
 
 const daysSince = iso => Math.floor((Date.now() - new Date(iso).getTime()) / 86400000);
 
@@ -17,7 +17,6 @@ export function DataSheet({ db, persistDB, overdue, onClose }) {
   const [paste, setPaste]     = useState("");
   const [result, setResult]   = useState(null);     // { ok, text }
   const [pending, setPending] = useState(null);     // an import read and checked, awaiting "Load it"
-  const [sent, setSent]       = useState(null);     // Send to Claude: what happened
   const fileRef = useRef(null);
 
   // An import replaces everything on this device, so it's confirmed first: the import check.
@@ -73,12 +72,9 @@ export function DataSheet({ db, persistDB, overdue, onClose }) {
           <span className={overdue ? "ui-problem" : "ui-meta"}>{overdue && <span className="ui-problem-dot" aria-hidden="true" />}{status}</span>
           {overdue && <span className="ui-meta"> · changes since</span>}
         </div>
-        <div className="shell-status-action">
-          <BlockButton onClick={() => downloadBackup(db, persistDB)}>Back up · export file</BlockButton>
-          <BlockButton secondary onClick={async () => setSent(await sendToClaude(db, persistDB))}>Send to Claude</BlockButton>
-          {sent && sent !== "cancelled" && <div className="ui-meta">{sent === "downloaded" ? "Prompt copied · file downloaded" : "Prompt copied"}</div>}
-        </div>
+        <div className="shell-status-action"><BlockButton onClick={() => downloadBackup(db, persistDB)}>Back up · export file</BlockButton></div>
       </Group>
+      <SyncRow db={db} persistDB={persistDB} />
       <Section>
         <Group>
           <Row title="Import from file" onClick={() => fileRef.current?.click()} />

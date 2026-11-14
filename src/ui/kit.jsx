@@ -63,7 +63,7 @@ export const PillButton = ({ children, onClick, secondary, inline, disabled }) =
   <button type="button" disabled={disabled} onClick={onClick}
     className={`ui-pill ${secondary ? "ui-pill-secondary" : "ui-pill-primary"}${inline ? " ui-pill-inline" : ""}`}>{children}</button>
 );
-export const BlockButton = ({ children, onClick, secondary }) => <button type="button" className={secondary ? "ui-block-button ui-block-button-secondary" : "ui-block-button"} onClick={onClick}>{children}</button>;
+export const BlockButton = ({ children, onClick }) => <button type="button" className="ui-block-button" onClick={onClick}>{children}</button>;
 export const IconButton = ({ icon, label, onClick, dot }) => (
   <button type="button" className="ui-icon-button" aria-label={label} onClick={onClick}>
     <Icon name={icon} />{dot && <span className="ui-dot" aria-hidden="true" />}

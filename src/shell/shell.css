@@ -1,6 +1,6 @@
 /* Shell pieces (polish Phase 2). Tokens only, like src/ui. */
 .shell-status { padding: var(--space-4) var(--space-4) var(--space-2); font-size: var(--body-size); }
-.shell-status-action { padding: 0 var(--space-4) var(--space-4); display: flex; flex-direction: column; gap: var(--space-2); }
+.shell-status-action { padding: 0 var(--space-4) var(--space-4); }
 .shell-check { color: var(--action); font-weight: 700; }
 .shell-legacy { background: var(--surface); border-radius: var(--radius-group); padding: var(--space-2) var(--space-4); }
 .shell-library-switch { padding: 0 var(--gutter) var(--space-2); }
@@ -21,8 +21,16 @@
 .imp-row-dot { width: var(--dot); height: var(--dot); border-radius: 50%; background: var(--problem); flex: none; align-self: center; }
 .imp-replaces { padding: 0; margin-top: calc(-1 * var(--space-3)); }
 
-/* Calendar sync row: two equal outlined steps with an inline chevron between them. */
-.sync { margin-bottom: var(--space-5); font-family: var(--font); }
-.sync-row { display: flex; align-items: center; gap: var(--space-2); }
-.sync-row .ui-block-button { flex: 1; min-width: 0; }
-.sync-chev { color: var(--control-border); font-size: var(--title-size); font-weight: 400; flex: none; }
+/* Calendar sync row (board "Plan, week: calendar"): white card, label left, two outlined
+   32px pills with an inline chevron between. The pills keep a 44px tap area (transparent
+   top/bottom borders, like .ui-pill-inline), so the outline is an inset shadow on the face. */
+.sync { font-family: var(--font); background: var(--surface); border-radius: var(--radius-group); padding: 0 var(--space-2) 0 var(--space-4); display: flex; align-items: center; gap: var(--space-2); }
+.sync-label { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: var(--label-size); line-height: var(--label-line); font-weight: 600; color: var(--text-muted); }
+.sync-status { font-weight: 400; }
+.sync-pill { flex: none; font: inherit; font-size: var(--label-size); font-weight: 700; color: var(--action); background: transparent; cursor: pointer;
+  min-height: var(--touch); padding: 0 var(--space-2); border: 0; border-top: var(--pill-inset) solid transparent; border-bottom: var(--pill-inset) solid transparent;
+  background-clip: padding-box; box-shadow: inset 0 0 0 var(--pill-outline) var(--action); border-radius: calc(var(--pill-height) / 2) / calc(var(--touch) / 2); }
+.sync-pill:active { background-color: var(--pressed); }
+.sync-pill:focus-visible { outline: 2px solid var(--action); outline-offset: 2px; }
+.sync-chev { flex: none; color: var(--control-border); font-size: var(--label-size); font-weight: 400; }
+.sync-welcome { margin-bottom: var(--space-2); }

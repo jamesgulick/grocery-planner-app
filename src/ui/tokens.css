@@ -71,6 +71,7 @@
   --row-height: 44px;
   --block-button: 52px;                   /* full-width primary action */
   --touch-compact: 32px;                  /* inline text links that sit in running text */
+  --pill-outline: 1.5px;                  /* outlined pill (Sync row) */
   --pill-inset: 6px;                      /* (44 - 32) / 2 */
   --dot: 8px;
   --dot-inset: 9px;

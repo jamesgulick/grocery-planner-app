@@ -378,7 +378,7 @@ function PlanWelcome({ onStart, onStartNext, onResume, draft, persistDB, db, onG
 
       <RefreshReminder dayNotes={draft?.dayNotes} />
 
-      <SyncRow db={db} persistDB={persistDB} />
+      <div className="sync-welcome"><SyncRow db={db} persistDB={persistDB} /></div>
 
       {onResume && draft && (
         <div style={{ ...S.card, border:`2px solid ${C.accent}`, background:C.primaryLight }}>
