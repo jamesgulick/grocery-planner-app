@@ -19,6 +19,9 @@ const exportMeta = db => {
     // seed-vs-real) instead of re-deriving it from the fresh export moment.
     dataChangedAt:  db.dataChangedAt || null,
     lastExportedAt: db.lastExportedAt || null,
+    // The calendar sync instructions, as typed in Settings (Send to Claude points Claude
+    // here). Written only when set, and dropped again on import like the rest of _meta.
+    ...(db.settings?.syncInstructions?.trim() ? { syncInstructions: db.settings.syncInstructions } : {}),
     // A preview build's export is test data; the live app warns before importing it.
     ...(IS_PREVIEW ? { preview: PREVIEW_SLOT } : {}),
   };
@@ -56,13 +59,15 @@ const buildBackupPayload = db => {
 // Writes an actual .json file via Blob + a temporary <a download>, then
 // stamps lastExportedAt as a background write (backing up isn't itself a
 // change to the grocery data).
+const exportFileName = () => !IS_PREVIEW ? "grocery_db.json" : PREVIEW_SLOT === "v2" ? "grocery_db-V2-PREVIEW.json" : "grocery_db-PREVIEW.json";
+
 const downloadBackup = (db, persistDB) => {
   const { now, text } = buildBackupPayload(db);
   const blob = new Blob([text], { type: "application/json" });
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
-  a.download = !IS_PREVIEW ? "grocery_db.json" : PREVIEW_SLOT === "v2" ? "grocery_db-V2-PREVIEW.json" : "grocery_db-PREVIEW.json";
+  a.download = exportFileName();
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);
@@ -134,4 +139,4 @@ const buildPublished = db => {
   };
 };
 
-export { buildBackupPayload, buildExportDB, buildPublished, downloadBackup, previewImportOk, stripExportNodes };
+export { buildBackupPayload, buildExportDB, buildPublished, downloadBackup, exportFileName, previewImportOk, stripExportNodes };

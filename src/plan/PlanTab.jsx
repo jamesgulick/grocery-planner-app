@@ -10,6 +10,7 @@ import { PlanConfirm } from "./PlanConfirm.jsx";
 import { PlanInventory } from "./PlanInventory.jsx";
 import { PlanMeals } from "./PlanMeals.jsx";
 import { orderingPatch } from "./ordering.js";
+import { SyncRow } from "../shell/SyncRow.jsx";
 
 // ── PLAN TAB ───────────────────────────────────────────────────────────────────
 
@@ -376,6 +377,8 @@ function PlanWelcome({ onStart, onStartNext, onResume, draft, persistDB, db, onG
       </div>
 
       <RefreshReminder dayNotes={draft?.dayNotes} />
+
+      <SyncRow db={db} persistDB={persistDB} />
 
       {onResume && draft && (
         <div style={{ ...S.card, border:`2px solid ${C.accent}`, background:C.primaryLight }}>

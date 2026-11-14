@@ -38,6 +38,7 @@ button.ui-row:active { background: var(--pressed); }
 .ui-pill:active { opacity: 0.8; }
 .ui-pill:disabled { opacity: 0.45; cursor: default; }
 .ui-block-button { font: inherit; font-size: var(--body-size); font-weight: 700; width: 100%; min-height: var(--block-button); border-radius: var(--radius-control); border: 0; cursor: pointer; background: var(--action); color: var(--on-action); }
+.ui-block-button-secondary { background: var(--surface); color: var(--action); border: 1px solid var(--control-border); }
 .ui-tile-button { font: inherit; font-size: var(--body-size); font-weight: 600; min-height: var(--touch); border-radius: var(--radius-control); border: 0; cursor: pointer; background: var(--surface); color: var(--action); display: flex; align-items: center; justify-content: center; gap: var(--space-2); }
 .ui-icon-button { width: var(--touch); height: var(--touch); flex: none; display: inline-flex; align-items: center; justify-content: center; border: 0; background: none; color: var(--text); cursor: pointer; position: relative; padding: 0; }
 .ui-icon-button:active { opacity: 0.6; }

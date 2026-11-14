@@ -1,6 +1,6 @@
 /* Shell pieces (polish Phase 2). Tokens only, like src/ui. */
 .shell-status { padding: var(--space-4) var(--space-4) var(--space-2); font-size: var(--body-size); }
-.shell-status-action { padding: 0 var(--space-4) var(--space-4); }
+.shell-status-action { padding: 0 var(--space-4) var(--space-4); display: flex; flex-direction: column; gap: var(--space-2); }
 .shell-check { color: var(--action); font-weight: 700; }
 .shell-legacy { background: var(--surface); border-radius: var(--radius-group); padding: var(--space-2) var(--space-4); }
 .shell-library-switch { padding: 0 var(--gutter) var(--space-2); }
@@ -20,3 +20,9 @@
 .imp-row.is-problem .imp-row-label, .imp-row.is-problem .imp-row-value { color: var(--problem); font-weight: 600; }
 .imp-row-dot { width: var(--dot); height: var(--dot); border-radius: 50%; background: var(--problem); flex: none; align-self: center; }
 .imp-replaces { padding: 0; margin-top: calc(-1 * var(--space-3)); }
+
+/* Calendar sync row: two equal outlined steps with an inline chevron between them. */
+.sync { margin-bottom: var(--space-5); font-family: var(--font); }
+.sync-row { display: flex; align-items: center; gap: var(--space-2); }
+.sync-row .ui-block-button { flex: 1; min-width: 0; }
+.sync-chev { color: var(--control-border); font-size: var(--title-size); font-weight: 400; flex: none; }
