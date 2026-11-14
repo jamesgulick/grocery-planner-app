@@ -15,10 +15,10 @@
 .imp-count-change.is-problem { color: var(--problem); font-weight: 600; }
 .imp-row { position: relative; display: flex; align-items: baseline; gap: var(--space-3); padding: var(--space-3) var(--space-4); }
 .imp-row + .imp-row::before { content: ""; position: absolute; top: 0; left: var(--space-4); right: 0; height: 1px; background: var(--divider); }
-.imp-row-label { flex: 1; min-width: 0; font-size: var(--body-size); line-height: var(--body-line); }
-.imp-row-value { font-size: var(--meta-size); line-height: var(--meta-line); color: var(--text-muted); text-align: right; display: flex; flex-direction: column; }
+.imp-row-label { flex: none; font-size: var(--body-size); line-height: var(--body-line); }
+.imp-row-value { flex: 1; min-width: 0; font-size: var(--meta-size); line-height: var(--meta-line); color: var(--text-muted); text-align: right; display: flex; flex-direction: column; }
 .imp-row.is-problem .imp-row-label, .imp-row.is-problem .imp-row-value { color: var(--problem); font-weight: 600; }
-.imp-row-dot { width: var(--dot); height: var(--dot); border-radius: 50%; background: var(--problem); flex: none; align-self: center; }
+.imp-row-dot { width: var(--dot); height: var(--dot); border-radius: 50%; background: var(--problem); flex: none; align-self: flex-start; margin-top: calc((var(--body-line) - var(--dot)) / 2); }
 .imp-replaces { padding: 0; margin-top: calc(-1 * var(--space-3)); }
 
 /* Calendar sync row (board "Plan, week: calendar"): white card, label left, two outlined

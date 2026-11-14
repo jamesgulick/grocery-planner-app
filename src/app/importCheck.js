@@ -48,6 +48,10 @@ const dayLabels = isos => {
 const MAX_LINES = 3;
 const capLines = lines => (lines.length <= MAX_LINES ? lines : [...lines.slice(0, MAX_LINES - 1), `+${lines.length - MAX_LINES + 1} more`]);
 
+// Up to three records by name ("Lasagna, Tacos"), else a count.
+const MAX_NAMES = 3;
+const namesOr = recs => (recs.length <= MAX_NAMES ? recs.map(r => r.name).join(", ") : String(recs.length));
+
 function recordChanges(cur = [], inc = [], noun) {
   const byId = list => new Map(list.map(r => [r.id, r]));
   const c = byId(cur), n = byId(inc);
@@ -55,8 +59,8 @@ function recordChanges(cur = [], inc = [], noun) {
   const added = inc.filter(r => !c.has(r.id));
   const edited = inc.filter(r => c.has(r.id) && !same(c.get(r.id), r));
   const lines = [];
-  if (missing.length) lines.push(missing.length === 1 ? `${missing[0].name} missing` : `${missing.length} missing`);
-  if (added.length) lines.push(added.length === 1 ? `${added[0].name} added` : `${added.length} added`);
+  if (missing.length) lines.push(`${namesOr(missing)} missing`);
+  if (added.length) lines.push(`${namesOr(added)} added`);
   if (edited.length) lines.push(`${edited.length} edited`);
   return lines.length ? { label: noun, lines, problem: true } : null;
 }
