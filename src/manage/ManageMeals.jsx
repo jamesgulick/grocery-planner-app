@@ -5,6 +5,7 @@ import { MEAL_TYPES, toSentenceCase } from "../app/globals.js";
 import { SEED_TS } from "../app/seed.js";
 import { C, EFFORT_COLORS, S } from "../app/styles.js";
 import { SearchBar } from "../components/common.jsx";
+import { RowChevron } from "../ui/kit.jsx";
 import { MealEditor, mealMatches } from "./MealEditor.jsx";
 
 function ManageMeals({ db, persistDB }) {
@@ -88,7 +89,7 @@ function ManageMeals({ db, persistDB }) {
             <div key={meal.id} style={{ ...S.row, ...(i===filtered.length-1?S.rowLast:{}), cursor:"default" }}>
               <div style={{ flex:1 }}>
                 <div style={{ display:"flex", alignItems:"center", gap:4, marginBottom:3 }}>
-                  <span style={{ fontWeight:600, fontSize:15 }}>{meal.name}</span>
+                  <span style={{ fontWeight: meal.type === "side" ? 400 : 600, fontSize:15 }}>{meal.name}</span>
                 </div>
                 <div style={{ display:"flex", flexWrap:"wrap", gap:4 }}>
                   <span style={S.badge(ec.color,ec.bg)}>{meal.effort}</span>
@@ -103,7 +104,7 @@ function ManageMeals({ db, persistDB }) {
                 </div>
                 {meal.ingredients?.length>0 && <div style={{ fontSize:11, color:C.faint, marginTop:2 }}>{meal.ingredients.length} ingredients</div>}
               </div>
-              <button style={{ background:"none", border:"none", cursor:"pointer", color:C.faint, fontSize:18, padding:"4px" }} onClick={() => setEditing(meal)}>›</button>
+              <button aria-label={`Edit ${meal.name}`} style={{ background:"none", border:"none", cursor:"pointer", padding:0, minWidth:"var(--touch)", minHeight:"var(--touch)", alignSelf:"flex-start", display:"flex", justifyContent:"flex-end", marginTop:"calc(-1 * var(--space-3))" }} onClick={() => setEditing(meal)}><RowChevron top /></button>
             </div>
           );
         })}

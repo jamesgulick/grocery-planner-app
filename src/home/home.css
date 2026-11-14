@@ -12,7 +12,7 @@
 
 .ui-row.home-day { align-items: flex-start; }   /* beats .ui-row, which loads after this file */
 .home-day-abbr { width: var(--day-col); flex: none; padding-top: var(--space-3); font-size: var(--label-size); font-weight: 700; color: var(--text-muted); }
-.home-day-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; padding: var(--space-3) 0; }
+.home-day-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: var(--space-half); padding: var(--space-3) 0; }
 .home-day-main { font-size: var(--body-size); line-height: var(--body-line); font-weight: 600; }   /* main names are bold (decided 11/14) */
 
 .home-firstrun { display: flex; align-items: center; gap: var(--space-3); min-height: var(--row-height); padding: var(--space-1) var(--space-3) var(--space-1) var(--space-4); }
@@ -24,12 +24,12 @@
 .home-week { background: var(--tint); display: flex; flex-direction: column; gap: var(--space-2); padding: var(--space-1) var(--space-2) var(--space-1) 0; }
 .home-week-group + .home-week-group .home-week { box-shadow: inset 0 1px 0 var(--surface); }
 .home-week-top { display: flex; align-items: center; gap: var(--space-3); }
-.home-week-open { flex: 1; min-width: 0; min-height: var(--touch); font: inherit; text-align: left; background: none; border: 0; cursor: pointer; color: var(--text); display: flex; flex-direction: column; justify-content: center; gap: 2px; padding: var(--space-1) 0 var(--space-1) var(--space-4); }
+.home-week-open { flex: 1; min-width: 0; min-height: var(--touch); font: inherit; text-align: left; background: none; border: 0; cursor: pointer; color: var(--text); display: flex; flex-direction: column; justify-content: center; gap: var(--space-half); padding: var(--space-1) 0 var(--space-1) var(--space-4); }
 .home-week-title { font-size: var(--body-size); line-height: var(--body-line); font-weight: 700; }
 .home-week-chev { color: var(--control-border); font-weight: 400; }
-.home-steps { margin: 0; padding: 0 var(--space-2) var(--space-2) var(--space-4); list-style: none; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 3px; }
-.home-steps li { display: flex; flex-direction: column; gap: 3px; font-size: var(--tab-label-size); font-weight: 500; color: var(--text-muted); min-width: 0; }
-.home-steps-bar { height: var(--step-bar-h); border-radius: 2px; background: var(--step-off); }
+.home-steps { margin: 0; padding: 0 var(--space-2) var(--space-2) var(--space-4); list-style: none; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: var(--space-1); }
+.home-steps li { display: flex; flex-direction: column; gap: var(--space-1); font-size: var(--tab-label-size); font-weight: 500; color: var(--text-muted); min-width: 0; }
+.home-steps-bar { height: var(--step-bar-h); border-radius: calc(var(--step-bar-h) / 2); background: var(--step-off); }
 .home-steps li.is-done .home-steps-bar { background: var(--action); }
 .home-steps li.is-next { font-weight: 700; color: var(--text); }
 

@@ -4,10 +4,13 @@
 // and anything else that differs in amber.
 import { compareImport } from "../app/importCheck.js";
 import { formatSavedAt } from "../app/globals.js";
+import { DEFAULT_SETTINGS } from "../app/seed.js";
 import { BlockButton, Section, Sheet } from "../ui/kit.jsx";
 
 export function ImportCheck({ device, prepared, onLoad, onCancel }) {
-  const { savedAt, counts, rows, older } = compareImport(device, prepared.db, prepared.summary.asOf);
+  // Defaults filled on the device side too, as prepareImport fills them on the file's.
+  const here = device && { ...device, settings: { ...DEFAULT_SETTINGS, ...(device.settings || {}) } };
+  const { savedAt, counts, rows, older } = compareImport(here, prepared.db, prepared.summary);
   const allRows = older
     ? [...rows, { label: "Older file", lines: [`this device ${formatSavedAt(device.dataChangedAt)}`], problem: true }]
     : rows;

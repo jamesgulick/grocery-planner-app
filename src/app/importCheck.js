@@ -62,12 +62,14 @@ function recordChanges(cur = [], inc = [], noun) {
 }
 
 /**
- * compareImport(device, incoming) → {
+ * compareImport(device, incoming, { savedAt, asOf }) → {
  *   savedAt, counts: [{ label, n, change, problem }], rows: [{ label, lines, problem }],
- *   fresh  // true when this device holds only the example data: nothing to compare against
+ *   fresh,  // true when this device holds only the example data: nothing to compare against
+ *   older,  // the file's data predates this device's last change
  * }
+ * savedAt is the file's own save time (shown); asOf is when its data last changed.
  */
-export function compareImport(device, incoming, savedAt) {
+export function compareImport(device, incoming, { savedAt = null, asOf = null } = {}) {
   const fresh = !device || device._isSeed;
   const incWeeks = weeksOf(incoming);
   const countChange = (a, b) => {
@@ -101,6 +103,8 @@ export function compareImport(device, incoming, savedAt) {
   });
   const homeLabels = dayLabels(homeChanges.map(h => h.iso));
   const homeLines = homeChanges.map((h, i) => `${homeLabels[i]}: ${h.changed.join(", ")}`);
+  // Away dates are part of who's home (a calendar sync may add one): neutral, never amber.
+  if (!same(device.settings?.awayRanges, incoming.settings?.awayRanges)) homeLines.push("away dates changed");
   // Time: dates whose time to cook differs.
   const timeDays = dates.filter(iso => ni[iso] && di[iso] && (field(di, iso, "timeLevels") || null) !== (field(ni, iso, "timeLevels") || null));
   const timeLabels = dayLabels(timeDays);
@@ -118,18 +122,19 @@ export function compareImport(device, incoming, savedAt) {
   const planned = dates.filter(iso => !same(field(di, iso, "mealPlan") || [], field(ni, iso, "mealPlan") || []));
   const LIST_FIELDS = ["checkedIds", "stapleFlags", "addedItems", "addedOff", "keptIds", "quantities"];
   const listChanged = ["current", "next"].some(k => LIST_FIELDS.some(f => !same(device.plans?.[k]?.[f], incoming.plans?.[k]?.[f])));
-  const { awayRanges: a1, ...s1 } = device.settings || {};
-  const { awayRanges: a2, ...s2 } = incoming.settings || {};
+  // The caller fills the device's settings defaults as the import does, so a filled-in
+  // default is not a change.
+  const s1 = { ...(device.settings || {}), awayRanges: null };
+  const s2 = { ...(incoming.settings || {}), awayRanges: null };
   const history = !same(device.mealHistory, incoming.mealHistory) || !same(device.planTail, incoming.planTail);
   for (const r of [
     meals, items,
     planned.length ? { label: "Planned meals", lines: [planned.length <= MAX_LINES ? dayLabels(planned).join(", ") : plural(planned.length, "day")], problem: true } : null,
     listChanged ? { label: "Shopping list", lines: ["changed"], problem: true } : null,
-    !same(a1, a2) ? { label: "Away dates", lines: ["changed"], problem: true } : null,
     !same(s1, s2) ? { label: "Settings", lines: ["changed"], problem: true } : null,
     history ? { label: "Past weeks", lines: ["changed"], problem: true } : null,
   ]) if (r) rows.push(r);
 
-  const older = savedAt && device.dataChangedAt && new Date(savedAt) < new Date(device.dataChangedAt);
+  const older = !!(asOf && device.dataChangedAt && new Date(asOf) < new Date(device.dataChangedAt));
   return { savedAt, counts, rows, fresh, older };
 }

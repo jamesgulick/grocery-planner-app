@@ -40,7 +40,7 @@ export const Group = ({ children }) => <div className="ui-group">{children}</div
 // after a link word is a text "›" instead, styled by the screen.
 export const RowChevron = ({ top }) => (
   <span className={top ? "ui-chevron ui-chevron-top" : "ui-chevron"}>
-    <svg aria-hidden="true" width="8" height="14" viewBox="0 0 8 14" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M1 1l6 6-6 6" /></svg>
+    <svg aria-hidden="true" className="ui-chevron-icon" viewBox="0 0 8 14" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round"><path d="M1 1l6 6-6 6" /></svg>
   </span>
 );
 

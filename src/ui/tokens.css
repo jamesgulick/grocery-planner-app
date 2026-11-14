@@ -27,6 +27,7 @@
   --label-size: 13px;        --label-line: 16px;        --label-weight: 600;
 
   /* Space, radius, size */
+  --space-half: 2px;          /* two-line text stacks only (name over subline) */
   --space-1: 4px;
   --space-2: 8px;
   --space-3: 12px;
@@ -73,6 +74,8 @@
   --pill-inset: 6px;                      /* (44 - 32) / 2 */
   --dot: 8px;
   --dot-inset: 9px;
+  --seg-gap: 2px;                         /* between segments in the track */
+  --switch-inset: 2px;                    /* switch thumb inside its track */
   --switch-w: 51px;
   --switch-h: 31px;
   --seg-height: 34px;                     /* in a 40px track: 3px padding */
@@ -98,6 +101,7 @@
   /* Import check counts. */
   --count-size: 26px;
   --caption-size: 12px;                   /* the count's change line under its label */
+  --caption-line: 16px;
 }
 
 html, body {

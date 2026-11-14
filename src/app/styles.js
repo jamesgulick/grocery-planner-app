@@ -1,4 +1,5 @@
 // Split verbatim from grocery-app.jsx in polish Phase 1.5; see CLAUDE.md's file map.
+// Shared spacing, heights and radii read the grid tokens in src/ui/tokens.css (decided 11/14).
 
 // ── Styles ─────────────────────────────────────────────────────────────────────
 
@@ -31,28 +32,28 @@ const S = {
   tabs:        { display:"flex" },
   tab: a => ({ flex:1, padding:"9px 2px", textAlign:"center", fontSize:11, fontWeight:700, color:a?"#fff":C.accentMuted, borderBottom:a?"2px solid #fff":"2px solid transparent", cursor:"pointer", background:"none", border:"none" }),
   body:        { padding:"16px 16px 20px" },
-  card:        { background:C.surface, borderRadius:14, padding:"14px 16px", marginBottom:10, boxShadow:"0 1px 3px rgba(0,0,0,0.06)" },
-  cardFlat:    { background:C.surface, borderRadius:14, marginBottom:10, overflow:"hidden", boxShadow:"0 1px 3px rgba(0,0,0,0.06)" },
-  sectionLabel:{ fontSize:11, fontWeight:700, letterSpacing:"0.08em", textTransform:"uppercase", color:C.accentMuted, marginBottom:6 },
+  card:        { background:C.surface, borderRadius:"var(--radius-group)", padding:"var(--space-4)", marginBottom:"var(--space-2)", boxShadow:"0 1px 3px rgba(0,0,0,0.06)" },
+  cardFlat:    { background:C.surface, borderRadius:"var(--radius-group)", marginBottom:"var(--space-2)", overflow:"hidden", boxShadow:"0 1px 3px rgba(0,0,0,0.06)" },
+  sectionLabel:{ fontSize:11, fontWeight:700, letterSpacing:"0.08em", textTransform:"uppercase", color:C.accentMuted, marginBottom:"var(--space-2)" },
   h2:          { fontSize:20, fontWeight:700, marginBottom:4 },
   sub:         { fontSize:14, color:C.muted, lineHeight:1.5, marginBottom:12 },
-  row:         { display:"flex", alignItems:"center", padding:"11px 16px", borderBottom:`1px solid ${C.border}`, gap:10 },
+  row:         { display:"flex", alignItems:"center", minHeight:"var(--touch)", boxSizing:"border-box", padding:"var(--space-3) var(--space-4)", borderBottom:`1px solid ${C.border}`, gap:10 },
   rowLast:     { borderBottom:"none" },
   label:       { fontSize:13, fontWeight:600, color:C.muted, marginBottom:4, display:"block" },
-  input:       { width:"100%", padding:"11px 13px", borderRadius:10, border:`1.5px solid ${C.border}`, fontSize:15, background:"#FAFAFA", boxSizing:"border-box", outline:"none", color:C.text },
-  select:      { width:"100%", padding:"11px 13px", borderRadius:10, border:`1.5px solid ${C.border}`, fontSize:15, background:"#FAFAFA", boxSizing:"border-box", outline:"none", color:C.text },
-  btn:         { display:"block", width:"100%", padding:"13px 16px", borderRadius:12, border:"none", fontSize:15, fontWeight:600, cursor:"pointer", textAlign:"center", marginBottom:8, touchAction:"manipulation", WebkitTapHighlightColor:"rgba(0,0,0,0.1)" },
+  input:       { width:"100%", minHeight:"var(--touch)", padding:"var(--space-3)", borderRadius:"var(--radius-control)", border:`1.5px solid ${C.border}`, fontSize:15, background:"#FAFAFA", boxSizing:"border-box", outline:"none", color:C.text },
+  select:      { width:"100%", minHeight:"var(--touch)", padding:"var(--space-3)", borderRadius:"var(--radius-control)", border:`1.5px solid ${C.border}`, fontSize:15, background:"#FAFAFA", boxSizing:"border-box", outline:"none", color:C.text },
+  btn:         { display:"block", width:"100%", minHeight:"var(--block-button)", boxSizing:"border-box", padding:"var(--space-4)", lineHeight:"var(--body-line)", borderRadius:"var(--radius-control)", border:"none", fontSize:15, fontWeight:600, cursor:"pointer", textAlign:"center", marginBottom:8, touchAction:"manipulation", WebkitTapHighlightColor:"rgba(0,0,0,0.1)" },
   btnP:        { background:C.primary, color:"#fff" },
   btnS:        { background:C.primaryLight, color:C.primary },
   btnD:        { background:C.dangerLight, color:C.danger },
-  btnSm:       { padding:"7px 12px", borderRadius:8, border:"none", fontSize:13, fontWeight:600, cursor:"pointer" },
-  badge:  (color, bg) => ({ display:"inline-block", fontSize:11, fontWeight:700, padding:"2px 8px", borderRadius:20, background:bg, color, marginRight:4 }),
+  btnSm:       { padding:"var(--space-2) var(--space-3)", borderRadius:"var(--radius-seg)", border:"none", fontSize:13, fontWeight:600, cursor:"pointer" },
+  badge:  (color, bg) => ({ display:"inline-block", fontSize:11, fontWeight:700, padding:"2px 8px", borderRadius:"var(--radius-pill)", background:bg, color, marginRight:4 }),
   toggle: on  => ({ width:46, height:26, borderRadius:13, background:on?C.primary:"#DDD", position:"relative", cursor:"pointer", flexShrink:0, border:"none", transition:"background 0.2s" }),
   toggleDot: on => ({ position:"absolute", top:3, left:on?23:3, width:20, height:20, borderRadius:"50%", background:"#fff", transition:"left 0.2s", boxShadow:"0 1px 3px rgba(0,0,0,0.2)" }),
   checkBox: on => ({ width:24, height:24, borderRadius:6, border:on?"none":`2px solid ${C.border}`, background:on?C.primary:"#fff", display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0, color:"#fff", fontSize:13, cursor:"pointer", transition:"all 0.15s" }),
-  pill: a  => ({ padding:"6px 14px", borderRadius:20, border:`1.5px solid ${a?C.primary:C.border}`, background:a?C.primaryLight:"#fff", color:a?C.primary:C.muted, fontSize:13, fontWeight:600, cursor:"pointer" }),
-  mealCard: effort => ({ background:effort==="easy"?"#F0FAF4":"#fff", border:effort==="easy"?`1.5px solid #B8E8CA`:`1.5px solid ${C.border}`, borderRadius:12, padding:"12px 14px", marginBottom:10 }),
-  tag: (color, bg) => ({ display:"inline-block", fontSize:11, fontWeight:600, padding:"2px 8px", borderRadius:20, background:bg||C.primaryLight, color:color||C.primary, marginLeft:4 }),
+  pill: a  => ({ display:"inline-flex", alignItems:"center", justifyContent:"center", minHeight:"var(--pill-height)", boxSizing:"border-box", padding:"0 var(--space-3)", borderRadius:"var(--radius-pill)", border:`1.5px solid ${a?C.primary:C.border}`, background:a?C.primaryLight:"#fff", color:a?C.primary:C.muted, fontSize:13, fontWeight:600, cursor:"pointer" }),
+  mealCard: effort => ({ background:effort==="easy"?"#F0FAF4":"#fff", border:effort==="easy"?`1.5px solid #B8E8CA`:`1.5px solid ${C.border}`, borderRadius:"var(--radius-group)", padding:"var(--space-4)", marginBottom:"var(--space-2)" }),
+  tag: (color, bg) => ({ display:"inline-block", fontSize:11, fontWeight:600, padding:"2px 8px", borderRadius:"var(--radius-pill)", background:bg||C.primaryLight, color:color||C.primary, marginLeft:4 }),
 };
 
 export { C, EFFORT_COLORS, S, TIER_COLORS };

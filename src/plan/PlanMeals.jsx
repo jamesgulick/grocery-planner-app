@@ -571,7 +571,7 @@ function PlanMeals({ mealPlan, plates, setMealPlan, commitMealToPlan, timeLevels
                   ) : (
                     <div style={{ display:"flex", alignItems:"center", gap:8, ...(isSide(mealIdx) ? { paddingLeft:14 } : {}) }}>
                       <div style={{ flex:1, minWidth:0 }}>
-                        <div style={{ fontWeight: isSide(mealIdx) ? 500 : 600, fontSize: isSide(mealIdx) ? 14 : 15, display:"flex", alignItems:"center", gap:6, flexWrap:"wrap" }}>
+                        <div style={{ fontWeight: isSide(mealIdx) ? 400 : 600, fontSize: isSide(mealIdx) ? 14 : 15, display:"flex", alignItems:"center", gap:6, flexWrap:"wrap" }}>
                           {meal}
                           {sideBadge(dishAt(mealIdx))}
                           {noSidesMain(mealIdx) && <span style={S.tag(C.muted, "#F3F4F6")} title="Complete on its own. A side is added only to cover someone who won't eat it.">no sides needed</span>}

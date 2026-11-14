@@ -13,7 +13,7 @@ export function prepareImport(imp) {
     settings: { ...DEFAULT_SETTINGS, ...(imp.settings || {}) },
     _isSeed: false,
   };
-  return { db, summary: { meals: db.meals.length, items: db.ingredients.length, asOf: imp._meta?.dataChangedAt || imp.dataChangedAt || imp.savedAt || null } };
+  return { db, summary: { meals: db.meals.length, items: db.ingredients.length, asOf: imp._meta?.dataChangedAt || null, savedAt: imp.savedAt || null } };
 }
 
 export const readFileText = file => new Promise((resolve, reject) => {

@@ -2,6 +2,7 @@
 import { useState } from "react";
 import { DEFAULT_SUBTYPE, STORAGE_LOCATIONS, TIERS, TIER_SUBTYPES, tierOptions, tierValueOf, toSentenceCase } from "../app/globals.js";
 import { mapBothPlans } from "../app/plans.js";
+import { RowChevron } from "../ui/kit.jsx";
 import { SEED_TS } from "../app/seed.js";
 import { C, S, TIER_COLORS } from "../app/styles.js";
 import { FieldGroup, PillSelect, SearchBar } from "../components/common.jsx";
@@ -253,7 +254,7 @@ function ManageItems({ db, persistDB, initialLoc }) {
                 <div style={{ display:"flex", alignItems:"center", gap:4 }}>
                   <span style={{ fontWeight:600, fontSize:15 }}>{ing.name}</span>
                   <span style={{ flex:1 }} />
-                  <div style={{ color:C.faint, fontSize:16 }}>›</div>
+                  <RowChevron />
                 </div>
                 <div style={{ display:"flex", gap:4, flexWrap:"wrap" }}>
                   <span style={S.badge(tc.color,tc.bg)}>{(TIER_SUBTYPES[ing.tier]||[]).length ? `${ing.tier} · ${ing.stapleType||DEFAULT_SUBTYPE(ing.tier)}` : ing.tier}</span>
