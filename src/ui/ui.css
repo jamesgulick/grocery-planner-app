@@ -31,7 +31,10 @@ button.ui-row:active { background: var(--pressed); }
 .ui-pill-secondary { background: var(--surface); color: var(--action); border: 1px solid var(--control-border); }
 /* 36px visual, 44px tap target on the button itself: transparent top/bottom borders are
    part of the button's box, and the background stops at them. */
-.ui-pill-inline { min-height: var(--touch); border-top: var(--pill-inset) solid transparent; border-bottom: var(--pill-inset) solid transparent; background-clip: padding-box; }
+.ui-pill-inline { min-height: var(--touch); border-top: var(--pill-inset) solid transparent; border-bottom: var(--pill-inset) solid transparent; background-clip: padding-box;
+  /* Round ends on the visible 32px face: the corner's vertical radius includes the
+     transparent border, so it's half the tap height; the horizontal one half the face. */
+  border-radius: calc(var(--pill-height) / 2) / calc(var(--touch) / 2); }
 .ui-pill:active { opacity: 0.8; }
 .ui-pill:disabled { opacity: 0.45; cursor: default; }
 .ui-block-button { font: inherit; font-size: var(--body-size); font-weight: 700; width: 100%; min-height: var(--block-button); border-radius: var(--radius-control); border: 0; cursor: pointer; background: var(--action); color: var(--on-action); }
