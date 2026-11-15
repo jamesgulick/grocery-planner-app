@@ -1,6 +1,6 @@
 // Settings sheet (polish Phase 2; canvas board, to review): Household (Family, Away dates),
 // Cooking (Grill season), Shopping (Plans start on), Calendar (Sync instructions: free text,
-// written into every export's _meta for Send to Claude; never in the code), Help. No learn-mode switch (decided
+// written into every export's _meta for Send to AI; never in the code), Help. No learn-mode switch (decided
 // 11/12: the plate sheet's Reasons switch replaces it). Away dates and Help reuse today's
 // editors inside the sheet until their own redraw.
 import { useState } from "react";

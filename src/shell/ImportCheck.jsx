@@ -7,7 +7,9 @@ import { formatSavedAt } from "../app/globals.js";
 import { DEFAULT_SETTINGS } from "../app/seed.js";
 import { BlockButton, Section, Sheet } from "../ui/kit.jsx";
 
-export function ImportCheck({ device, prepared, onLoad, onCancel }) {
+// fromClipboard (calendar sync, board "Round 14"): the subline names the source, and the
+// footnote says Load also saves a copy.
+export function ImportCheck({ device, prepared, onLoad, onCancel, fromClipboard = false }) {
   // Defaults filled on the device side too, as prepareImport fills them on the file's.
   const here = device && { ...device, settings: { ...DEFAULT_SETTINGS, ...(device.settings || {}) } };
   const { savedAt, counts, rows, older } = compareImport(here, prepared.db, prepared.summary);
@@ -15,7 +17,7 @@ export function ImportCheck({ device, prepared, onLoad, onCancel }) {
     ? [...rows, { label: "Older file", lines: [`this device ${formatSavedAt(device.dataChangedAt)}`], problem: true }]
     : rows;
   return (
-    <Sheet title="Load this file?" sub={savedAt ? `Saved ${formatSavedAt(savedAt)}` : "Saved: unknown"}
+    <Sheet title="Load this file?" sub={`${fromClipboard ? "From clipboard · " : ""}${savedAt ? `Saved ${formatSavedAt(savedAt)}` : "Saved: unknown"}`}
       onClose={onCancel} doneLabel="Cancel"
       footer={<BlockButton onClick={onLoad}>Load</BlockButton>}>
       <div className="imp-counts">
@@ -42,7 +44,7 @@ export function ImportCheck({ device, prepared, onLoad, onCancel }) {
           </div>
         </Section>
       )}
-      <div className="ui-meta imp-replaces">Replaces what's on this device</div>
+      <div className="ui-meta imp-replaces">Replaces what's on this device{fromClipboard && " · Saves a copy"}</div>
     </Sheet>
   );
 }

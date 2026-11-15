@@ -19,7 +19,7 @@ const exportMeta = db => {
     // seed-vs-real) instead of re-deriving it from the fresh export moment.
     dataChangedAt:  db.dataChangedAt || null,
     lastExportedAt: db.lastExportedAt || null,
-    // The calendar sync instructions, as typed in Settings (Send to Claude points Claude
+    // The calendar sync instructions, as typed in Settings (Send to AI points the AI
     // here). Written only when set, and dropped again on import like the rest of _meta.
     ...(db.settings?.syncInstructions?.trim() ? { syncInstructions: db.settings.syncInstructions } : {}),
     // A preview build's export is test data; the live app warns before importing it.

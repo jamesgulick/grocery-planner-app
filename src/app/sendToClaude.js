@@ -1,4 +1,4 @@
-// Send to Claude (calendar sync, the way out; decided 11/14). One action in two places,
+// Send to AI (calendar sync, the way out; decided 11/14; label per 11/15). One action in two places,
 // the Sync row and the Data sheet: build the normal export (its _meta carries the sync
 // instructions from Settings), copy the fixed prompt, and open the share sheet with the
 // file and the prompt as share text. Where the share sheet can't take a file, download
