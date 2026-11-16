@@ -86,6 +86,7 @@ function computeDataStatus(db, storageOk) {
 export default function App() {
   const [db, setDB]               = useState(null);
   const [tab, setTab]             = useState("home");
+  const [tabTaps, setTabTaps]     = useState(0);         // a bottom-tab tap returns that tab to its top (11/16)
   const [sheet, setSheet]         = useState(null);       // "data" | "settings" | null
   const [libraryView, setLibraryView] = useState("meals"); // Library: Meals | Items
   const [loading, setLoading]     = useState(true);
@@ -309,9 +310,9 @@ export default function App() {
           <TopBar title="Plan">{headerIcons}</TopBar>
           <PlanTab key={db.activePlan || "current"} db={db} persistDB={persistDB} onGoToImport={() => setSheet("data")} onGoToUnassigned={() => { setLibraryView("items"); setTab("library"); }} />
         </>}
-        {tab==="library" && <LibraryTab db={db} persistDB={persistDB} view={libraryView} setView={setLibraryView} headerIcons={headerIcons} />}
+        {tab==="library" && <LibraryTab db={db} persistDB={persistDB} view={libraryView} setView={setLibraryView} headerIcons={headerIcons} resetKey={tabTaps} />}
         <TabBarSpacer />
-        <TabBar tabs={TABS} active={tab} onSelect={setTab} />
+        <TabBar tabs={TABS} active={tab} onSelect={id => { setTab(id); setTabTaps(n => n + 1); window.scrollTo(0, 0); }} />
         {sheet === "data" && <DataSheet db={db} persistDB={persistDB} overdue={dataDot} onClose={() => setSheet(null)} />}
         {sheet === "settings" && <SettingsSheet db={db} persistDB={persistDB} onClose={() => setSheet(null)} />}
       </div>

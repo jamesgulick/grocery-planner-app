@@ -6,8 +6,10 @@
 //              Avoid on the plate · Can be someone's dinner
 //   Cooking: Leftovers · Weather     Shopping: Ingredients (+ Paste a recipe) · Recipe link
 //   Notes, then Delete meal (speed bump).
-// Sections read as cards; a tap opens that section's sheet, which saves as you go. Switches,
-// Type and Rotation are set in place. The large title collapses into the bar on scroll;
+// Compact rows (11/16, "Meal page density" B): each group is one card of rows, label + ⓘ left,
+// a short value right; a tap opens that row's sheet, which saves as you go. Switches sit in their
+// row; Type and Rotation keep their segmented control under the label. A problem row has an
+// amber value and its group's card gets the amber outline. Back names the previous screen. The large title collapses into the bar on scroll;
 // ✎ renames in place (renameMeal: plans and history follow, the record stays the same).
 // Finish-the-entry gaps are amber only for a meal in rotation or planned; learn-over-time
 // fields read "Not set" quietly.
@@ -15,19 +17,20 @@ import { useEffect, useRef, useState } from "react";
 import { todayLocalISO } from "../app/globals.js";
 import { mealNameProblem, renameMeal } from "../mealRename.js";
 import { FACET_VOCAB } from "../manage/MealEditor.jsx";
-import { Clocks, DeleteButton, FieldLabel, Group, Icon, Row, Segmented, Switch } from "../ui/kit.jsx";
+import { Clocks, DeleteButton, FieldLabel, Icon, Segmented, Switch } from "../ui/kit.jsx";
 import {
   DeleteSheet, HowOftenSheet, InfoSheet, IngredientsSheet, LeftoversSheet, PairsSheet,
   TagSheet, TextSheet, TimeCostSheet, WeatherSheet, WhoEatsSheet,
 } from "./LibrarySheets.jsx";
 import {
   EFFORT_OPTIONS, ROTATION_OPTIONS, TYPE_OPTIONS, cadenceWord, dayShort, facetWord, isSide,
-  leftoversWords, linkWords, mealDeleteImpact, mealGaps, mealHistoryIndex, monthDay, pairIdsOf, timeCostWords,
-  typeWord, weatherWords, whoEatsWords, withField, withPairs, withoutMeal,
+  mealDeleteImpact, mealGaps, mealHistoryIndex, monthDay, pairIdsOf,
+  typeWord, weatherWords, withField, withPairs, withoutMeal,
 } from "./libraryModel.js";
 
 // The page's title bar and big title, shared with the item page.
-export function PageHeader({ name, sub, onBack, onRename, renameProblem, renameExtra }) {
+// `backLabel` names the screen you came from (11/16); long names read "Back".
+export function PageHeader({ name, sub, onBack, backLabel = "Library", onRename, renameProblem, renameExtra }) {
   const titleRef = useRef(null);
   const [collapsed, setCollapsed] = useState(false);
   const [draft, setDraft] = useState(null);   // the name being typed, while renaming
@@ -44,7 +47,7 @@ export function PageHeader({ name, sub, onBack, onRename, renameProblem, renameE
     <>
       <div className="lib-pagebar">
         {draft === null
-          ? <button type="button" className="lib-back" onClick={onBack}><span aria-hidden="true">‹</span> Library</button>
+          ? <button type="button" className="lib-back" onClick={onBack}><span aria-hidden="true">‹</span> {backLabel.length > 16 ? "Back" : backLabel}</button>
           : <button type="button" className="lib-back" onClick={() => setDraft(null)}>Cancel</button>}
         <span className="lib-pagebar-title" data-show={collapsed && draft === null ? "1" : "0"}>{name}</span>
         {draft !== null && <button type="button" className="lib-bar-done" disabled={!!problem} onClick={done}>Done</button>}
@@ -84,17 +87,46 @@ export function SectionCard({ label, info, onInfo, value, problem, onClick, chil
   );
 }
 const TagList = ({ values }) => <span className="lib-tags">{values.map(v => <span key={v} className="lib-tag">{facetWord(v)}</span>)}</span>;
-const SwitchRow = ({ title, checked, onChange, info, onInfo }) => (
-  <Group><Row title={<span className="lib-switch-title">{title}{info && <button type="button" className="ui-info" aria-label={"About " + title} onClick={() => onInfo(info)}><Icon name="info" size={18} /></button>}</span>}
-    trailing={<Switch checked={!!checked} onChange={onChange} label={title} />} /></Group>
+
+// Compact rows (11/16, board "Meal page density", option B): each group is one card of rows;
+// label + ⓘ on the left, a short value on the right, chevron. A problem row has an amber value
+// and its group's card gets the amber outline.
+const Info = ({ label, topic, onInfo }) => (topic
+  ? <button type="button" className="ui-info" aria-label={"About " + label} onClick={e => { e.stopPropagation(); onInfo(topic); }}><Icon name="info" size={18} /></button>
+  : null);
+const GroupCard = ({ problem, children }) => <div className={problem ? "lib-gcard lib-card-problem" : "lib-gcard"}>{children}</div>;
+function FieldRow({ label, info, onInfo, value, problem, onClick }) {
+  return (
+    <div className="lib-row" onClick={onClick}>
+      {label && <span className="lib-row-label">{label}<Info label={label} topic={info} onInfo={onInfo} /></span>}
+      <button type="button" className={problem ? "lib-row-value lib-row-problem" : "lib-row-value"} aria-label={label || undefined}
+        onClick={e => { e.stopPropagation(); onClick(); }}>
+        <span className="lib-row-text">{value == null ? <span className="lib-notset">Not set</span> : value}</span>
+        <svg aria-hidden="true" className="ui-chevron-icon lib-card-chev" viewBox="0 0 8 14" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round"><path d="M1 1l6 6-6 6" /></svg>
+      </button>
+    </div>
+  );
+}
+const SwitchField = ({ label, info, onInfo, checked, onChange }) => (
+  <div className="lib-row lib-row-switch">
+    <span className="lib-row-label">{label}<Info label={label} topic={info} onInfo={onInfo} /></span>
+    <Switch checked={!!checked} onChange={onChange} label={label} />
+  </div>
+);
+// Type and Rotation keep their segmented control inside the card, under the label.
+const StackField = ({ label, info, onInfo, meta, children }) => (
+  <div className="lib-row lib-row-stack">
+    <span className="lib-row-label">{label}<Info label={label} topic={info} onInfo={onInfo} /></span>
+    {children}
+    {meta && <span className="ui-meta">{meta}</span>}
+  </div>
 );
 
-export function MealPage({ db, persistDB, mealId, onBack }) {
+export function MealPage({ db, persistDB, mealId, onBack, backLabel = "Library" }) {
   const today = todayLocalISO();
   const meal = (db.meals || []).find(m => m.id === mealId);
   const [sheet, setSheet] = useState(null);   // which section's sheet is open
   const [info, setInfo] = useState(null);
-  useEffect(() => { window.scrollTo(0, 0); }, [mealId]);
   if (!meal) return null;
 
   const family = db.settings?.familyContacts || [];
@@ -112,7 +144,6 @@ export function MealPage({ db, persistDB, mealId, onBack }) {
   const setField = (k, v) => save(db.meals.map(m => (m.id === meal.id ? withField(m, k, v) : m)));
   const close = () => setSheet(null);
 
-  const whoWords = whoEatsWords(meal, family);
   const sub = [typeWord(meal.type), planned ? `Planned ${dayShort(planned)}` : null].filter(Boolean).join(" · ");
   const effort = EFFORT_OPTIONS.find(o => o.value === meal.effort);
   const cooked = hist.count(meal.name);
@@ -157,74 +188,90 @@ export function MealPage({ db, persistDB, mealId, onBack }) {
     open = <DeleteSheet name={meal.name} lines={lines} onClose={close} onDelete={() => { persistDB(withoutMeal(db, meal.id)); onBack(); }} />;
   }
 
+  // Short values (11/16: kept short so nothing wraps; the full detail is in each row's sheet).
+  const prefs = (meal.preferences || []).filter(p => p.pref === "likes" || p.pref === "dislikes");
+  const likeN = prefs.filter(p => p.pref === "likes").length;
+  const wont = family.map(f => f.name).filter(n => prefs.some(p => p.person === n && p.pref === "dislikes"));
+  const fineN = family.length - likeN - wont.length;
+  const whoShort = !prefs.length ? (isNew ? null : "Everyone fine")
+    : <>{[likeN ? `${likeN} like` : null, ...wont.map(n => <strong key={n}>{n} won't</strong>), fineN > 0 ? `${fineN} fine` : null]
+        .filter(Boolean).map((p, k) => <span key={k}>{k ? " · " : ""}{p}</span>)}</>;
+  const howShort = isNew && !meal.cadence ? null
+    : [meal.rotation === "manual" && !meal.cadence ? "Hand-picked" : cadenceWord(meal.cadence), last ? monthDay(last) : null].filter(Boolean).join(" · ");
+  const cost = meal.cost && meal.cost !== "none" ? meal.cost[0].toUpperCase() + meal.cost.slice(1) : null;
+  const timeShort = effort ? <span className="lib-with-clocks"><Clocks n={effort.n} />{[effort.label, cost].filter(Boolean).join(" · ")}</span> : null;
+  const tags = values => (!values.length ? null : values.length < 3 ? <TagList values={values} /> : `${values.length} tags`);
+  const names = (list, noun) => (!list.length ? null : list.length < 3 ? list.join(", ") : `${list.length} ${noun}`);
+  const c = meal.carries;
+  const leftShort = !c ? (isNew ? null : "None")
+    : `${Array.isArray(c.forWhom) ? (c.forWhom.length ? (c.forWhom.length < 3 ? c.forWhom.join(", ") : `${c.forWhom.length} people`) : "Nobody") : c.forWhom === "all" ? "Everyone" : "Who likes it"} · ${c.lastsDays} day${c.lastsDays === 1 ? "" : "s"}`;
+  const ingShort = gaps.nothingToBuy ? "Nothing to buy" : ingNames.length ? `${ingNames.length} item${ingNames.length === 1 ? "" : "s"}` : null;
+  const notes = (meal.notes || "").trim();
+
   return (
     <div className="lib-page">
-      <PageHeader name={meal.name} sub={sub} onBack={onBack}
+      <PageHeader name={meal.name} sub={sub} onBack={onBack} backLabel={backLabel}
         renameProblem={n => mealNameProblem(db.meals, meal.id, n)}
         onRename={n => { const base = renameMeal(db, meal.id, n); persistDB({ ...base, meals: base.meals.map(m => (m.id === meal.id ? { ...m, name: n } : m)) }); }} />
 
       <section className="lib-group">
         <h2 className="lib-group-head">Planning</h2>
-        <SwitchRow title="Wanted soon" checked={meal.soon} onChange={v => setField("soon", v || undefined)} info="wantedSoon" onInfo={setInfo} />
-        <SectionCard label="Who eats it" info="whoEats" onInfo={setInfo} onClick={() => setSheet("who")}
-          value={whoWords && (typeof whoWords === "string" ? whoWords : whoWords.map((p, k) => <span key={k}>{k ? " · " : ""}{p.strong ? <strong>{p.text}</strong> : p.text}</span>))} />
-        <SectionCard label="How often" info="howOften" onInfo={setInfo} onClick={() => setSheet("often")}
-          value={isNew && !meal.cadence ? null : [meal.rotation === "manual" && !meal.cadence ? "Hand-picked" : cadenceWord(meal.cadence), last ? `last made ${monthDay(last)}` : null].filter(Boolean).join(" · ")} />
-        <SectionCard label="Time needed and cost" info="timeNeeded" onInfo={setInfo} onClick={() => setSheet("time")}
-          value={timeCostWords(meal) && <span className="lib-with-clocks">{effort && <Clocks n={effort.n} />}{timeCostWords(meal)}</span>} />
-        <div className="lib-section">
-          <FieldLabel info="Rotation" onInfo={() => setInfo("rotation")}>Rotation</FieldLabel>
-          <div className="lib-card lib-card-static">
+        <GroupCard>
+          <SwitchField label="Wanted soon" info="wantedSoon" onInfo={setInfo} checked={meal.soon} onChange={v => setField("soon", v || undefined)} />
+          <FieldRow label="Who eats it" info="whoEats" onInfo={setInfo} value={whoShort} onClick={() => setSheet("who")} />
+          <FieldRow label="How often" info="howOften" onInfo={setInfo} value={howShort} onClick={() => setSheet("often")} />
+          <FieldRow label="Time and cost" info="timeNeeded" onInfo={setInfo} value={timeShort} onClick={() => setSheet("time")} />
+          <StackField label="Rotation" info="rotation" onInfo={setInfo}
+            meta={cooked ? `Cooked ${cooked} time${cooked === 1 ? "" : "s"}${last ? ` · last ${monthDay(last)}` : ""}` : "Not cooked yet"}>
             <Segmented label="Rotation" value={meal.rotation || "in"} onChange={v => setField("rotation", v)} options={ROTATION_OPTIONS} />
-            <div className="ui-meta lib-rot-line">{cooked ? `Cooked ${cooked} time${cooked === 1 ? "" : "s"}${last ? ` · last ${monthDay(last)}` : ""}` : "Not cooked yet"}</div>
-          </div>
-        </div>
+          </StackField>
+        </GroupCard>
       </section>
 
       <section className="lib-group">
         <h2 className="lib-group-head">The plate</h2>
-        <div className="lib-section">
-          <FieldLabel info="Type" onInfo={() => setInfo("type")}>Type</FieldLabel>
-          <Segmented label="Type" value={meal.type || "dinner"} onChange={v => save(db.meals.map(m => (m.id === meal.id ? { ...m, type: v } : m)))} options={TYPE_OPTIONS} />
-        </div>
-        <SectionCard label="Style" info="style" onInfo={setInfo} onClick={() => setSheet("style")} problem={gaps.style}
-          value={gaps.style ? "Not set · can't keep it apart from similar meals" : (meal.form || []).length + (meal.service || []).length ? <TagList values={[...(meal.form || []), ...(meal.service || [])]} /> : null} />
-        <SectionCard label="Plate and feel" info="plateFeel" onInfo={setInfo} onClick={() => setSheet("plate")}
-          value={(meal.experience || []).length + (meal.plate || []).length ? <TagList values={[...(meal.experience || []), ...(meal.plate || [])]} /> : null} />
-        {!side && <>
-          <SwitchRow title="No sides needed" checked={meal.noSidesUnlessNeeded} onChange={v => setField("noSidesUnlessNeeded", v || undefined)} info="noSides" onInfo={setInfo} />
-          {!meal.noSidesUnlessNeeded && (
-            <SectionCard label={`Sides that go with it${pairIds.length ? ` · ${pairIds.length}` : ""}`} info="pairs" onInfo={setInfo} onClick={() => setSheet("pairs")}
-              value={pairNames.length ? pairNames.join(", ") : null} />
-          )}
-        </>}
-        {side && <>
-          <SectionCard label="Goes with" info="goesWith" onInfo={setInfo} onClick={() => setSheet("pairs")} problem={gaps.goesWith}
-            value={gaps.goesWith ? "Not set · never offered as a side" : pairNames.length ? <strong>{pairNames.join(", ")}</strong> : null} />
-          <SectionCard label="Avoid on the plate" info="avoid" onInfo={setInfo} onClick={() => setSheet("avoid")}
-            value={(meal.avoidPlate || []).length ? <TagList values={meal.avoidPlate} /> : null} />
-          <SwitchRow title="Can be someone's dinner" checked={meal.substantial} onChange={v => setField("substantial", v || undefined)} info="substantial" onInfo={setInfo} />
-        </>}
+        <GroupCard problem={gaps.style || gaps.goesWith}>
+          <StackField label="Type" info="type" onInfo={setInfo}>
+            <Segmented label="Type" value={meal.type || "dinner"} onChange={v => save(db.meals.map(m => (m.id === meal.id ? { ...m, type: v } : m)))} options={TYPE_OPTIONS} />
+          </StackField>
+          <FieldRow label="Style" info="style" onInfo={setInfo} problem={gaps.style} onClick={() => setSheet("style")}
+            value={tags([...(meal.form || []), ...(meal.service || [])])} />
+          <FieldRow label="Plate and feel" info="plateFeel" onInfo={setInfo} onClick={() => setSheet("plate")}
+            value={tags([...(meal.experience || []), ...(meal.plate || [])])} />
+          {!side && <>
+            <SwitchField label="No sides needed" info="noSides" onInfo={setInfo} checked={meal.noSidesUnlessNeeded} onChange={v => setField("noSidesUnlessNeeded", v || undefined)} />
+            {!meal.noSidesUnlessNeeded && (
+              <FieldRow label="Sides that go with it" info="pairs" onInfo={setInfo} onClick={() => setSheet("pairs")} value={names(pairNames, "sides")} />
+            )}
+          </>}
+          {side && <>
+            <FieldRow label="Goes with" info="goesWith" onInfo={setInfo} problem={gaps.goesWith} onClick={() => setSheet("pairs")} value={names(pairNames, "mains")} />
+            <FieldRow label="Avoid on the plate" info="avoid" onInfo={setInfo} onClick={() => setSheet("avoid")} value={tags(meal.avoidPlate || [])} />
+            <SwitchField label="Can be someone's dinner" info="substantial" onInfo={setInfo} checked={meal.substantial} onChange={v => setField("substantial", v || undefined)} />
+          </>}
+        </GroupCard>
       </section>
 
       <section className="lib-group">
         <h2 className="lib-group-head">Cooking</h2>
-        <SectionCard label="Leftovers" info="leftovers" onInfo={setInfo} onClick={() => setSheet("left")} value={leftoversWords(meal)} />
-        <SectionCard label="Weather" info="weather" onInfo={setInfo} onClick={() => setSheet("weather")} value={weatherWords(meal)} />
+        <GroupCard>
+          <FieldRow label="Leftovers" info="leftovers" onInfo={setInfo} onClick={() => setSheet("left")} value={leftShort} />
+          <FieldRow label="Weather" info="weather" onInfo={setInfo} onClick={() => setSheet("weather")} value={weatherWords(meal)} />
+        </GroupCard>
       </section>
 
       <section className="lib-group">
         <h2 className="lib-group-head">Shopping</h2>
-        <SectionCard label="Ingredients" onClick={() => setSheet("ingredients")} problem={!!gaps.nothingToBuy}
-          value={gaps.nothingToBuy ? `Nothing to buy for ${dayShort(gaps.nothingToBuy)}`
-            : ingNames.length ? <>{ingNames.slice(0, 5).join(", ")}{ingNames.length > 5 && <span className="lib-more"> +{ingNames.length - 5}</span>}</> : null} />
+        <GroupCard problem={!!gaps.nothingToBuy}>
+          <FieldRow label="Ingredients" problem={!!gaps.nothingToBuy} onClick={() => setSheet("ingredients")} value={ingShort} />
+          <FieldRow label="Recipe link" onClick={() => setSheet("link")} value={meal.link ? "Set" : null} />
+        </GroupCard>
         {!ingNames.length && <button type="button" className="ui-link lib-paste-link" onClick={() => setSheet("paste")}>Paste a recipe</button>}
-        <SectionCard label="Recipe link" onClick={() => setSheet("link")} value={meal.link ? linkWords(meal.link) : null} />
       </section>
 
       <section className="lib-group">
         <h2 className="lib-group-head">Notes</h2>
-        <SectionCard onClick={() => setSheet("notes")} value={(meal.notes || "").trim() ? <span className="lib-notes">{meal.notes}</span> : null} />
+        <GroupCard><FieldRow onClick={() => setSheet("notes")} value={notes ? <span className="lib-row-note">{notes}</span> : null} /></GroupCard>
         <DeleteButton onClick={() => setSheet("delete")}>Delete meal</DeleteButton>
       </section>
 

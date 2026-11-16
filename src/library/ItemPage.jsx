@@ -4,7 +4,7 @@
 // rows that open their pages), then Delete item (speed bump: the meals it leaves, any list).
 // A Buy change from here doesn't touch this week's list; re-filing from Inventory or Confirm
 // still goes through the plan's updateItem, which carries the on/off state across.
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { INVENTORY_LOCS } from "../app/globals.js";
 import { DeleteButton, FieldLabel, Group, Row } from "../ui/kit.jsx";
 import { DeleteSheet, PickListSheet, TextSheet } from "./LibrarySheets.jsx";
@@ -13,10 +13,9 @@ import { BUY_OPTIONS, buyOf, buyPatch, buyWord, isSide, itemDeleteImpact, placeO
 
 const key = s => String(s || "").trim().toLowerCase();
 
-export function ItemPage({ db, persistDB, itemId, onBack, onOpenMeal }) {
+export function ItemPage({ db, persistDB, itemId, onBack, backLabel, onOpenMeal }) {
   const item = (db.ingredients || []).find(i => i.id === itemId);
   const [sheet, setSheet] = useState(null);
-  useEffect(() => { window.scrollTo(0, 0); }, [itemId]);
   if (!item) return null;
 
   const update = patch => persistDB({
@@ -47,7 +46,7 @@ export function ItemPage({ db, persistDB, itemId, onBack, onOpenMeal }) {
 
   return (
     <div className="lib-page">
-      <PageHeader name={item.name} sub={sub} onBack={onBack}
+      <PageHeader name={item.name} sub={sub} onBack={onBack} backLabel={backLabel}
         renameProblem={n => {
           if (!key(n)) return "Give the item a name.";
           const clash = db.ingredients.find(i => i.id !== item.id && key(i.name) === key(n));

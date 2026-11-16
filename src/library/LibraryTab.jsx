@@ -19,9 +19,14 @@ import {
 const MEAL_FILTERS = [{ value: "mains", label: "Mains" }, { value: "sides", label: "Sides" }];
 const ITEM_FILTERS = [{ value: "always", label: "Always" }, { value: "staples", label: "Staples" }, { value: "meals", label: "For meals" }];
 
-export function LibraryTab({ db, persistDB, view, setView, headerIcons }) {
+// Pages open as a stack (11/16): the back link names the screen you came from and returns to
+// it at its scroll position ("‹ Corn on the cob" after Item › Used in › meal). Tapping the
+// Library tab (`resetKey` changes) always returns to the list's top.
+export function LibraryTab({ db, persistDB, view, setView, headerIcons, resetKey }) {
   const today = todayLocalISO();
-  const [page, setPage] = useState(null);           // { kind: "meal" | "item", id }
+  const [stack, setStack] = useState([]);           // [{ kind: "meal" | "item", id, scroll }]
+  const page = stack[stack.length - 1] || null;
+  const restoreTo = useRef(0);                      // where to scroll once the screen shows
   const [state, setState] = useState({ meals: { q: "", filter: null, sort: "az" }, items: { q: "", filter: null, sort: "place" } });
   const scrollRef = useRef(0);
   const headRef = useRef(null);
@@ -36,12 +41,26 @@ export function LibraryTab({ db, persistDB, view, setView, headerIcons }) {
     ro.observe(el);
     return () => ro.disconnect();
   }, [page]);
-  // Coming back from a page puts the list where it was.
-  useEffect(() => { if (!page) window.scrollTo(0, scrollRef.current); }, [page]);
-  const openPage = p => { scrollRef.current = window.scrollY; setPage(p); };
+  // Each screen shows at its own scroll position: a new page at the top, a screen you come
+  // back to where you left it. Runs after the page's own scroll-to-top.
+  useEffect(() => { window.scrollTo(0, restoreTo.current); }, [stack.length, page?.id]);
+  useEffect(() => { if (resetKey) { scrollRef.current = 0; restoreTo.current = 0; setStack([]); } }, [resetKey]);
+  const openPage = p => {
+    const y = window.scrollY;   // read now: the next screen scrolls to its top before React runs the updater
+    if (!stack.length) scrollRef.current = y;
+    restoreTo.current = 0;
+    setStack(st => [...st.slice(0, -1), ...(st.length ? [{ ...st[st.length - 1], scroll: y }] : []), p]);
+  };
+  const back = () => {
+    const prev = stack[stack.length - 2];
+    restoreTo.current = prev ? prev.scroll || 0 : scrollRef.current;
+    setStack(st => st.slice(0, -1));
+  };
+  const nameOf = p => (p.kind === "meal" ? (db.meals || []).find(m => m.id === p.id)?.name : (db.ingredients || []).find(i => i.id === p.id)?.name) || "Back";
+  const backLabel = stack.length > 1 ? nameOf(stack[stack.length - 2]) : "Library";
 
-  if (page?.kind === "meal") return <MealPage db={db} persistDB={persistDB} mealId={page.id} onBack={() => setPage(null)} />;
-  if (page?.kind === "item") return <ItemPage db={db} persistDB={persistDB} itemId={page.id} onBack={() => setPage(null)} onOpenMeal={id => setPage({ kind: "meal", id })} />;
+  if (page?.kind === "meal") return <MealPage db={db} persistDB={persistDB} mealId={page.id} onBack={back} backLabel={backLabel} />;
+  if (page?.kind === "item") return <ItemPage db={db} persistDB={persistDB} itemId={page.id} onBack={back} backLabel={backLabel} onOpenMeal={id => openPage({ kind: "meal", id })} />;
 
   const meals = db.meals || [], items = db.ingredients || [];
   const hist = mealHistoryIndex(db, today);

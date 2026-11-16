@@ -61,3 +61,20 @@
 .lib-person-name { font-size: var(--body-size); font-weight: 600; }
 .lib-cant-undo { font-size: var(--meta-size); color: var(--text-muted); }
 .lib-open-link { align-self: flex-start; text-decoration: none; display: inline-flex; align-items: center; }
+
+/* ── Meal page: compact rows, one card per group (11/16, "Meal page density" B) ── */
+.lib-gcard { background: var(--surface); border-radius: var(--radius-group); display: flex; flex-direction: column; overflow: hidden; }
+.lib-row { position: relative; display: flex; align-items: center; gap: var(--space-3); min-height: var(--row-height); padding-left: var(--space-4); cursor: pointer; font-size: var(--body-size); line-height: var(--body-line); }
+.lib-row + .lib-row::before { content: ""; position: absolute; top: 0; left: var(--space-4); right: 0; height: 1px; background: var(--divider); }
+.lib-row:active { background: var(--pressed); }
+.lib-row-label { flex: none; display: inline-flex; align-items: center; gap: var(--space-1); white-space: nowrap; color: var(--text); }
+.lib-row-value { flex: 1; min-width: 0; align-self: stretch; display: flex; align-items: center; justify-content: flex-end; gap: var(--space-3); padding: var(--space-3) var(--space-4) var(--space-3) 0; border: 0; background: none; font: inherit; color: var(--text-muted); text-align: right; cursor: pointer; }
+.lib-row-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lib-row-text .lib-tags { flex-wrap: nowrap; }
+.lib-row-problem { color: var(--problem); font-weight: 600; }
+.lib-row-note { color: var(--text); }
+.lib-row:has(> .lib-row-value:only-child) .lib-row-value { justify-content: space-between; text-align: left; }
+.lib-row-switch { cursor: default; padding-right: var(--space-4); justify-content: space-between; }
+.lib-row-switch:active, .lib-row-stack:active { background: none; }
+.lib-row-stack { cursor: default; flex-direction: column; align-items: stretch; gap: var(--space-2); padding: var(--space-3) var(--space-4); }
+.lib-row-stack .lib-row-label { align-self: flex-start; }
