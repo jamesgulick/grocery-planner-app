@@ -5,6 +5,7 @@ import { mealNameProblem } from "../mealRename.js";
 import React, { useState } from "react";
 import { EFFORTS, FAMILY_NAMES, MEAL_TYPES, TEMP_AFFINITY_OPTIONS, toSentenceCase } from "../app/globals.js";
 import { C, S } from "../app/styles.js";
+import { FACET_VOCAB } from "../app/vocab.js";
 import { FieldGroup, PillSelect, SearchBar } from "../components/common.jsx";
 
 // ── ENGINE FACETS (SPEC-engine-facet-editor) ─────────────────────────────────
@@ -12,12 +13,7 @@ import { FieldGroup, PillSelect, SearchBar } from "../components/common.jsx";
 // are the controlled vocabulary (FACET-VOCABULARY.md, live values only); adding a value
 // is a deliberate act there, never free text here. A value a meal already carries that
 // isn't listed is shown struck through so it can be removed, never dropped silently.
-const FACET_VOCAB = {
-  form:       ["casserole","component","stew","plated-entree","finger-food","pasta","sandwich","soup","salad","sauce","bowl","custard-pie"],
-  service:    ["home-cooked","takeout","choose-your-own","dine-out"],
-  experience: ["hearty","light","picnicky","pubfood","fancy"],
-  plate:      ["meaty","starchy","cheesy","bread-based","vegetable-forward","fried","brothy","creamy","salty","seafood","rich","deli-salad","chilled","eggy"],
-};
+// (FACET_VOCAB now lives in src/app/vocab.js, shared with the meal page and Send to AI.)
 const ROTATION_OPTIONS = ["in","manual","experimental"];
 const ROTATION_HELP = {
   in: "In rotation: the engine picks it.",

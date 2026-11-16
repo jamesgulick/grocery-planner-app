@@ -16,7 +16,8 @@ export function prepareImport(imp) {
     // time, and every import path saves in the background so it isn't re-stamped.
     dataChangedAt: imp.dataChangedAt || imp._meta?.dataChangedAt || null,
   };
-  return { db, summary: { meals: db.meals.length, items: db.ingredients.length, asOf: imp._meta?.dataChangedAt || null, savedAt: imp.savedAt || null } };
+  // meta: the file's own _meta (request, response, exportedAt), read by the import check only.
+  return { db, meta: imp._meta || null, summary: { meals: db.meals.length, items: db.ingredients.length, asOf: imp._meta?.dataChangedAt || null, savedAt: imp.savedAt || null } };
 }
 
 export const readFileText = file => new Promise((resolve, reject) => {

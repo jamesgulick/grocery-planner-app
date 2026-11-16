@@ -16,12 +16,8 @@ export const dayShort = iso => { const d = dateOf(iso); return `${WD[d.getDay()]
 // ── Words ─────────────────────────────────────────────────────────────────────
 // FACET_VOCAB values in plain words (Decisions 11/15: 'Plated entrée', 'Custard or pie',
 // 'Pub food', 'Bread-based'). A value not listed reads as itself, capitalised.
-const FACET_WORDS = {
-  "plated-entree": "Plated entrée", "finger-food": "Finger food", "custard-pie": "Custard or pie",
-  "home-cooked": "Home-cooked", "choose-your-own": "Choose-your-own", "dine-out": "Dine-out",
-  pubfood: "Pub food", "bread-based": "Bread-based", "vegetable-forward": "Vegetable-forward", "deli-salad": "Deli salad",
-};
-export const facetWord = v => FACET_WORDS[v] || (v ? v[0].toUpperCase() + v.slice(1) : "");
+import { facetWord } from "../app/vocab.js";
+export { facetWord };
 
 export const TYPE_OPTIONS = [
   { value: "dinner", label: "Dinner" }, { value: "side", label: "Side" }, { value: "batch", label: "Batch" },

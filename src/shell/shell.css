@@ -37,3 +37,10 @@
 .sync-pill:focus-visible { outline: 2px solid var(--action); outline-offset: 2px; }
 .sync-chev { flex: none; color: var(--control-border); font-size: var(--label-size); font-weight: 400; }
 .sync-welcome { margin-bottom: var(--space-2); }
+/* Import check record rows (recipe / fill-in): amber rows carry the dot. */
+.imp-rec { position: relative; display: flex; align-items: flex-start; gap: var(--space-3); padding: var(--space-3) var(--space-4); }
+.imp-rec + .imp-rec::before, .ui-row + .imp-rec::before, .imp-rec + .ui-row::before { content: ""; position: absolute; top: 0; left: var(--space-4); right: 0; height: 1px; background: var(--divider); }
+.imp-rec-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: var(--space-half); }
+.imp-rec-name { font-size: var(--body-size); line-height: var(--body-line); }
+.imp-rec-line { font-size: var(--meta-size); line-height: var(--meta-line); color: var(--text-muted); }
+.imp-rec.is-problem .imp-rec-name, .imp-rec.is-problem .imp-rec-line { color: var(--problem); font-weight: 600; }

@@ -6,8 +6,8 @@ import { DEFAULT_SETTINGS } from "./seed.js";
 // Header info, now emitted as a JSON node (not prepended text) so the exported
 // file is 100% valid JSON — the mid-week Shortcut can parse it directly, and
 // you still see the summary at the top of the file during data exchange.
-const exportMeta = db => {
-  const now = new Date();
+// `extra`: more _meta for a Send to AI (request, vocab); `now` is the file's exportedAt.
+const exportMeta = (db, extra = {}, now = new Date()) => {
   const et = now.toLocaleString("en-US", { timeZone:"America/New_York", weekday:"short", month:"short", day:"numeric", hour:"numeric", minute:"2-digit" });
   return {
     app:            "GroceryDB",
@@ -25,6 +25,7 @@ const exportMeta = db => {
     ...(db.settings?.aiInstructions?.calendar?.trim() ? { syncInstructions: db.settings.aiInstructions.calendar } : {}),
     // A preview build's export is test data; the live app warns before importing it.
     ...(IS_PREVIEW ? { preview: PREVIEW_SLOT } : {}),
+    ...extra,
   };
 };
 
@@ -40,7 +41,7 @@ const previewImportOk = imp => {
 // Assemble the object written on export: a _meta node first (human-readable
 // summary), a fresh published menu for the Shortcut, then the full db. Pure
 // JSON, no prepended text.
-const buildExportDB = db => ({ _meta: exportMeta(db), ...db, published: buildPublished(db) });
+const buildExportDB = (db, extra = {}, now = new Date()) => ({ _meta: exportMeta(db, extra, now), ...db, published: buildPublished(db) });
 
 // On import, drop export-only nodes so they don't go stale in stored state.
 // They're regenerated fresh on every export.
@@ -51,10 +52,11 @@ const stripExportNodes = ({ _meta, published, ...rest }) => rest;
 // self-consistent with what the app now believes just happened. Shared by
 // the Manage > Config export section and the header's contextual backup
 // action (SPEC-data-provenance.md).
-const buildBackupPayload = db => {
-  const now = new Date().toISOString();
-  const fresh = buildExportDB({ ...db, lastExportedAt: now });
-  return { now, text: JSON.stringify(fresh, null, 2) };
+const buildBackupPayload = (db, extra = {}) => {
+  const at = new Date();
+  const now = at.toISOString();
+  const fresh = buildExportDB({ ...db, lastExportedAt: now }, extra, at);
+  return { now, exportedAt: now, text: JSON.stringify(fresh, null, 2) };
 };
 
 // Writes an actual .json file via Blob + a temporary <a download>, then
@@ -62,8 +64,9 @@ const buildBackupPayload = db => {
 // change to the grocery data).
 const exportFileName = () => !IS_PREVIEW ? "grocery_db.json" : PREVIEW_SLOT === "v2" ? "grocery_db-V2-PREVIEW.json" : "grocery_db-PREVIEW.json";
 
-const downloadBackup = (db, persistDB) => {
-  const { now, text } = buildBackupPayload(db);
+const downloadBackup = (db, persistDB, extra = {}) => downloadPayload(buildBackupPayload(db, extra), db, persistDB);
+// Download a payload already built (Send to AI keeps a copy of exactly this file).
+const downloadPayload = ({ now, text }, db, persistDB) => {
   const blob = new Blob([text], { type: "application/json" });
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
@@ -140,4 +143,4 @@ const buildPublished = db => {
   };
 };
 
-export { buildBackupPayload, buildExportDB, buildPublished, downloadBackup, exportFileName, previewImportOk, stripExportNodes };
+export { buildBackupPayload, buildExportDB, buildPublished, downloadBackup, downloadPayload, exportFileName, previewImportOk, stripExportNodes };

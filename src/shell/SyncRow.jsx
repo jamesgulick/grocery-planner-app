@@ -4,7 +4,7 @@
 // "Prompt copied", "No file copied"; never empty: "Not synced yet" before the first), then
 // [Send to AI] › [Re-import]. The same row sits on the plan's Welcome step (phase 1's
 // stand-in for the Calendar step) and in the Data sheet.
-// - Send to AI shares the export with the fixed prompt (sendToClaude.js).
+// - Send to AI shares the export with the fixed prompt and the calendar request (sendToAI.js).
 // - Re-import reads the file the AI sent back from the clipboard (copied in the chat) and
 //   opens the one import check. Loading it re-exports this device's data as the backup
 //   (grocery_db.json, like Back up), so every sync leaves a copy on the phone.
@@ -15,7 +15,7 @@
 import { useEffect, useRef, useState } from "react";
 import { prepareImport, readFileText } from "../app/dataIO.js";
 import { downloadBackup } from "../app/exportData.js";
-import { sendToClaude } from "../app/sendToClaude.js";
+import { sendToAI } from "../app/sendToAI.js";
 import { ImportCheck } from "./ImportCheck.jsx";
 
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
@@ -59,7 +59,7 @@ export function SyncRow({ db, persistDB }) {
 
   const send = async () => {
     setNoFile(false); setError("");
-    setSent((await sendToClaude(db, persistDB)) !== "cancelled");
+    setSent((await sendToAI(db, persistDB, { purpose: "calendar" })) !== "cancelled");
   };
 
   const fromClipboard = async () => {

@@ -16,7 +16,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { todayLocalISO } from "../app/globals.js";
 import { mealNameProblem, renameMeal } from "../mealRename.js";
-import { FACET_VOCAB } from "../manage/MealEditor.jsx";
+import { FACET_VOCAB } from "../app/vocab.js";
 import { Clocks, DeleteButton, FieldLabel, Icon, Segmented, Switch } from "../ui/kit.jsx";
 import {
   DeleteSheet, HowOftenSheet, InfoSheet, IngredientsSheet, LeftoversSheet, PairsSheet,
