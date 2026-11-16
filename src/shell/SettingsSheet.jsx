@@ -1,61 +1,74 @@
-// Settings sheet (polish Phase 2; canvas board, to review): Household (Family, Away dates),
-// Cooking (Grill season), Shopping (Plans start on), Calendar (Sync instructions: free text,
-// written into every export's _meta for Send to AI; never in the code), Help. No learn-mode switch (decided
-// 11/12: the plate sheet's Reasons switch replaces it). Away dates and Help reuse today's
-// editors inside the sheet until their own redraw.
+// Settings sheet (board "Settings, reviewed", Round 20; decided 11/16):
+//   Planning: Usual shopping day ›, Grill season (switch)
+//   Household: Family › (read-only), Away dates ›
+//   Instructions for AI › (no heading: a group with one row gets none) — Calendar sync ·
+//     Add a recipe · Fill in meals, each Set / Not set and a typed text box (Cancel · Done).
+//     Free text kept on the device (settings.aiInstructions) and written into exports;
+//     never in the code.
+//   Help ›
 import { useState } from "react";
 import { todayLocalISO } from "../app/globals.js";
-import { AwayPeriods } from "../manage/ManageConfig.jsx";
+import { upcomingCount } from "../app/awayDates.js";
 import { ManageHelp } from "../manage/ManageHelp.jsx";
 import { Group, Row, Section, Sheet, Switch } from "../ui/kit.jsx";
+import { AwayDates } from "./AwayDates.jsx";
 
 const WEEKDAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+// The labels match the buttons that send each one (decided 11/16); keys are the request purposes.
+const AI_JOBS = [
+  { key: "calendar", label: "Calendar sync" },
+  { key: "recipe",   label: "Add a recipe" },
+  { key: "enrich",   label: "Fill in meals" },
+];
+
+function InstructionEditor({ job, value, onCancel, onDone }) {
+  const [text, setText] = useState(value);
+  return (
+    <Sheet title={job.label} onClose={onCancel} onCancel={onCancel} onDone={() => onDone(text.trim() ? text : "")}>
+      <textarea className="ui-textarea" aria-label={job.label} value={text} onChange={e => setText(e.target.value)} />
+    </Sheet>
+  );
+}
 
 export function SettingsSheet({ db, persistDB, onClose }) {
-  const [page, setPage] = useState("main");   // main | family | away | start | sync | help
-  const [syncDraft, setSyncDraft] = useState(null);   // the instructions being edited
+  const [page, setPage] = useState("main");   // main | family | away | day | ai | ai:<key> | help
   const settings = db.settings || {};
   const upd = (k, v) => persistDB({ ...db, settings: { ...settings, [k]: v } });
   const family = settings.familyContacts || [];
-  const ranges = settings.awayRanges || [];
-  const today = todayLocalISO();
-  const upcoming = ranges.filter(r => !r.to || r.to >= today).length;
+  const upcoming = upcomingCount(settings.awayRanges || [], todayLocalISO());
+  const ai = settings.aiInstructions || {};
+  const isSet = key => !!(ai[key] || "").trim();
   const back = () => setPage("main");
 
-  // Sync instructions are saved when the page is left (back or close), not per keystroke.
-  // Stored as aiInstructions.calendar (RULING 16); the full Instructions for AI page comes
-  // with the Settings rework.
-  const calendarText = settings.aiInstructions?.calendar || "";
-  if (page === "sync") {
-    const value = syncDraft ?? calendarText;
-    const save = then => () => {
-      const text = value.trim() ? value : "";
-      if (text !== calendarText) {
-        const ai = { ...(settings.aiInstructions || {}), calendar: text };
-        if (!text) delete ai.calendar;
-        persistDB({ ...db, settings: { ...settings, aiInstructions: ai } });
-      }
-      setSyncDraft(null); then();
-    };
+  if (page.startsWith("ai:")) {
+    const job = AI_JOBS.find(j => "ai:" + j.key === page);
     return (
-      <Sheet title="Sync instructions" onClose={save(onClose)} onBack={save(back)}>
-        <textarea className="ui-textarea" aria-label="Sync instructions" value={value} onChange={e => setSyncDraft(e.target.value)} />
-      </Sheet>
+      <InstructionEditor job={job} value={ai[job.key] || ""} onCancel={() => setPage("ai")}
+        onDone={text => {
+          if (text !== (ai[job.key] || "")) {
+            const next = { ...ai, [job.key]: text };
+            if (!text) delete next[job.key];
+            upd("aiInstructions", next);
+          }
+          setPage("ai");
+        }} />
     );
   }
-
+  if (page === "ai") return (
+    <Sheet title="Instructions for AI" onClose={onClose} onBack={back} backLabel="Settings">
+      <Group>
+        {AI_JOBS.map(j => <Row key={j.key} title={j.label} value={isSet(j.key) ? "Set" : "Not set"} onClick={() => setPage("ai:" + j.key)} />)}
+      </Group>
+    </Sheet>
+  );
   if (page === "family") return (
-    <Sheet title="Family" onClose={onClose} onBack={back}>
+    <Sheet title="Family" onClose={onClose} onBack={back} backLabel="Settings">
       <Group>{family.map(f => <Row key={f.name} title={f.name} />)}</Group>
     </Sheet>
   );
-  if (page === "away") return (
-    <Sheet title="Away dates" onClose={onClose} onBack={back}>
-      <div className="shell-legacy"><AwayPeriods contacts={family} ranges={ranges} onChange={r => upd("awayRanges", r)} /></div>
-    </Sheet>
-  );
-  if (page === "start") return (
-    <Sheet title="Plans start on" onClose={onClose} onBack={back}>
+  if (page === "away") return <AwayDates db={db} persistDB={persistDB} onClose={onClose} onBack={back} />;
+  if (page === "day") return (
+    <Sheet title="Usual shopping day" onClose={onClose} onBack={back} backLabel="Settings">
       <Group>
         {WEEKDAYS.map(d => (
           <Row key={d} title={d} onClick={() => upd("shoppingDay", d)} chevron={false}
@@ -65,30 +78,27 @@ export function SettingsSheet({ db, persistDB, onClose }) {
     </Sheet>
   );
   if (page === "help") return (
-    <Sheet title="Help" onClose={onClose} onBack={back}>
+    <Sheet title="Help" onClose={onClose} onBack={back} backLabel="Settings">
       <div className="shell-legacy"><ManageHelp /></div>
     </Sheet>
   );
 
+  const setCount = AI_JOBS.filter(j => isSet(j.key)).length;
   return (
     <Sheet title="Settings" onClose={onClose}>
+      <Section label="Planning">
+        <Group>
+          <Row title="Usual shopping day" value={settings.shoppingDay || "Wednesday"} onClick={() => setPage("day")} />
+          <Row title="Grill season" trailing={<Switch checked={!!settings.grillOpen} onChange={v => upd("grillOpen", v)} label="Grill season" />} />
+        </Group>
+      </Section>
       <Section label="Household">
         <Group>
           <Row title="Family" value={`${family.length} ${family.length === 1 ? "person" : "people"}`} onClick={() => setPage("family")} />
           <Row title="Away dates" value={upcoming ? `${upcoming} upcoming` : "None"} onClick={() => setPage("away")} />
         </Group>
       </Section>
-      <Section label="Cooking">
-        <Group>
-          <Row title="Grill season" trailing={<Switch checked={!!settings.grillOpen} onChange={v => upd("grillOpen", v)} label="Grill season" />} />
-        </Group>
-      </Section>
-      <Section label="Shopping">
-        <Group><Row title="Plans start on" value={settings.shoppingDay || "Wednesday"} onClick={() => setPage("start")} /></Group>
-      </Section>
-      <Section label="Calendar">
-        <Group><Row title="Sync instructions" value={calendarText.trim() ? "Set" : "Not set"} onClick={() => setPage("sync")} /></Group>
-      </Section>
+      <Group><Row title="Instructions for AI" value={`${setCount} of ${AI_JOBS.length} set`} onClick={() => setPage("ai")} /></Group>
       <Group><Row title="Help" onClick={() => setPage("help")} /></Group>
     </Sheet>
   );

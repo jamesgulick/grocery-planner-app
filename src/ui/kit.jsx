@@ -14,6 +14,7 @@ const PATHS = {
   print:    <><path d="M6 9V3h12v6" /><rect x="4" y="9" width="16" height="8" rx="2" /><path d="M7 17h10v4H7z" /></>,
   chevron:  <path d="M9 6l6 6-6 6" />,
   back:     <path d="M15 6l-6 6 6 6" />,
+  trash:    <><path d="M4 7h16" /><path d="M10 11v6M14 11v6" /><path d="M6 7l1 13a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1l1-13" /><path d="M9 7V4h6v3" /></>,
 };
 
 export function Icon({ name, size = 22, strong = false }) {
@@ -44,7 +45,8 @@ export const RowChevron = ({ top }) => (
   </span>
 );
 
-export function Row({ title, sub, value, onClick, trailing, chevron = !!onClick }) {
+// `dim`: a row that's past (an ended away stretch) reads in the muted colour.
+export function Row({ title, sub, value, onClick, trailing, dim, chevron = !!onClick }) {
   const body = (
     <>
       <span className="ui-row-main"><span>{title}</span>{sub && <span className="ui-meta">{sub}</span>}</span>
@@ -54,8 +56,8 @@ export function Row({ title, sub, value, onClick, trailing, chevron = !!onClick 
     </>
   );
   return onClick
-    ? <button type="button" className="ui-row" onClick={onClick}>{body}</button>
-    : <div className="ui-row ui-row-plain">{body}</div>;
+    ? <button type="button" className={dim ? "ui-row ui-row-dim" : "ui-row"} onClick={onClick}>{body}</button>
+    : <div className={dim ? "ui-row ui-row-plain ui-row-dim" : "ui-row ui-row-plain"}>{body}</div>;
 }
 
 // ── Buttons ───────────────────────────────────────────────────────────────────
@@ -64,6 +66,28 @@ export const PillButton = ({ children, onClick, secondary, inline, disabled }) =
     className={`ui-pill ${secondary ? "ui-pill-secondary" : "ui-pill-primary"}${inline ? " ui-pill-inline" : ""}`}>{children}</button>
 );
 export const BlockButton = ({ children, onClick }) => <button type="button" className="ui-block-button" onClick={onClick}>{children}</button>;
+// Full-width outlined button: the second action (three-button rule, 11/15).
+export const OutlineButton = ({ children, onClick }) => <button type="button" className="ui-block-button ui-block-outline" onClick={onClick}>{children}</button>;
+// Deleting a whole record: the one place red is used (destructive #B42318).
+export const DeleteButton = ({ children, onClick }) => (
+  <button type="button" className="ui-block-button ui-block-delete" onClick={onClick}><Icon name="trash" size={20} />{children}</button>
+);
+
+// ── Chips: multi-select tags and people (on = pale green + ✓, off = white outline) ──
+export const Chip = ({ on, onClick, children }) => (
+  <button type="button" className="ui-chip" aria-pressed={!!on} onClick={onClick}>{on && <span aria-hidden="true">✓</span>}{children}</button>
+);
+
+// ── A labelled field in a typed sheet ────────────────────────────────────────
+export const Field = ({ label, children }) => (
+  <div className="ui-field"><div className="ui-section-label">{label}</div>{children}</div>
+);
+
+// ── Toast: one line, bottom of the screen, gone after a moment ───────────────
+export function Toast({ text, onDone, ms = 2500 }) {
+  useEffect(() => { const t = setTimeout(onDone, ms); return () => clearTimeout(t); }, [text]);   // restarts when the text changes
+  return <div className="ui-toast" role="status">{text}</div>;
+}
 export const IconButton = ({ icon, label, onClick, dot }) => (
   <button type="button" className="ui-icon-button" aria-label={label} onClick={onClick}>
     <Icon name={icon} />{dot && <span className="ui-dot" aria-hidden="true" />}
@@ -83,9 +107,11 @@ export const Segmented = ({ options, value, onChange, label }) => (
 );
 
 // ── Sheet: grabber, title left, Done (or Cancel) right; tap outside or swipe down closes.
-// `onBack` shows a back chevron for a page pushed inside the sheet.
+// `onBack` shows a back chevron for a page pushed inside the sheet; with `backLabel` it is the
+// green "‹ Settings" line above the title instead (board "Settings, reviewed").
+// `onCancel`: a typed sheet (Cancel · Done); `doneDisabled` greys Done out.
 // `sub` is a line under the title; `footer` is pinned under the scrolling body (a primary action).
-export function Sheet({ title, sub, onClose, onBack, doneLabel = "Done", footer, children }) {
+export function Sheet({ title, sub, onClose, onBack, backLabel, onCancel, onDone, doneDisabled, doneLabel = "Done", footer, children }) {
   const [drag, setDrag] = useState(0);
   const start = useRef(null);
   useEffect(() => {
@@ -101,11 +127,15 @@ export function Sheet({ title, sub, onClose, onBack, doneLabel = "Done", footer,
       <section role="dialog" aria-modal="true" aria-label={title} className="ui-sheet" style={drag ? { transform: `translateY(${drag}px)`, transition: "none" } : undefined}>
         <div onTouchStart={onTouchStart} onTouchMove={onTouchMove} onTouchEnd={onTouchEnd}>
           <div className="ui-sheet-grabber" aria-hidden="true" />
+          {onBack && backLabel && (
+            <button type="button" className="ui-sheet-backlink" onClick={onBack}><span aria-hidden="true">‹</span> {backLabel}</button>
+          )}
           <div className="ui-sheet-header">
-            {onBack && <span className="ui-sheet-back"><IconButton icon="back" label="Back" onClick={onBack} /></span>}
+            {onBack && !backLabel && <span className="ui-sheet-back"><IconButton icon="back" label="Back" onClick={onBack} /></span>}
             {sub ? <div className="ui-sheet-titles"><h2 className="ui-heading">{title}</h2><span className="ui-meta">{sub}</span></div>
               : <h2 className="ui-heading">{title}</h2>}
-            <button type="button" className="ui-sheet-done" onClick={onClose}>{doneLabel}</button>
+            {onCancel && <button type="button" className="ui-sheet-done ui-sheet-cancel" onClick={onCancel}>Cancel</button>}
+            <button type="button" className="ui-sheet-done" disabled={doneDisabled} onClick={onDone || onClose}>{doneLabel}</button>
           </div>
         </div>
         <div className="ui-sheet-body">{children}</div>

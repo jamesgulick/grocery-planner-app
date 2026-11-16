@@ -2,7 +2,8 @@
 // src/app, src/components, src/plan, src/manage and src/tonight (polish Phase 1.5).
 import React, { useEffect, useRef, useState } from "react";
 import { buildExportDB, buildPublished, downloadBackup, previewImportOk, stripExportNodes } from "./app/exportData.js";
-import { IS_PREVIEW, PREVIEW_SLOT, extractJSON, formatSavedAt } from "./app/globals.js";
+import { IS_PREVIEW, PREVIEW_SLOT, extractJSON, formatSavedAt, todayLocalISO } from "./app/globals.js";
+import { pruneEnded } from "./app/awayDates.js";
 import { autoRetirePlans, migrateDB, planCount } from "./app/plans.js";
 import { prepareImport } from "./app/dataIO.js";
 import { DEFAULT_DB } from "./app/seed.js";
@@ -103,7 +104,12 @@ export default function App() {
       // Auto-retire runs once per load, never mid-session: promotes plans.next
       // to current if its weekStartDate has arrived. Persist immediately if it
       // fired, so a reload doesn't re-archive the same outgoing week.
-      const retired = autoRetirePlans(loaded);
+      let retired = autoRetirePlans(loaded);
+      // Away stretches that ended over two weeks ago drop off (decided 11/16), in the same
+      // background save.
+      const ranges = retired?.settings?.awayRanges;
+      const kept = ranges && pruneEnded(ranges, todayLocalISO());
+      if (kept && kept !== ranges) retired = { ...retired, settings: { ...retired.settings, awayRanges: kept } };
       if (retired !== loaded) {
         persistDB(retired, { background: true });
       } else {

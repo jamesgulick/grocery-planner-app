@@ -93,6 +93,10 @@
   --tonight-line: 32px;
   --day-col: 34px;                        /* weekday column in day lists */
   --tint: #E9EFEA;                        /* pale green: Home's week rows; on/off chips */
+  --destructive: #B42318;                 /* deleting a whole record, and nothing else */
+  --disabled: #A1A1A6;                    /* a disabled text button (Done) */
+  --toast-bg: #1C1C1E;
+  --chip-height: 40px;
   --step-off: #DDDDD8;                    /* step bar: a step not done yet */
   --step-bar-h: 4px;
   /* Row chevron (decided 11/14): one fixed icon everywhere, never a text glyph. */

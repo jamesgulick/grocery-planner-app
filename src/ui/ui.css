@@ -24,6 +24,7 @@ button.ui-row:active { background: var(--pressed); }
 /* On a multi-line row the chevron centres on the first line, not the row. */
 .ui-chevron-top { align-self: flex-start; padding-top: calc(var(--space-3) + (var(--body-line) - var(--chev-h)) / 2); }
 .ui-row-plain { color: var(--text); }
+.ui-row.ui-row-dim, .ui-row-dim .ui-meta { color: var(--text-muted); }
 
 /* ── Buttons ──────────────────────────────────────────────────────────── */
 .ui-pill { font: inherit; font-size: var(--meta-size); font-weight: 700; border-radius: var(--radius-pill); min-height: var(--touch); padding: 0 var(--space-4); cursor: pointer; display: inline-flex; align-items: center; justify-content: center; gap: var(--space-2); flex: none; }
@@ -66,6 +67,9 @@ button.ui-row:active { background: var(--pressed); }
 .ui-sheet-header .ui-heading { flex: 1; min-width: 0; }
 .ui-sheet-back { margin-left: calc(-1 * var(--space-3)); }
 .ui-sheet-done { font: inherit; font-size: var(--body-size); font-weight: 700; color: var(--action); background: none; border: 0; min-height: var(--touch); padding: 0 var(--space-3); cursor: pointer; }
+.ui-sheet-done:disabled { color: var(--disabled); cursor: default; }
+.ui-sheet-cancel { font-weight: 600; }
+.ui-sheet-backlink { align-self: flex-start; font: inherit; font-size: var(--body-size); color: var(--action); background: none; border: 0; min-height: var(--touch); padding: 0 var(--gutter); cursor: pointer; text-align: left; }
 .ui-sheet-body { overflow-y: auto; padding: var(--space-2) var(--space-4) var(--space-5); display: flex; flex-direction: column; gap: var(--space-5); -webkit-overflow-scrolling: touch; }
 
 /* ── Tab bar: translucent, light blur, content scrolls beneath ───────── */
@@ -97,6 +101,24 @@ button.ui-row:active { background: var(--pressed); }
 /* ── Problem text: an amber dot + amber text, never a tint ─────────────── */
 .ui-problem { color: var(--problem); font-weight: 600; }
 .ui-problem-dot { display: inline-block; width: var(--dot); height: var(--dot); border-radius: 50%; background: var(--problem); margin-right: var(--space-2); vertical-align: middle; }
+
+/* ── Outlined and delete buttons (full width, 52) ─────────────────────── */
+.ui-block-outline { background: var(--surface); color: var(--action); border: var(--pill-outline) solid var(--action); }
+.ui-block-delete { background: var(--surface); color: var(--destructive); border: var(--pill-outline) solid var(--destructive); display: flex; align-items: center; justify-content: center; gap: var(--space-2); }
+
+/* ── Chips ────────────────────────────────────────────────────────────── */
+.ui-chips { display: flex; flex-wrap: wrap; gap: var(--space-2); }
+.ui-chip { font: inherit; font-size: var(--body-size); font-weight: 600; min-height: var(--chip-height); padding: 0 var(--space-4); border-radius: var(--radius-pill); border: 1px solid var(--divider); background: var(--surface); color: var(--text); display: inline-flex; align-items: center; gap: var(--space-2); cursor: pointer; }
+.ui-chip[aria-pressed="true"] { background: var(--tint); border-color: var(--tint); color: var(--action); }
+
+/* ── Fields in typed sheets ───────────────────────────────────────────── */
+.ui-field { display: flex; flex-direction: column; gap: var(--space-2); }
+.ui-input { font: inherit; font-size: var(--body-size); width: 100%; min-width: 0; max-width: 100%; box-sizing: border-box; min-height: var(--block-button); padding: 0 var(--space-4); border-radius: var(--radius-control); border: 1px solid var(--control-border); background: var(--surface); color: var(--text); -webkit-appearance: none; appearance: none; display: block; }
+.ui-input::-webkit-date-and-time-value { text-align: left; }
+.ui-input:focus { outline: 2px solid var(--action); outline-offset: 1px; }
+
+/* ── Toast ────────────────────────────────────────────────────────────── */
+.ui-toast { position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(var(--bar-bottom) + var(--space-6)); z-index: 300; width: calc(100% - 2 * var(--gutter)); max-width: calc(var(--app-max) - 2 * var(--gutter)); box-sizing: border-box; padding: var(--space-3) var(--space-4); border-radius: var(--radius-control); background: var(--toast-bg); color: var(--on-action); font-size: var(--body-size); }
 
 /* ── Text input ───────────────────────────────────────────────────────── */
 .ui-textarea { font: inherit; font-size: var(--meta-size); width: 100%; box-sizing: border-box; min-height: var(--textarea-height); padding: var(--space-3); border-radius: var(--radius-control); border: 1px solid var(--control-border); background: var(--surface); color: var(--text); resize: vertical; }

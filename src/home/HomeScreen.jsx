@@ -57,7 +57,7 @@ function awayLines(rows, plan, db) {
 // The weeks that own each date. A plan's week runs from its weekStartDate through its
 // extra days; where two overlap, the later-starting week wins. A date no plan covers
 // belongs to an unplanned week: it starts where the previous week ended, or on the
-// "Plans start on" weekday, and stops where the next plan starts.
+// "Usual shopping day" weekday, and stops where the next plan starts.
 function weekFinder(plans, shoppingDay) {
   const weeks = ["current", "next"].filter(k => plans[k]?.weekStartDate).map(k => ({
     key: k, plan: plans[k], start: plans[k].weekStartDate, end: addDaysISO(plans[k].weekStartDate, 7 + extraDaysOf(plans[k])),
