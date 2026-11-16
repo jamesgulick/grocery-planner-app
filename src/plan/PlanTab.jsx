@@ -1,5 +1,5 @@
 // Split verbatim from grocery-app.jsx in polish Phase 1.5; see CLAUDE.md's file map.
-import { MAX_EXTRA_DAYS, extraDaysOf, reconcilePlates } from "../engine/assembleInputs.js";
+import { MAX_EXTRA_DAYS, PLAN_TAIL_KEEP, endDateFor, extraDaysOf, reconcilePlates } from "../engine/assembleInputs.js";
 import { useState } from "react";
 import { DAYS_ALL, PLAN_STEPS, addDaysISO, nextDateForShoppingDay, planDays, seedTimeLevels, weekLabel } from "../app/globals.js";
 import { getActivePlan, writeActivePlan } from "../app/plans.js";
@@ -134,7 +134,7 @@ function PlanTab({ db, persistDB, onGoToImport, onGoToUnassigned }) {
     const newMax = Math.max(maxStep, s);
     setStep(s);
     setMaxStep(newMax);
-    saveDraft({ step: s, maxStep: newMax });
+    saveDraft({ step: s, maxStep: newMax }, { background: true }); // moving between steps isn't an edit (RULING 16.4)
   };
 
   // Wrapped setters: update local state AND persist the draft in one shot.
@@ -156,7 +156,8 @@ function PlanTab({ db, persistDB, onGoToImport, onGoToUnassigned }) {
     saveDraft({ checkedIds: next.checkedIds, stapleFlags: next.stapleFlags });
   };
   const setAddedItemsP  = v => { const nv = typeof v === "function" ? v(addedItems)  : v; setAddedItems(nv);  saveDraft({ addedItems: nv }); };
-  const setDayNotesP    = v => { const nv = typeof v === "function" ? v(dayNotes)    : v; setDayNotes(nv);    saveDraft({ dayNotes: nv }); };
+  // opts { background: true } for the Meals step's blank-notes fill, which isn't an edit.
+  const setDayNotesP    = (v, opts) => { const nv = typeof v === "function" ? v(dayNotes) : v; setDayNotes(nv); saveDraft({ dayNotes: nv }, opts); };
   const setDayPillsP    = v => { const nv = typeof v === "function" ? v(dayPills)    : v; setDayPills(nv);    saveDraft({ dayPills: nv }); };
   const setStapleFlagsP = v => { const nv = typeof v === "function" ? v(stapleFlags) : v; setStapleFlags(nv); saveDraft({ stapleFlags: nv }); };
   const setQuantitiesP  = v => { const nv = typeof v === "function" ? v(quantities)  : v; setQuantities(nv);  saveDraft({ quantities: nv }); };
@@ -171,13 +172,14 @@ function PlanTab({ db, persistDB, onGoToImport, onGoToUnassigned }) {
   const setExtraDays = n => {
     const target = Math.max(0, Math.min(MAX_EXTRA_DAYS, n));
     if (!canExtend || target === extraDays) return;
-    if (target > extraDays) { saveDraft({ extraDays: target }); return; }
+    const endDate = endDateFor(draft.weekStartDate, target);
+    if (target > extraDays) { saveDraft({ endDate }); return; }
     const gone = []; for (let k = target + 1; k <= extraDays; k++) gone.push(`X${k}`);
     const drop = o => { const c = { ...(o || {}) }; gone.forEach(k => delete c[k]); return c; };
     const nm = drop(mealPlan), np = reconcilePlates(mealPlan, nm, plates, db.meals || []);
     const nn = drop(dayNotes), nt = drop(timeLevels), npr = drop(presence), nd = drop(dayPills);
     setMealPlan(nm); setPlates(np); setDayNotes(nn); setTimeLevels(nt); setPresence(npr); setDayPills(nd);
-    saveDraft({ extraDays: target, mealPlan: nm, plates: np, dayNotes: nn, timeLevels: nt, presence: npr, dayPills: nd });
+    saveDraft({ endDate, mealPlan: nm, plates: np, dayNotes: nn, timeLevels: nt, presence: npr, dayPills: nd });
   };
 
   // Single-write committer for placing a meal on the planner. If the name is new,
@@ -190,7 +192,7 @@ function PlanTab({ db, persistDB, onGoToImport, onGoToUnassigned }) {
     let meals = db.meals || [];
     const nm = (maybeNewName||"").trim();
     if (nm && !meals.some(m => m.name.toLowerCase() === nm.toLowerCase())) {
-      meals = [...meals, { id:"m"+Date.now()+Math.random().toString(36).slice(2,5), createdAt:new Date().toISOString(), name:nm, effort:"medium", type:"dinner", weather:"any", tempAffinity:"neutral", grillable:false, leftovers:"none", preferences:[], notes:"", ingredients:[] }];
+      meals = [...meals, { id:"m"+Date.now()+Math.random().toString(36).slice(2,5), createdAt:new Date().toISOString(), name:nm, effort:"medium", type:"dinner", tempAffinity:"neutral", grillable:false, leftovers:"none", preferences:[], notes:"", ingredients:[] }];
     }
     const nextPlates = reconcilePlates(mealPlan, newMealPlan, plates, meals);
     setPlates(nextPlates);
@@ -225,7 +227,7 @@ function PlanTab({ db, persistDB, onGoToImport, onGoToUnassigned }) {
       .filter(n => n && n !== "Choose your own night" && n !== "Choose your own");
     const prevHistory = db.mealHistory || [];
     const mealHistory = outgoingMeals.length
-      ? [...prevHistory, { archivedAt:new Date().toISOString(), meals:[...new Set(outgoingMeals)] }].slice(-6)
+      ? [...prevHistory, { archivedAt:new Date().toISOString(), meals:[...new Set(outgoingMeals)] }].slice(-PLAN_TAIL_KEEP)
       : prevHistory;
 
     // Seed the new plan's start date from the "Default plan start day" setting
@@ -233,7 +235,7 @@ function PlanTab({ db, persistDB, onGoToImport, onGoToUnassigned }) {
     // override immediately via the date input on the resume card.
     const seedDate = nextDateForShoppingDay(db.settings?.shoppingDay || "Wednesday");
     const freshPlan = {
-      weekStartDate: seedDate, notes:"", meals:{}, items:[],
+      weekStartDate: seedDate, endDate: endDateFor(seedDate), notes:"", meals:{}, items:[],
       dismissedShared: [],
       // Auto-populate day notes from this week's baked-in schedule so a new plan
       // never starts blank. notesTouched tracks manual edits so a later refresh
@@ -261,7 +263,7 @@ function PlanTab({ db, persistDB, onGoToImport, onGoToUnassigned }) {
     const anchor     = draft?.weekStartDate || new Date().toISOString().split("T")[0];
     const nextStart  = addDaysISO(anchor, 7 + extraDaysOf(draft));   // after any extra days
     const freshPlan = {
-      weekStartDate: nextStart, notes:"", meals:{}, items:[],
+      weekStartDate: nextStart, endDate: endDateFor(nextStart), notes:"", meals:{}, items:[],
       dismissedShared:[],
       step:1, maxStep:1, timeLevels:seedTimeLevels(), presence:{}, mealPlan:freshMeals, plates:{}, checkedIds:[], addedOff:[], addedItems:[], dayNotes:{ ...defaultNotes }, dayPills:{}, notesTouched:false, _stepsVer:4, stapleFlags:{}, quantities:{}, weather:"hot", startedAt:new Date().toISOString(),
     };
@@ -392,7 +394,7 @@ function PlanWelcome({ onStart, onStartNext, onResume, draft, persistDB, db, onG
           <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:12, fontSize:12, color:C.muted }}>
             <span style={{ fontWeight:700 }}>{weekLabel(draft.weekStartDate)}</span>
             {/* This date drives day-ordering for the whole plan (see getWeekFromDate), so it's editable rather than fixed to the settings default — shopping day shifts week to week. */}
-            <input type="date" value={draft.weekStartDate || ""} onChange={e => e.target.value && persistDB(writeActivePlan(db, { ...draft, weekStartDate:e.target.value }))}
+            <input type="date" value={draft.weekStartDate || ""} onChange={e => e.target.value && persistDB(writeActivePlan(db, { ...draft, weekStartDate:e.target.value, endDate:endDateFor(e.target.value, extraDaysOf(draft)) }))}
               style={{ fontSize:12, border:`1px solid ${C.border}`, borderRadius:6, padding:"3px 5px", color:C.muted }} />
           </div>
           <button style={{ ...S.btn, ...S.btnP, marginBottom:0 }} onClick={onResume}>Open / edit plan</button>

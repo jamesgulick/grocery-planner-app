@@ -27,7 +27,7 @@ export function DataSheet({ db, persistDB, overdue, onClose }) {
     setPage("confirm");
   };
   const load = () => {
-    persistDB(pending.db);
+    persistDB(pending.db, { background: true });
     const { meals, items } = pending.summary;
     setResult({ ok: true, text: `Loaded ${meals} meals and ${items} items.` });
     setPending(null); setPaste(""); setPage("main");

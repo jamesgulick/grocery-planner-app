@@ -1,5 +1,5 @@
 // Split verbatim from grocery-app.jsx in polish Phase 1.5; see CLAUDE.md's file map.
-import { extraDaysOf, seedTimeLevel } from "../engine/assembleInputs.js";
+import { PLAN_TAIL_KEEP, endDateFor, extraDaysOf, seedTimeLevel } from "../engine/assembleInputs.js";
 import { DAYS_ALL, addDaysISO, todayLocalISO } from "./globals.js";
 import { foldRemovedIds } from "../plan/ordering.js";
 
@@ -108,6 +108,15 @@ const mapBothPlans = (db, fn) => ({
 const PLAN_MODEL_VER = 1;
 const PLAN_INPUTS_VER = 1;   // timeLevels + presence (see the plan-inputs block below)
 const PLAN_ORDER_VER = 1;    // checked = buying: removedIds folded away (polish Phase 1b)
+const SCHEMA_VER = 1;        // phase 2 data groundwork (see the schema block below)
+
+// Every meal and item needs an id: the import check and the AI round trip match records by
+// id (RULING 16.2). A record without one gets one minted here, once; the next save keeps it.
+const mintId = prefix => prefix + Date.now() + Math.random().toString(36).slice(2, 7);
+const withIds = (list, prefix) => {
+  if (!Array.isArray(list) || list.every(r => r && r.id)) return list;
+  return list.map(r => (r && !r.id ? { ...r, id: mintId(prefix) } : r));
+};
 const migrateDB = db => {
   if (!db) return db;
   let out = db;
@@ -170,7 +179,9 @@ const migrateDB = db => {
   // matching what the old hardcoded index-0/index-3 behavior always meant.
   // Only runs when no member carries any role flag yet, so it never
   // clobbers real per-member data. Self-heals old exports/localStorage.
-  if (out.settings && Array.isArray(out.settings.familyContacts) && out.settings.familyContacts.length) {
+  // Only for data older than the schema block below, which drops isPartner and
+  // canBeAway once the plan-inputs migration has read them.
+  if ((out._schemaVer || 0) < SCHEMA_VER && out.settings && Array.isArray(out.settings.familyContacts) && out.settings.familyContacts.length) {
     const contacts = out.settings.familyContacts;
     const hasRoles = contacts.some(f => f.isPartner || f.canBeAway || f.isSelf);
     if (!hasRoles) {
@@ -240,6 +251,39 @@ const migrateDB = db => {
     out = { ...out, plans, _planOrderVer: PLAN_ORDER_VER };
   }
 
+  // Phase 2 data groundwork (_schemaVer 1). Runs after the plan-inputs migration, the
+  // last reader of the role flags.
+  //   - Family: drop phone (never used), isPartner and canBeAway (RULING 17.5: presence is
+  //     Who's home plus Away dates for everyone). isSelf stays, as a plain fact.
+  //   - Items: drop walmartName / walmartVerified. Meals: drop the legacy weather field
+  //     (the engine reads tempAffinity and grillable).
+  //   - Settings: syncInstructions → aiInstructions.calendar (RULING 16).
+  //   - Plans: the length is stored once, as endDate (RULING 15); extraDays goes.
+  if ((out._schemaVer || 0) < SCHEMA_VER) {
+    const strip = (o, keys) => { if (!o) return o; const c = { ...o }; keys.forEach(k => delete c[k]); return c; };
+    let settings = out.settings;
+    if (settings) {
+      const { syncInstructions, ...rest } = settings;
+      settings = {
+        ...rest,
+        familyContacts: (rest.familyContacts || []).map(f => strip(f, ["phone", "isPartner", "canBeAway"])),
+        aiInstructions: { ...(rest.aiInstructions || {}), ...(syncInstructions && !rest.aiInstructions?.calendar ? { calendar: syncInstructions } : {}) },
+      };
+    }
+    const toEnd = p => (p && p.weekStartDate ? strip({ ...p, endDate: p.endDate || endDateFor(p.weekStartDate, extraDaysOf(p)) }, ["extraDays"]) : p);
+    const plans = out.plans && !Array.isArray(out.plans) ? { current: toEnd(out.plans.current), next: toEnd(out.plans.next) } : out.plans;
+    out = {
+      ...out, settings, plans,
+      meals: (out.meals || []).map(m => strip(m, ["weather"])),
+      ingredients: (out.ingredients || []).map(i => strip(i, ["walmartName", "walmartVerified"])),
+      _schemaVer: SCHEMA_VER,
+    };
+  }
+
+  // Ids last, and on every pass: a file can arrive at the current schema without them.
+  const meals = withIds(out.meals, "m"), ingredients = withIds(out.ingredients, "i");
+  if (meals !== out.meals || ingredients !== out.ingredients) out = { ...out, meals, ingredients };
+
   return out;
 };
 
@@ -264,7 +308,7 @@ const autoRetirePlans = db => {
     .filter(n => n && n !== "Choose your own night" && n !== "Choose your own");
   const prevHistory = db.mealHistory || [];
   const mealHistory = outgoingMeals.length
-    ? [...prevHistory, { archivedAt:new Date().toISOString(), meals:[...new Set(outgoingMeals)] }].slice(-6)
+    ? [...prevHistory, { archivedAt:new Date().toISOString(), meals:[...new Set(outgoingMeals)] }].slice(-PLAN_TAIL_KEEP)
     : prevHistory;
 
   // Day-level tail, parallel to mealHistory above but preserving day-of-week
@@ -276,14 +320,14 @@ const autoRetirePlans = db => {
         weekStartDate: outgoing.weekStartDate || null,
         mealPlan: outgoing.mealPlan || outgoing.meals || {},
         // Extra days (X1, X2) are dated from this, so history keeps their dates right.
-        ...(extraDaysOf(outgoing) ? { extraDays: extraDaysOf(outgoing) } : {}),
+        ...(outgoing.weekStartDate ? { endDate: endDateFor(outgoing.weekStartDate, extraDaysOf(outgoing)) } : {}),
         // Plate annotations (C1) carry the as-served leftovers snapshots history needs.
         ...(outgoing.plates ? { plates: outgoing.plates } : {}),
       }
     : null;
   const prevTails = db.planTail || [];
   const planTail = outgoingTail
-    ? [...prevTails, outgoingTail].slice(-6)
+    ? [...prevTails, outgoingTail].slice(-PLAN_TAIL_KEEP)
     : prevTails;
 
   // Promoting a finished future-week plan into "the week you're now in" means

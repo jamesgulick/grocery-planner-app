@@ -21,7 +21,8 @@ const exportMeta = db => {
     lastExportedAt: db.lastExportedAt || null,
     // The calendar sync instructions, as typed in Settings (Send to AI points the AI
     // here). Written only when set, and dropped again on import like the rest of _meta.
-    ...(db.settings?.syncInstructions?.trim() ? { syncInstructions: db.settings.syncInstructions } : {}),
+    // Kept under this name until the calendar skill reads _meta.request (RULING 16).
+    ...(db.settings?.aiInstructions?.calendar?.trim() ? { syncInstructions: db.settings.aiInstructions.calendar } : {}),
     // A preview build's export is test data; the live app warns before importing it.
     ...(IS_PREVIEW ? { preview: PREVIEW_SLOT } : {}),
   };

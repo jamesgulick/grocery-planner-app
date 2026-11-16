@@ -28,8 +28,25 @@ export const abbrOfISO = (iso) => DAY_ABBRS[new Date(parseISO(iso)).getUTCDay()]
 // weekday name, so an 8th day can't overwrite the first one with the same name; each
 // still has its own real date (weekStartDate + 7, + 8).
 export const MAX_EXTRA_DAYS = 2;
+// History keeps the last PLAN_TAIL_KEEP plans (planTail and mealHistory), not weeks. At the
+// shortest plan (5 days) that is ~30 days, past the 14-day longest anti-repeat block
+// (RULING 15; asserted in engine/golden/plan-length.test.mjs).
+export const PLAN_TAIL_KEEP = 6;
 export const isExtraDay = (key) => /^X\d$/.test(key);
-export const extraDaysOf = (plan) => Math.max(0, Math.min(MAX_EXTRA_DAYS, Number(plan && plan.extraDays) || 0));
+// A plan's length is stored once, as endDate (RULING 15: one field, so two can't disagree).
+// Plans and history entries saved before endDate carry extraDays instead; both read here.
+const daysBetweenISO = (a, b) => Math.round((Date.parse(b + "T00:00:00Z") - Date.parse(a + "T00:00:00Z")) / 864e5);
+export const extraDaysOf = (plan) => {
+  if (!plan) return 0;
+  const n = plan.endDate && plan.weekStartDate ? daysBetweenISO(plan.weekStartDate, plan.endDate) - 6 : Number(plan.extraDays) || 0;
+  return Math.max(0, Math.min(MAX_EXTRA_DAYS, n || 0));
+};
+/** A plan's last date, from endDate (or, on older records, weekStartDate + 6 + extraDays). */
+export const planEndDate = (plan) => (plan && plan.weekStartDate ? addDaysISO(plan.weekStartDate, 6 + extraDaysOf(plan)) : null);
+/** The endDate for a plan of 7 + extra days from start. */
+export const endDateFor = (weekStartDate, extraDays = 0) => addDaysISO(weekStartDate, 6 + extraDays);
+/** The pickup date: pickupDate when set, else the plan's first day (RULING 15). */
+export const pickupDateOf = (plan) => (plan && (plan.pickupDate || plan.weekStartDate)) || null;
 
 export function weekDates(weekStartDate, extraDays = 0) {
   const out = {};

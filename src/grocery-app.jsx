@@ -146,9 +146,10 @@ export default function App() {
 
   // dataChangedAt is the single source of truth for "when did the user's
   // actual grocery data last change" (SPEC-data-provenance.md). Every call
-  // stamps it EXCEPT the two known background writers — weather-driven pill
-  // auto-derivation and auto-retire's next→current promotion — which pass
-  // { background: true } so opening the app doesn't itself look like a change.
+  // stamps it EXCEPT writes that aren't the user's edits (RULING 16.4), which pass
+  // { background: true }: auto-retire, imports and restores (which keep the file's own
+  // time), moving between plan steps, backup stamps, Order's sent marks, Confirm's
+  // order snapshot.
   const persistDB = (next, opts = {}) => {
     // migrateDB is idempotent, so this is a cheap no-op for an already-current
     // db and a safety net for anything entering via recovery/import that might
@@ -164,7 +165,7 @@ export default function App() {
   };
 
   const acceptRecovery = () => {
-    persistDB(recovery.db);
+    persistDB(recovery.db, { background: true }); // a restore isn't an edit; the snapshot keeps its own time
     clearRecovery();
     setRecovery(null);
   };
@@ -188,7 +189,7 @@ export default function App() {
 
   const confirmSessionImport = () => {
     // Real external data replacing what's here — not the seed set.
-    persistDB(sessionPendingConfirm.db);
+    persistDB(sessionPendingConfirm.db, { background: true });
     setSessionPendingConfirm(null);
     setSessionImport("");
     setShowOpenSession(false);

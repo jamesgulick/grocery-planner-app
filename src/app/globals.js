@@ -5,16 +5,14 @@ import { extraDaysOf, seedTimeLevel } from "../engine/assembleInputs.js";
 
 const DAYS_ALL   = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
 const DAYS_FULL  = ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
-// Semantic role flags (SPEC-family-roles.md) — resolved by name, never by
-// position/initials, at every call site. isPartner: per-day presence via the
-// home/away pill. canBeAway: persistent presence via the config toggle.
-// isSelf: the app's own user; a small tiebreaker bonus when present.
+// isSelf marks the person planning: a plain fact, never fed to scoring (RULING 17.5).
+// Presence for everyone comes from Who's home and Away dates.
 const FAMILY     = [
-  { name:"Partner", phone:"", isPartner:true },
-  { name:"Kid 1",   phone:"" },
-  { name:"Kid 2",   phone:"" },
-  { name:"Kid 3",   phone:"", canBeAway:true },
-  { name:"Me",      phone:"", isSelf:true },
+  { name:"Partner" },
+  { name:"Kid 1" },
+  { name:"Kid 2" },
+  { name:"Kid 3" },
+  { name:"Me", isSelf:true },
 ];
 const STORAGE_LOCATIONS = ["Unassigned","Pantry","Fridge","Freezer","Garage","Cabinet","Seasonings","Medicine Cabinet","Other"];
 // Locations walked during the plan-flow inventory step (everything real, i.e.

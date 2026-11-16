@@ -89,9 +89,6 @@ function PlanMeals({ mealPlan, plates, setMealPlan, commitMealToPlan, timeLevels
   const [search,  setSearch]  = useState("");
   const [loading, setLoading] = useState(false);
   const allMeals   = meals.length > 0 ? meals : SEED_MEALS;
-  // Resolved by role flag, never by hardcoded name — see SPEC-family-roles.md.
-  const partner     = (db.settings?.familyContacts || []).find(f => f.isPartner);
-  const partnerName = partner?.name || "Partner";
 
   // Presence (REFACTOR B2): everyone on the roster, every day. A day's date is
   // its offset from weekStartDate (days[] is ordered from that weekday), which
@@ -173,7 +170,7 @@ function PlanMeals({ mealPlan, plates, setMealPlan, commitMealToPlan, timeLevels
   // this covers in-progress drafts that predate that.
   useEffect(() => {
     const allEmpty = days.every(d => !((dayNotes||{})[d] || "").trim());
-    if (allEmpty) setDayNotes(prev => { const next = { ...prev }; days.forEach(d => { next[d] = defaultNotes[d] || ""; }); return next; });
+    if (allEmpty) setDayNotes(prev => { const next = { ...prev }; days.forEach(d => { next[d] = defaultNotes[d] || ""; }); return next; }, { background: true });
   }, []);
   const [pillEditDay, setPillEditDay] = useState(null);
   const [newPillLabel, setNewPillLabel] = useState("");
@@ -427,7 +424,6 @@ function PlanMeals({ mealPlan, plates, setMealPlan, commitMealToPlan, timeLevels
               {m.type === "remix"   && <span style={S.tag("#7C3AED", "#EDE9FE")}>remix</span>}
               {m.type === "batch"   && <span style={S.tag(C.muted,   "#F3F4F6")}>batch</span>}
               {m.type === "takeout" && <span style={S.tag(C.muted,   "#F3F4F6")}>takeout</span>}
-              {partner && (m.preferences||[]).some(p => p.person===partner.name && p.pref==="dislikes") && <span style={S.tag(C.danger, C.dangerLight)}>{partnerName} dislikes</span>}
             </span>
           </div>
         ))}

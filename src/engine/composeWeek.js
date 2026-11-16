@@ -591,6 +591,8 @@ function resolveForWhom(carries, meal, roster) {
 
 function composeDay(day, ctx, rationale, observations) {
   const placed = ctx.week[day.date];
+  // RULING 17.2: every main on a night is a full member of it (spacing, leftovers, floor,
+  // sides). The earliest-placed main comes first only for display order.
   let main = placed.find((p) => p.role === 'main');
 
   if (!main) {
@@ -610,19 +612,19 @@ function composeDay(day, ctx, rationale, observations) {
     }
   }
 
-  const mainMeal = ctx.mealsById.get(main.mealId);
-  if (!mainMeal) return;
+  const mainMeals = placed.filter((p) => p.role === 'main').map((p) => ctx.mealsById.get(p.mealId)).filter(Boolean);
+  if (!mainMeals.length) return;
 
   const hasSides = placed.some((p) => p.role === 'side');
   if (!hasSides) {
-    for (const side of selectSides(day, mainMeal, ctx, rationale)) {
+    for (const side of selectSides(day, mainMeals, ctx, rationale)) {
       placed.push(toPlacedDish(side, 'side'));
       ctx.usedIds.add(side.id);
       ctx.shownThisCall.push(side.id);
     }
   }
 
-  crossCheckDay(day, mainMeal, ctx, observations);
+  for (const mainMeal of mainMeals) crossCheckDay(day, mainMeal, ctx, observations);
 
   // Floor is the objective: report the realized day, never silently absorb a gap.
   const gaps = gapsOnDay(day.date, ctx);
@@ -641,7 +643,7 @@ function composeDay(day, ctx, rationale, observations) {
   // side that happens to also feed them is incidental and must not hide the chain.
   const cover = leftoverCoverage(day.date, ctx);
   for (const [person, src] of cover) {
-    if (feeds(mainMeal, person)) continue;
+    if (mainMeals.some((m) => feeds(m, person))) continue;
     const m = ctx.mealsById.get(src.mealId);
     rationale.push({
       day: day.date, mealId: src.mealId,
@@ -1274,15 +1276,20 @@ function emitMainRationale(meal, day, ctx, trace, info, rationale) {
 
 /* ================================================================== side selection */
 
-function selectSides(day, main, ctx, rationale) {
+// `mains`: every main on the night (RULING 17.2), in display order. With one main this is
+// exactly the single-main behaviour: floor-fill covers whoever no main feeds; accompaniment
+// runs once per main that takes sides, each against its own cap and its own pairings.
+function selectSides(day, mains, ctx, rationale) {
   const chosen = [];
-  const restNight = intersects(main.service, CONSTANTS.SERVICE_REST_NIGHT);
+  const isRest = (m) => intersects(m.service, CONSTANTS.SERVICE_REST_NIGHT);
+  const restNight = mains.every(isRest);
+  const mainPlate = uniq(mains.flatMap((m) => m.plate || []));
 
-  // What the side's `avoidPlate` is checked against: the main alone, or the plate as
+  // What the side's `avoidPlate` is checked against: the mains alone, or the plate as
   // composed so far (see CONSTANTS.AVOID_PLATE_CHECKS_WHOLE_PLATE).
   const plateTraits = () => (CONSTANTS.AVOID_PLATE_CHECKS_WHOLE_PLATE
-    ? uniq([...(main.plate || []), ...chosen.flatMap((c) => c.plate || [])])
-    : (main.plate || []));
+    ? uniq([...mainPlate, ...chosen.flatMap((c) => c.plate || [])])
+    : mainPlate);
 
   // THE TWO-JOBS SEAM (James, 9/12). Structural gates apply to BOTH passes: rotation,
   // already-on-the-plan, and `grillable` (a capability — you cannot grill in a snowstorm,
@@ -1313,9 +1320,9 @@ function selectSides(day, main, ctx, rationale) {
   // serves one, that's his adventurous choice." The reserve dip is opt-in, so it gets no
   // floor-repair machinery; the same unknowns that keep it out of the floor tier above
   // keep it from summoning sides here.
-  if (!inReserve(main) && !(restNight && CONSTANTS.SUPPRESS_SIDES_ON_TAKEOUT_EVEN_FOR_FLOOR)) {
+  if (!mains.every(inReserve) && !(restNight && CONSTANTS.SUPPRESS_SIDES_ON_TAKEOUT_EVEN_FOR_FLOOR)) {
     const cover = leftoverCoverage(day.date, ctx);
-    let gaps = ctx.presentPeople(day.date).filter((p) => !feeds(main, p) && !cover.has(p));
+    let gaps = ctx.presentPeople(day.date).filter((p) => !mains.some((m) => feeds(m, p)) && !cover.has(p));
     let guard = 0;
     while (gaps.length && guard++ < 5) {
       const cands = eligibleForFloor()
@@ -1351,13 +1358,16 @@ function selectSides(day, main, ctx, rationale) {
 
   // --- accompaniment: RESTRAINED, effort-capped, erring toward fewer ---------------
   // Suppressed for indivisible mains (the dish is sealed; the night is not) and on rest
-  // nights — takeout means no cooking, not "takeout plus a vegetable".
-  if (main.noSidesUnlessNeeded || restNight) return chosen;
+  // nights — takeout means no cooking, not "takeout plus a vegetable". Once per main; the
+  // first main's room also counts the floor-fills, as it always has.
+  const floorFills = chosen.length;
+  mains.forEach((main, k) => {
+  if (main.noSidesUnlessNeeded || isRest(main)) return;
 
   const involved = main.effort === 'involved';
   const cap = involved ? CONSTANTS.MAX_ACCOMPANIMENT_SIDES_INVOLVED_MAIN : CONSTANTS.MAX_ACCOMPANIMENT_SIDES;
-  const room = cap - chosen.length;
-  if (room <= 0) return chosen;
+  const room = cap - (k === 0 ? floorFills : 0);
+  if (room <= 0) return;
 
   const mode = CONSTANTS.ACCOMPANIMENT_CADENCE_MODE;
   const cands = eligibleForAccompaniment()
@@ -1409,6 +1419,7 @@ function selectSides(day, main, ctx, rationale) {
       });
     }
   }
+  });
   return chosen;
 }
 
@@ -1656,10 +1667,10 @@ const nameList = (xs) => (xs.length < 3 ? xs.join(' and ') : `${xs.slice(0, -1).
 function evaluateDay(day, ctx, rationale, observations) {
   const placed = ctx.week[day.date] || [];
   const mealOf = (p) => ctx.mealsById.get(p.mealId);
-  const mainDish = placed.find((p) => p.role === 'main');
-  const mainMeal = mainDish && mealOf(mainDish);
+  // Every main is checked (RULING 17.2).
+  const mainMeals = placed.filter((p) => p.role === 'main').map(mealOf).filter(Boolean);
 
-  if (mainMeal) crossCheckDay(day, mainMeal, ctx, observations);
+  if (mainMeals.length) for (const m of mainMeals) crossCheckDay(day, m, ctx, observations);
   else {
     observations.push({
       property: 'unplanned',
@@ -1708,7 +1719,7 @@ function evaluateDay(day, ctx, rationale, observations) {
   // Carried-in leftovers holding someone who is off the main — the same reasoning compose
   // shows. With no main, every leftover that is covering someone is doing the holding.
   for (const [person, src] of cover) {
-    if (mainMeal && feeds(mainMeal, person) && !inReserve(mainMeal)) continue;
+    if (mainMeals.some((m) => feeds(m, person) && !inReserve(m))) continue;
     const m = ctx.mealsById.get(src.mealId);
     rationale.push({
       day: day.date, mealId: src.mealId,

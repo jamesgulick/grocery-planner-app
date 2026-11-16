@@ -12,6 +12,9 @@ export function prepareImport(imp) {
     ...stripExportNodes(imp),
     settings: { ...DEFAULT_SETTINGS, ...(imp.settings || {}) },
     _isSeed: false,
+    // Loading isn't an edit (RULING 16.4): the device takes the file's own last-changed
+    // time, and every import path saves in the background so it isn't re-stamped.
+    dataChangedAt: imp.dataChangedAt || imp._meta?.dataChangedAt || null,
   };
   return { db, summary: { meals: db.meals.length, items: db.ingredients.length, asOf: imp._meta?.dataChangedAt || null, savedAt: imp.savedAt || null } };
 }

@@ -209,7 +209,7 @@ function PlanConfirm({ mode = "confirm", onUpdateItem, keptIds = [], checkedIds,
     const updated   = activePlan
       ? { ...activePlan, meals:mealPlan, items:listItems }
       : { weekStartDate:today, notes:"", dismissedShared:[], meals:mealPlan, items:listItems };
-    persistDB(writeActivePlan(db, updated));
+    persistDB(writeActivePlan(db, updated), { background: true }); // a snapshot of the list, not an edit
   };
 
   const QtyChip = ({ ing }) => {

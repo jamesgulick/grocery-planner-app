@@ -23,14 +23,17 @@ export function SettingsSheet({ db, persistDB, onClose }) {
   const back = () => setPage("main");
 
   // Sync instructions are saved when the page is left (back or close), not per keystroke.
+  // Stored as aiInstructions.calendar (RULING 16); the full Instructions for AI page comes
+  // with the Settings rework.
+  const calendarText = settings.aiInstructions?.calendar || "";
   if (page === "sync") {
-    const value = syncDraft ?? settings.syncInstructions ?? "";
+    const value = syncDraft ?? calendarText;
     const save = then => () => {
       const text = value.trim() ? value : "";
-      if (text !== (settings.syncInstructions || "")) {
-        const next = { ...settings, syncInstructions: text };
-        if (!text) delete next.syncInstructions;
-        persistDB({ ...db, settings: next });
+      if (text !== calendarText) {
+        const ai = { ...(settings.aiInstructions || {}), calendar: text };
+        if (!text) delete ai.calendar;
+        persistDB({ ...db, settings: { ...settings, aiInstructions: ai } });
       }
       setSyncDraft(null); then();
     };
@@ -84,7 +87,7 @@ export function SettingsSheet({ db, persistDB, onClose }) {
         <Group><Row title="Plans start on" value={settings.shoppingDay || "Wednesday"} onClick={() => setPage("start")} /></Group>
       </Section>
       <Section label="Calendar">
-        <Group><Row title="Sync instructions" value={settings.syncInstructions?.trim() ? "Set" : "Not set"} onClick={() => setPage("sync")} /></Group>
+        <Group><Row title="Sync instructions" value={calendarText.trim() ? "Set" : "Not set"} onClick={() => setPage("sync")} /></Group>
       </Section>
       <Group><Row title="Help" onClick={() => setPage("help")} /></Group>
     </Sheet>

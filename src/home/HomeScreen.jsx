@@ -6,7 +6,7 @@
 // (away info by name, plate concerns in amber, verbatim). Then Fridge report / Share with
 // family. No time icons, no app name, no instructional copy.
 import { useMemo, useState } from "react";
-import { addDaysISO, checkWeek, dayKeyForDate, extraDaysOf, presentOn, weekDates } from "../engine/assembleInputs.js";
+import { addDaysISO, checkWeek, dayKeyForDate, extraDaysOf, pickupDateOf, presentOn, weekDates } from "../engine/assembleInputs.js";
 import { evaluateWeek } from "../engine/composeWeek.js";
 import { copyToClipboard } from "../app/clipboard.js";
 import { buildFridgeReportHTML } from "../app/fridgeReport.js";
@@ -93,7 +93,7 @@ function weekState(w, today) {
 function WeekRow({ week, state, today, onOpen, onContinue }) {
   const status = state.kind === "unplanned" ? "Not planned"
     : state.kind === "progress" ? `Up next: ${STEP_BAR[state.next]}`
-    : state.kind === "ordered" && week.start > today ? `Ordered · pickup ${abbrOf(week.start)}`
+    : state.kind === "ordered" && week.start > today ? `Ordered · pickup ${abbrOf(pickupDateOf(week.plan))}`
     : null;
   return (
     <div className="home-week">

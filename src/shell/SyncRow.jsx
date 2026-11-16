@@ -80,7 +80,7 @@ export function SyncRow({ db, persistDB }) {
 
   const load = () => {
     const now = new Date().toISOString();
-    const next = { ...pending.prepared.db, lastSyncAt: now, dataChangedAt: now };
+    const next = { ...pending.prepared.db, lastSyncAt: now };
     if (pending.fromClipboard) downloadBackup(next, persistDB);            // saves the copy, stamps lastExportedAt
     else persistDB({ ...next, lastExportedAt: now }, { background: true }); // the picked file is the copy
     setPending(null); setSent(false); setNoFile(false);
