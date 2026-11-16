@@ -1,6 +1,7 @@
 // Calendar sync (canvas boards "Plan, week: calendar" and "Round 14 — calendar sync: return
-// trip from the clipboard"; decided 11/14–15). The section label "Calendar sync" over one
-// white card: the status ("Last 11/14", "Prompt copied", "No file copied"), then
+// trip from the clipboard"; decided 11/14–16). One row, no section heading (11/16: a group
+// with one row gets none): "Calendar sync" with the status as its subline ("Last Nov 14",
+// "Prompt copied", "No file copied"; never empty: "Not synced yet" before the first), then
 // [Send to AI] › [Re-import]. The same row sits on the plan's Welcome step (phase 1's
 // stand-in for the Calendar step) and in the Data sheet.
 // - Send to AI shares the export with the fixed prompt (sendToClaude.js).
@@ -15,10 +16,10 @@ import { useEffect, useRef, useState } from "react";
 import { prepareImport, readFileText } from "../app/dataIO.js";
 import { downloadBackup } from "../app/exportData.js";
 import { sendToClaude } from "../app/sendToClaude.js";
-import { Section } from "../ui/kit.jsx";
 import { ImportCheck } from "./ImportCheck.jsx";
 
-const shortDate = iso => { const d = new Date(iso); return `${d.getMonth() + 1}/${d.getDate()}`; };
+const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+const shortDate = iso => { const d = new Date(iso); return `${MONTHS[d.getMonth()]} ${d.getDate()}`; };
 
 // The clipboard's text, or "" when there is none or the read is refused.
 async function clipboardText() {
@@ -86,12 +87,12 @@ export function SyncRow({ db, persistDB }) {
     setPending(null); setSent(false); setNoFile(false);
   };
 
-  const status = noFile ? "No file copied" : sent ? "Prompt copied" : db.lastSyncAt ? `Last ${shortDate(db.lastSyncAt)}` : "";
+  const status = noFile ? "No file copied" : sent ? "Prompt copied" : db.lastSyncAt ? `Last ${shortDate(db.lastSyncAt)}` : "Not synced yet";
 
   return (
-    <Section label="Calendar sync">
+    <div className="sync-wrap">
       <div className="sync">
-        <span className="sync-status">{status}</span>
+        <span className="sync-main"><span className="sync-title">Calendar sync</span><span className="sync-status">{status}</span></span>
         <button type="button" className="sync-pill" onClick={send}>Send to AI</button>
         <span className="sync-chev" aria-hidden="true">›</span>
         {noFile
@@ -105,6 +106,6 @@ export function SyncRow({ db, persistDB }) {
         <ImportCheck device={db} prepared={pending.prepared} fromClipboard={pending.fromClipboard}
           onLoad={load} onCancel={() => { setPending(null); setNoFile(false); }} />
       )}
-    </Section>
+    </div>
   );
 }
