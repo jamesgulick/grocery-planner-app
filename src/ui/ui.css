@@ -71,6 +71,8 @@ button.ui-row:active { background: var(--pressed); }
 .ui-sheet-cancel { font-weight: 600; }
 .ui-sheet-backlink { align-self: flex-start; font: inherit; font-size: var(--body-size); color: var(--action); background: none; border: 0; min-height: var(--touch); padding: 0 var(--gutter); cursor: pointer; text-align: left; }
 .ui-sheet-body { overflow-y: auto; padding: var(--space-2) var(--space-4) var(--space-5); display: flex; flex-direction: column; gap: var(--space-5); -webkit-overflow-scrolling: touch; }
+/* A long list in a sheet must scroll, not squeeze what sits above it (the 44px search bar). */
+.ui-sheet-body > * { flex-shrink: 0; }
 
 /* ── Tab bar: translucent, light blur, content scrolls beneath ───────── */
 .ui-tabbar { position: fixed; left: 0; right: 0; bottom: 0; z-index: 100; display: flex; justify-content: center; background: var(--surface); border-top: 1px solid var(--bar-border); padding-bottom: var(--bar-bottom); }
@@ -121,7 +123,7 @@ button.ui-row:active { background: var(--pressed); }
 .ui-check-row + .ui-check-row::before { left: calc(var(--space-4) + var(--check) + var(--space-3)); }
 
 /* ── Search field ─────────────────────────────────────────────────────── */
-.ui-search { display: flex; align-items: center; gap: var(--space-2); height: var(--touch); box-sizing: border-box; padding: 0 var(--space-3); border-radius: var(--radius-control); border: 1px solid var(--divider); background: var(--surface); color: var(--text-muted); }
+.ui-search { flex: none; display: flex; align-items: center; gap: var(--space-2); height: var(--touch); box-sizing: border-box; padding: 0 var(--space-3); border-radius: var(--radius-control); border: 1px solid var(--divider); background: var(--surface); color: var(--text-muted); }
 .ui-search input { flex: 1; min-width: 0; border: 0; outline: none; background: none; font: inherit; font-size: var(--body-size); color: var(--text); -webkit-appearance: none; appearance: none; }
 .ui-search input::-webkit-search-cancel-button { display: none; }
 .ui-search:focus-within { outline: 2px solid var(--action); outline-offset: 1px; }
