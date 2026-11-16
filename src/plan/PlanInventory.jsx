@@ -25,7 +25,11 @@ function PlanInventory({ inFlow, locIdx: locIdxIn, setLocIdx: setLocIdxIn, check
   // Staples split by consumption rate. Unset stapleType defaults to "weekly"
   // (the careful-check bias), so older items and saved DBs keep working.
   const stapleAll      = locIngs.filter(i => i.tier === "staple");
-  const weeklyHere     = stapleAll.filter(i => (i.stapleType || "weekly") === "weekly");
+  // A staple a planned meal needs moves to "For this week's meals" and starts checked,
+  // weekly or slow (decided 11/16); the staple sections hold only the ones no meal needs.
+  const weeklyAll      = stapleAll.filter(i => (i.stapleType || "weekly") === "weekly");
+  const weeklyNeededHere = weeklyAll.filter(i => mealIngIds.has(i.id));
+  const weeklyHere     = weeklyAll.filter(i => !mealIngIds.has(i.id));
   // Slow staples normally coast on a quick scan — UNLESS one is needed for a meal
   // planned this week, in which case it earns the same rigor as a weekly staple.
   const slowAll        = stapleAll.filter(i => (i.stapleType || "weekly") === "slow");
@@ -154,7 +158,7 @@ function PlanInventory({ inFlow, locIdx: locIdxIn, setLocIdx: setLocIdxIn, check
         {moveNote && <div style={{ fontSize:12, lineHeight:1.4, marginTop:8, padding:"6px 8px", borderRadius:6, background:C.primaryLight, color:C.primary }}>{moveNote}</div>}
       </div>
 
-      {(alwaysHere.length > 0 || weeklyHere.length > 0 || slowNeededHere.length > 0 || slowHere.length > 0 || mealHere.length > 0) ? (
+      {(alwaysHere.length > 0 || weeklyHere.length > 0 || weeklyNeededHere.length > 0 || slowNeededHere.length > 0 || slowHere.length > 0 || mealHere.length > 0) ? (
         <div style={{ ...S.card, padding:"0 16px" }}>
           {alwaysHere.length > 0 && (
             <>
@@ -168,11 +172,11 @@ function PlanInventory({ inFlow, locIdx: locIdxIn, setLocIdx: setLocIdxIn, check
               {weeklyHere.map(ing => <StapleRow key={ing.id} ing={ing} accent="#3730A3" />)}
             </>
           )}
-          {(mealHere.length > 0 || slowNeededHere.length > 0) && (
+          {(mealHere.length > 0 || weeklyNeededHere.length > 0 || slowNeededHere.length > 0) && (
             <>
               <div style={{ fontSize:11, fontWeight:700, color:C.muted, padding:"14px 0 4px", textTransform:"uppercase", letterSpacing:"0.06em" }}>For this week's meals</div>
               {mealHere.map(ing => <ItemRow key={ing.id} ing={ing} accent={C.accent} dimOff />)}
-              {slowNeededHere.map(ing => <StapleRow key={ing.id} ing={ing} accent={C.accent} />)}
+              {[...weeklyNeededHere, ...slowNeededHere].map(ing => <ItemRow key={ing.id} ing={ing} accent={C.accent} dimOff />)}
             </>
           )}
           {slowHere.length > 0 && (
