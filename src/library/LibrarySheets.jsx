@@ -156,7 +156,7 @@ export function HowOftenSheet({ meal, onField, onClose }) {
   const [topic, setTopic] = useState(null);
   return (
     <Sheet title="How often" onClose={onClose} onInfo={() => setTopic("howOften")}>
-      <Segmented label="How often" value={meal.cadence || "none"} onChange={v => onField("cadence", v === "none" ? undefined : v)} options={CADENCE_OPTIONS} />
+      <Segmented label="How often" value={meal.cadence} onChange={v => onField("cadence", v)} options={CADENCE_OPTIONS} />
       {topic && <InfoSheet topic={topic} onClose={() => setTopic(null)} />}
     </Sheet>
   );

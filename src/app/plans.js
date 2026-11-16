@@ -108,7 +108,7 @@ const mapBothPlans = (db, fn) => ({
 const PLAN_MODEL_VER = 1;
 const PLAN_INPUTS_VER = 1;   // timeLevels + presence (see the plan-inputs block below)
 const PLAN_ORDER_VER = 1;    // checked = buying: removedIds folded away (polish Phase 1b)
-const SCHEMA_VER = 1;        // phase 2 data groundwork (see the schema block below)
+const SCHEMA_VER = 2;        // 1: phase 2 data groundwork · 2: How often stores "occasional" (see below)
 
 // Every meal and item needs an id: the import check and the AI round trip match records by
 // id (RULING 16.2). A record without one gets one minted here, once; the next save keeps it.
@@ -181,7 +181,7 @@ const migrateDB = db => {
   // clobbers real per-member data. Self-heals old exports/localStorage.
   // Only for data older than the schema block below, which drops isPartner and
   // canBeAway once the plan-inputs migration has read them.
-  if ((out._schemaVer || 0) < SCHEMA_VER && out.settings && Array.isArray(out.settings.familyContacts) && out.settings.familyContacts.length) {
+  if ((out._schemaVer || 0) < 1 && out.settings && Array.isArray(out.settings.familyContacts) && out.settings.familyContacts.length) {
     const contacts = out.settings.familyContacts;
     const hasRoles = contacts.some(f => f.isPartner || f.canBeAway || f.isSelf);
     if (!hasRoles) {
@@ -259,7 +259,7 @@ const migrateDB = db => {
   //     (the engine reads tempAffinity and grillable).
   //   - Settings: syncInstructions → aiInstructions.calendar (RULING 16).
   //   - Plans: the length is stored once, as endDate (RULING 15); extraDays goes.
-  if ((out._schemaVer || 0) < SCHEMA_VER) {
+  if ((out._schemaVer || 0) < 1) {
     const strip = (o, keys) => { if (!o) return o; const c = { ...o }; keys.forEach(k => delete c[k]); return c; };
     let settings = out.settings;
     if (settings) {
@@ -276,7 +276,18 @@ const migrateDB = db => {
       ...out, settings, plans,
       meals: (out.meals || []).map(m => strip(m, ["weather"])),
       ingredients: (out.ingredients || []).map(i => strip(i, ["walmartName", "walmartVerified"])),
-      _schemaVer: SCHEMA_VER,
+      _schemaVer: 1,
+    };
+  }
+
+  // _schemaVer 2 (brief 11/16): How often stores "occasional" as a value, app-side only (the
+  // engine inputs still forward only weekly and biweekly). Meals in rotation with no cadence
+  // were Occasional by default, so they get it written; New and Hand-picked stay unset ("Not set").
+  if ((out._schemaVer || 0) < 2) {
+    out = {
+      ...out,
+      meals: (out.meals || []).map(m => (m && m.rotation === "in" && !m.cadence ? { ...m, cadence: "occasional" } : m)),
+      _schemaVer: 2,
     };
   }
 

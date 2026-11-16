@@ -13,7 +13,7 @@
 // ✎ renames in place (renameMeal: plans and history follow, the record stays the same).
 // Finish-the-entry gaps are amber only for a meal in rotation or planned; learn-over-time
 // fields read "Not set" quietly.
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { todayLocalISO } from "../app/globals.js";
 import { mealNameProblem, renameMeal } from "../mealRename.js";
 import { FACET_VOCAB } from "../manage/MealEditor.jsx";
@@ -86,7 +86,6 @@ export function SectionCard({ label, info, onInfo, value, problem, onClick, chil
     </div>
   );
 }
-const TagList = ({ values }) => <span className="lib-tags">{values.map(v => <span key={v} className="lib-tag">{facetWord(v)}</span>)}</span>;
 
 // Compact rows (11/16, board "Meal page density", option B): each group is one card of rows;
 // label + ⓘ on the left, a short value on the right, chevron. A problem row has an amber value
@@ -95,14 +94,46 @@ const Info = ({ label, topic, onInfo }) => (topic
   ? <button type="button" className="ui-info" aria-label={"About " + label} onClick={e => { e.stopPropagation(); onInfo(topic); }}><Icon name="info" size={18} /></button>
   : null);
 const GroupCard = ({ problem, children }) => <div className={problem ? "lib-gcard lib-card-problem" : "lib-gcard"}>{children}</div>;
-function FieldRow({ label, info, onInfo, value, problem, onClick }) {
+// `stacked` (tag rows, 11/16): label, ⓘ and chevron on the first line, the values under it,
+// grey and free to wrap. Any other value that doesn't fit beside its label stacks the same way;
+// an empty row stays on one line. `dim`: a field that doesn't apply (How often on Hand-picked).
+const Chev = () => <svg aria-hidden="true" className="ui-chevron-icon lib-card-chev" viewBox="0 0 8 14" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round"><path d="M1 1l6 6-6 6" /></svg>;
+function FieldRow({ label, info, onInfo, value, problem, onClick, stacked, dim }) {
+  const textRef = useRef(null);
+  const [tooLong, setTooLong] = useState(false);
+  const key = typeof value === "string" ? value : null;
+  useLayoutEffect(() => {
+    if (stacked || key === null) return;
+    setTooLong(false);
+  }, [key, stacked]);
+  useLayoutEffect(() => {
+    const el = textRef.current;
+    if (!stacked && !tooLong && el && el.scrollWidth > el.clientWidth + 1) setTooLong(true);
+  });
+  const stack = value != null && (stacked || tooLong);
+  const cls = ["lib-row", stack ? "lib-row-stacked" : "", dim ? "lib-row-dim" : ""].filter(Boolean).join(" ");
+  const go = e => { e.stopPropagation(); onClick(); };
+  if (stack && !label) return (   // no label (Notes): the text wraps beside the chevron
+    <div className={cls + " lib-row-nolabel"} onClick={onClick}>
+      <div className={problem ? "lib-row-below lib-row-problem" : "lib-row-below"}>{value}</div>
+      <button type="button" className="lib-row-go" aria-label="Open" onClick={go}><Chev /></button>
+    </div>
+  );
+  if (stack) return (
+    <div className={cls} onClick={onClick}>
+      <div className="lib-row-head">
+        {label && <span className="lib-row-label">{label}<Info label={label} topic={info} onInfo={onInfo} /></span>}
+        <button type="button" className="lib-row-go" aria-label={label || "Open"} onClick={go}><Chev /></button>
+      </div>
+      <div className={problem ? "lib-row-below lib-row-problem" : "lib-row-below"}>{value}</div>
+    </div>
+  );
   return (
-    <div className="lib-row" onClick={onClick}>
+    <div className={cls} onClick={onClick}>
       {label && <span className="lib-row-label">{label}<Info label={label} topic={info} onInfo={onInfo} /></span>}
-      <button type="button" className={problem ? "lib-row-value lib-row-problem" : "lib-row-value"} aria-label={label || undefined}
-        onClick={e => { e.stopPropagation(); onClick(); }}>
-        <span className="lib-row-text">{value == null ? <span className="lib-notset">Not set</span> : value}</span>
-        <svg aria-hidden="true" className="ui-chevron-icon lib-card-chev" viewBox="0 0 8 14" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round"><path d="M1 1l6 6-6 6" /></svg>
+      <button type="button" className={problem ? "lib-row-value lib-row-problem" : "lib-row-value"} aria-label={label || undefined} onClick={go}>
+        <span className="lib-row-text" ref={textRef}>{value == null ? <span className="lib-notset">Not set</span> : value}</span>
+        <Chev />
       </button>
     </div>
   );
@@ -196,12 +227,14 @@ export function MealPage({ db, persistDB, mealId, onBack, backLabel = "Library" 
   const whoShort = !prefs.length ? (isNew ? null : "Everyone fine")
     : <>{[likeN ? `${likeN} like` : null, ...wont.map(n => <strong key={n}>{n} won't</strong>), fineN > 0 ? `${fineN} fine` : null]
         .filter(Boolean).map((p, k) => <span key={k}>{k ? " · " : ""}{p}</span>)}</>;
-  const howShort = isNew && !meal.cadence ? null
-    : [meal.rotation === "manual" && !meal.cadence ? "Hand-picked" : cadenceWord(meal.cadence), last ? monthDay(last) : null].filter(Boolean).join(" · ");
+  // How often: the choice only (the last-made date shows once, under Rotation); "Not used" on Hand-picked.
+  const handPicked = meal.rotation === "manual";
+  const howShort = handPicked ? "Not used" : meal.cadence ? cadenceWord(meal.cadence) : null;
   const cost = meal.cost && meal.cost !== "none" ? meal.cost[0].toUpperCase() + meal.cost.slice(1) : null;
   const timeShort = effort ? <span className="lib-with-clocks"><Clocks n={effort.n} />{[effort.label, cost].filter(Boolean).join(" · ")}</span> : null;
-  const tags = values => (!values.length ? null : values.length < 3 ? <TagList values={values} /> : `${values.length} tags`);
-  const names = (list, noun) => (!list.length ? null : list.length < 3 ? list.join(", ") : `${list.length} ${noun}`);
+  // Tag rows (11/16): every value as plain text joined with " · ", stacked under the label.
+  const tags = values => (values.length ? values.map(facetWord).join(" · ") : null);
+  const names = list => (list.length ? list.join(" · ") : null);
   const c = meal.carries;
   const leftShort = !c ? (isNew ? null : "None")
     : `${Array.isArray(c.forWhom) ? (c.forWhom.length ? (c.forWhom.length < 3 ? c.forWhom.join(", ") : `${c.forWhom.length} people`) : "Nobody") : c.forWhom === "all" ? "Everyone" : "Who likes it"} · ${c.lastsDays} day${c.lastsDays === 1 ? "" : "s"}`;
@@ -219,7 +252,7 @@ export function MealPage({ db, persistDB, mealId, onBack, backLabel = "Library" 
         <GroupCard>
           <SwitchField label="Wanted soon" info="wantedSoon" onInfo={setInfo} checked={meal.soon} onChange={v => setField("soon", v || undefined)} />
           <FieldRow label="Who eats it" info="whoEats" onInfo={setInfo} value={whoShort} onClick={() => setSheet("who")} />
-          <FieldRow label="How often" info="howOften" onInfo={setInfo} value={howShort} onClick={() => setSheet("often")} />
+          <FieldRow label="How often" info="howOften" onInfo={setInfo} value={howShort} dim={handPicked} onClick={() => setSheet("often")} />
           <FieldRow label="Time and cost" info="timeNeeded" onInfo={setInfo} value={timeShort} onClick={() => setSheet("time")} />
           <StackField label="Rotation" info="rotation" onInfo={setInfo}
             meta={cooked ? `Cooked ${cooked} time${cooked === 1 ? "" : "s"}${last ? ` · last ${monthDay(last)}` : ""}` : "Not cooked yet"}>
@@ -234,19 +267,19 @@ export function MealPage({ db, persistDB, mealId, onBack, backLabel = "Library" 
           <StackField label="Type" info="type" onInfo={setInfo}>
             <Segmented label="Type" value={meal.type || "dinner"} onChange={v => save(db.meals.map(m => (m.id === meal.id ? { ...m, type: v } : m)))} options={TYPE_OPTIONS} />
           </StackField>
-          <FieldRow label="Style" info="style" onInfo={setInfo} problem={gaps.style} onClick={() => setSheet("style")}
+          <FieldRow label="Style" info="style" onInfo={setInfo} problem={gaps.style} onClick={() => setSheet("style")} stacked
             value={tags([...(meal.form || []), ...(meal.service || [])])} />
-          <FieldRow label="Plate and feel" info="plateFeel" onInfo={setInfo} onClick={() => setSheet("plate")}
+          <FieldRow label="Plate and feel" info="plateFeel" onInfo={setInfo} onClick={() => setSheet("plate")} stacked
             value={tags([...(meal.experience || []), ...(meal.plate || [])])} />
           {!side && <>
             <SwitchField label="No sides needed" info="noSides" onInfo={setInfo} checked={meal.noSidesUnlessNeeded} onChange={v => setField("noSidesUnlessNeeded", v || undefined)} />
             {!meal.noSidesUnlessNeeded && (
-              <FieldRow label="Sides that go with it" info="pairs" onInfo={setInfo} onClick={() => setSheet("pairs")} value={names(pairNames, "sides")} />
+              <FieldRow label="Sides that go with it" info="pairs" onInfo={setInfo} onClick={() => setSheet("pairs")} stacked value={names(pairNames)} />
             )}
           </>}
           {side && <>
-            <FieldRow label="Goes with" info="goesWith" onInfo={setInfo} problem={gaps.goesWith} onClick={() => setSheet("pairs")} value={names(pairNames, "mains")} />
-            <FieldRow label="Avoid on the plate" info="avoid" onInfo={setInfo} onClick={() => setSheet("avoid")} value={tags(meal.avoidPlate || [])} />
+            <FieldRow label="Goes with" info="goesWith" onInfo={setInfo} problem={gaps.goesWith} onClick={() => setSheet("pairs")} stacked value={names(pairNames)} />
+            <FieldRow label="Avoid on the plate" info="avoid" onInfo={setInfo} onClick={() => setSheet("avoid")} stacked value={tags(meal.avoidPlate || [])} />
             <SwitchField label="Can be someone's dinner" info="substantial" onInfo={setInfo} checked={meal.substantial} onChange={v => setField("substantial", v || undefined)} />
           </>}
         </GroupCard>

@@ -78,3 +78,14 @@
 .lib-row-switch:active, .lib-row-stack:active { background: none; }
 .lib-row-stack { cursor: default; flex-direction: column; align-items: stretch; gap: var(--space-2); padding: var(--space-3) var(--space-4); }
 .lib-row-stack .lib-row-label { align-self: flex-start; }
+/* Stacked rows (11/16): tag rows and anything too long to sit beside its label. */
+.lib-row-stacked { flex-direction: column; align-items: stretch; gap: var(--space-half); padding: var(--space-3) var(--space-4); }
+.lib-row-head { display: flex; align-items: center; gap: var(--space-3); }
+.lib-row-head .lib-row-label { flex: 1; min-width: 0; }
+.lib-row-go { flex: none; display: inline-flex; align-items: center; border: 0; background: none; padding: 0; color: inherit; cursor: pointer; }
+.lib-row-below { color: var(--text-muted); font-size: var(--body-size); line-height: var(--body-line); overflow-wrap: anywhere; }
+.lib-row-problem .lib-notset { color: inherit; }
+.lib-row-dim .lib-row-label, .lib-row-dim .lib-row-value { color: var(--text-muted); }
+.lib-row-stacked.lib-row-nolabel { flex-direction: row; align-items: flex-start; gap: var(--space-3); }
+.lib-row-nolabel .lib-row-below { flex: 1; min-width: 0; }
+.lib-row-nolabel .lib-row-go { min-height: var(--body-line); }

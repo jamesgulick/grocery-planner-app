@@ -32,10 +32,11 @@ export const ROTATION_OPTIONS = [
   { value: "experimental", label: "New" }, { value: "in", label: "In rotation" }, { value: "manual", label: "Hand-picked" },
 ];
 // Scale order: the stronger end on the left (Decisions 11/14).
+// "occasional" is stored (11/16, app-side only; the engine sees weekly and biweekly). Absent = Not set.
 export const CADENCE_OPTIONS = [
-  { value: "weekly", label: "Weekly" }, { value: "biweekly", label: "Every 2 weeks" }, { value: "none", label: "Occasional" },
+  { value: "weekly", label: "Weekly" }, { value: "biweekly", label: "Every 2 weeks" }, { value: "occasional", label: "Occasional" },
 ];
-export const cadenceWord = c => (CADENCE_OPTIONS.find(o => o.value === c) || CADENCE_OPTIONS[2]).label;
+export const cadenceWord = c => (CADENCE_OPTIONS.find(o => o.value === c) || { label: "Not set" }).label;
 export const EFFORT_OPTIONS = [
   { value: "easy", label: "Little", n: 1 }, { value: "medium", label: "Some", n: 2 }, { value: "involved", label: "Lots", n: 3 },
 ];

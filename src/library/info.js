@@ -23,6 +23,7 @@ export const INFO = {
     ["Weekly", "pulled back about every week, and never within 5 days."],
     ["Every 2 weeks", "pulled back gently, never within 10 days."],
     ["Occasional", "never pulled, never within 14 days. Week check mentions it when it hasn't been planned in 8 weeks."],
+    ["Not set", "you haven't decided yet. Until you do, the planner treats it like Occasional."],
   ] },
   timeNeeded: { title: "Time needed", lines: [
     ["Little", "preferred on busy nights."],
@@ -51,7 +52,7 @@ export const INFO = {
     [null, "The planner suggests only these as extras with this main. Any side that can be someone's dinner can still be added to cover a person who won't eat the main."],
   ] },
   goesWith: { title: "Goes with", lines: [
-    [null, "The planner suggests this side as an extra only with these mains. If it can be someone's dinner, it can still be added to cover a person who won't eat the main."],
+    [null, "The planner suggests only these as extras with this main. Any side that can be someone's dinner can still be added to cover a person who won't eat the main."],
   ] },
   noSides: { title: "No sides needed", lines: [
     [null, "No extras are suggested. A side can still be added for someone who won't eat it."],
