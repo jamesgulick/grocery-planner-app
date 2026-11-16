@@ -1,27 +1,28 @@
 // Split verbatim from grocery-app.jsx in polish Phase 1.5; see CLAUDE.md's file map.
-import { MAX_EXTRA_DAYS, PLAN_TAIL_KEEP, endDateFor, extraDaysOf, reconcilePlates } from "../engine/assembleInputs.js";
-import { useState } from "react";
-import { DAYS_ALL, PLAN_STEPS, addDaysISO, nextDateForShoppingDay, planDays, seedTimeLevels, weekLabel } from "../app/globals.js";
-import { getActivePlan, writeActivePlan } from "../app/plans.js";
-import { C, S } from "../app/styles.js";
-import { defaultNotes } from "../app/weather.js";
-import { RefreshReminder, WeekSelector } from "../components/common.jsx";
+import { MAX_EXTRA_DAYS, endDateFor, extraDaysOf, reconcilePlates, weekDates } from "../engine/assembleInputs.js";
+import { useRef, useState } from "react";
+import { INVENTORY_LOCS, PLAN_STEPS, nextDateForShoppingDay, planDays, seedTimeLevels, weekLabel } from "../app/globals.js";
+import { PLAN_STEPS_VER, getActivePlan, startPlan, writeActivePlan } from "../app/plans.js";
+import { ActionBar, BlockButton, Segmented } from "../ui/kit.jsx";
 import { PlanConfirm } from "./PlanConfirm.jsx";
 import { PlanInventory } from "./PlanInventory.jsx";
 import { PlanMeals } from "./PlanMeals.jsx";
 import { orderingPatch } from "./ordering.js";
-import { SyncRow } from "../shell/SyncRow.jsx";
+import { WeekStep } from "./WeekStep.jsx";
+import "./plan.css";
 
 // ── PLAN TAB ───────────────────────────────────────────────────────────────────
 
-function PlanTab({ db, persistDB, onGoToImport, onGoToUnassigned }) {
+// Phase 2 (SPEC-plan-flow-v2, stage 4a): Week · Meals · Inventory · Confirm · Order under one
+// frame. Welcome and "save & exit" are gone; Home's week rows and the empty state start plans.
+function PlanTab({ db, persistDB, headerIcons, onDone }) {
   // The plan the owner is currently EDITING — follows db.activePlan (current or
   // next), unlike Tonight's cards, which are pinned to today. This plan object
   // doubles as both the live-editing draft and the committed record (they were
   // merged by the two-plan-model migration).
   const draft = getActivePlan(db);
   // Day-ordering follows THIS plan's own weekStartDate, recomputed every
-  // render so editing the date (see the date input in PlanWelcome) reorders
+  // render so a changed start date reorders
   // the days live. Falls back to the shoppingDay default only when there's no
   // active plan yet (very first load, before any plan exists).
   const { days, daysFull } = planDays(draft, db.settings?.shoppingDay);
@@ -36,6 +37,7 @@ function PlanTab({ db, persistDB, onGoToImport, onGoToUnassigned }) {
   //     4→4(Print→Sparky),5→5.
   //   v3 → v4: Reconcile step removed. Flow becomes Welcome·Meals·Inventory·
   //     Confirm·Sparky (5 steps, indices 0–4). Any step 5 clamps to 4 (Sparky).
+  //   v4 → v5 (phase 2): Welcome(0) becomes Week(0); no index moves, so no remap.
   const migrateV2 = s => [0,1,1,2,3,4,4,5][s] ?? 0;
   const migrateV3 = s => [0,1,2,3,4,5][s] ?? 0;   // old Print(4) folds onto Sparky(4)
   const migrateV4 = s => s === 5 ? 4 : s;         // old Reconcile(5) folds onto Sparky(4)
@@ -84,7 +86,7 @@ function PlanTab({ db, persistDB, onGoToImport, onGoToUnassigned }) {
     const next = {
       ...draft,
       step, maxStep, timeLevels, presence, mealPlan, plates, checkedIds, addedOff, addedItems, dayNotes, dayPills, stapleFlags, quantities, weather,
-      _stepsVer: 4,
+      _stepsVer: PLAN_STEPS_VER,
       startedAt: draft?.startedAt || new Date().toISOString(),
       ...patch,
     };
@@ -121,7 +123,7 @@ function PlanTab({ db, persistDB, onGoToImport, onGoToUnassigned }) {
     const next = {
       ...draft,
       step, maxStep, timeLevels, presence, mealPlan, plates, checkedIds: nChecked, addedOff, addedItems, dayNotes, dayPills, stapleFlags: nFlags, quantities, weather,
-      keptIds: nKept, _stepsVer: 4, startedAt: draft?.startedAt || new Date().toISOString(),
+      keptIds: nKept, _stepsVer: PLAN_STEPS_VER, startedAt: draft?.startedAt || new Date().toISOString(),
     };
     persistDB(writeActivePlan({ ...db, ingredients: nextIngredients }, next));
   };
@@ -200,244 +202,100 @@ function PlanTab({ db, persistDB, onGoToImport, onGoToUnassigned }) {
     persistDB(writeActivePlan({ ...db, meals }, nextDraft));
   };
 
-  // Bootstrap the very FIRST plan. Only reachable from the blank Welcome screen
-  // ("Start planning", shown when there's no current plan at all yet — see
-  // PlanWelcome's !onResume branch) or the rare case of a plan record that
-  // exists but never advanced past step 0. Once a real current plan exists,
-  // startNextWeek (below) is how a new week begins — this never runs again
-  // after the first plan, so the archive-before-clear step below is a safety
-  // net for that edge case rather than the everyday path.
-  const startFresh = () => {
-    const freshLevels = seedTimeLevels();
-    const freshMeals  = Object.fromEntries(days.map(d => [d, []]));
-    setTimeLevels(freshLevels);
-    setPresence({});
-    setPlates({});
-    setMealPlan(freshMeals);
-    setCheckedIds([]);
-    setAddedOff([]);
-    setDayNotes({});
-    setStapleFlags({});
-    setQuantities({});
-    setWeather("hot");
-    setStep(1);
-    setMaxStep(1);
+  // Finish plan (Order's Next): the plan is ordered (Home reads "Ordered · pickup …"; set once,
+  // later edits don't clear it, decided 11/12), then back to Home.
+  const finishPlan = () => { if (!draft?.orderedAt) saveDraft({ orderedAt: new Date().toISOString() }); onDone?.(); };
 
-    const outgoingMeals = Object.values(draft?.mealPlan || draft?.meals || {}).flat()
-      .filter(n => n && n !== "Choose your own night" && n !== "Choose your own");
-    const prevHistory = db.mealHistory || [];
-    const mealHistory = outgoingMeals.length
-      ? [...prevHistory, { archivedAt:new Date().toISOString(), meals:[...new Set(outgoingMeals)] }].slice(-PLAN_TAIL_KEEP)
-      : prevHistory;
-
-    // Seed the new plan's start date from the "Default plan start day" setting
-    // — the next upcoming date on that weekday — not just today. The owner can
-    // override immediately via the date input on the resume card.
-    const seedDate = nextDateForShoppingDay(db.settings?.shoppingDay || "Wednesday");
-    const freshPlan = {
-      weekStartDate: seedDate, endDate: endDateFor(seedDate), notes:"", meals:{}, items:[],
-      dismissedShared: [],
-      // Auto-populate day notes from this week's baked-in schedule so a new plan
-      // never starts blank. notesTouched tracks manual edits so a later refresh
-      // can tell "never edited" from "deliberately changed".
-      step:1, maxStep:1, timeLevels:freshLevels, presence:{}, mealPlan:freshMeals, plates:{}, checkedIds:[], addedOff:[], addedItems:[], dayNotes:{ ...defaultNotes }, dayPills:{}, notesTouched:false, _stepsVer:4, stapleFlags:{}, quantities:{}, weather:"hot", startedAt:new Date().toISOString(),
-    };
-
-    persistDB(writeActivePlan({ ...db, mealHistory }, freshPlan));
+  // Week sub-steps (Calendar › Who's home › Time), remembered on the plan in the background.
+  const [weekSub, setWeekSub] = useState(Math.min(draft?.weekSub || 0, 2));
+  const [weekSubMax, setWeekSubMax] = useState(Math.max(draft?.weekSubMax || 0, draft?.weekSub || 0, maxStep > 0 ? 2 : 0));
+  const goSub = s => {
+    const m = Math.max(weekSubMax, s);
+    setWeekSub(s); setWeekSubMax(m); setStep(0);
+    saveDraft({ step: 0, weekSub: s, weekSubMax: m }, { background: true });
   };
+  // Inventory walks the storage places; the footer drives it (the header tabs come in 4c).
+  const [locIdx, setLocIdx] = useState(0);
+  // A step that must save before moving on (Confirm's order snapshot) registers it here.
+  const beforeNext = useRef(null);
 
-  // Create plans.next as a fresh, empty plan — the everyday "begin a new week"
-  // action once a current plan already exists. Never touches plans.current:
-  // the two are independent silos (no meal carry-over, no shared cart — the
-  // owner re-adds anything manually). weekStartDate defaults to 7 days after
-  // current's own anchor; the owner can edit it afterward (shopping day can
-  // shift). Auto-retire (on a later app load) is what promotes this to
-  // current once its date arrives; this function never does that itself.
-  // Guarded against next already existing — the caller (PlanWelcome) swaps in
-  // a "switch to it?" offer instead of calling this when that's the case
-  // (SPEC-active-plan-app-wide.md edge-case warnings), but this stays as a
-  // defensive backstop rather than silently overwriting.
-  const startNextWeek = () => {
-    if (db.plans?.next) return;
-    const freshMeals = Object.fromEntries(DAYS_ALL.map(d => [d, []]));
-    const anchor     = draft?.weekStartDate || new Date().toISOString().split("T")[0];
-    const nextStart  = addDaysISO(anchor, 7 + extraDaysOf(draft));   // after any extra days
-    const freshPlan = {
-      weekStartDate: nextStart, endDate: endDateFor(nextStart), notes:"", meals:{}, items:[],
-      dismissedShared:[],
-      step:1, maxStep:1, timeLevels:seedTimeLevels(), presence:{}, mealPlan:freshMeals, plates:{}, checkedIds:[], addedOff:[], addedItems:[], dayNotes:{ ...defaultNotes }, dayPills:{}, notesTouched:false, _stepsVer:4, stapleFlags:{}, quantities:{}, weather:"hot", startedAt:new Date().toISOString(),
-    };
-    persistDB({ ...db, plans: { ...db.plans, next: freshPlan }, activePlan: "next" });
-  };
-
-  // Exit the planning flow WITHOUT destroying anything. The draft IS the living
-  // plan — it persists so exports keep publishing the week's meals and you can
-  // resume to tweak. Retirement is date-driven (autoRetirePlans, on a later app
-  // load), not triggered by finishing — this just returns to the welcome screen.
-  const finishPlan = () => {
-    // Ordered: Home's week row reads "Ordered · pickup <day>" from this. Set once; later
-    // edits don't clear it (decided 11/12).
-    if (!draft?.orderedAt) saveDraft({ orderedAt: new Date().toISOString() });
-    // Return to Welcome. Don't read the raw draft's stored step here — after a
-    // mode split/migration the raw value can be out of range; just reset cleanly.
-    setStep(0);
-    setMaxStep(prev => prev);
-  };
-
-  const hasDraft = !!draft && (draft.maxStep ?? draft.step) > 0;
-
-  // Switching activePlan (via <WeekSelector>, below) persists db.activePlan;
-  // PlanTab is rendered with key={db.activePlan} (see the tab-switch site in
-  // App) so a switch fully remounts this component instead of leaving stale
-  // local editing state (step/mealPlan/etc.) pointed at the plan you switched
-  // away from — those hooks are only ever seeded once, at mount.
-
-  // Tappable step navigation. Gates on maxStep (furthest reached), so any step
-  // you've visited stays freely tappable — backward OR forward — even after you
-  // jump around. Steps you haven't reached yet stay locked.
-  const StepNav = () => (
-    <div style={{ background:"#2D5A3D", padding:"8px 10px", display:"flex", gap:4, overflowX:"auto", position:"sticky", top:52, zIndex:9 }}>
-      {PLAN_STEPS.map((label, i) => {
-        const active     = i === step;
-        const visited    = i < step;
-        const accessible = i <= maxStep;
-        return (
-          <button key={i} onClick={() => accessible && i !== step && goToStep(i)}
-            style={{ flexShrink:0, padding:"5px 11px", borderRadius:20, border:"none", fontSize:11, fontWeight:700,
-              cursor: accessible && i !== step ? "pointer" : "default",
-              background: active ? C.accent : accessible ? "rgba(255,255,255,0.18)" : "rgba(255,255,255,0.06)",
-              color: active ? "#fff" : accessible ? "#B8E8CA" : "rgba(255,255,255,0.4)" }}>
-            {accessible && !active ? "✓ " : ""}{label}
-          </button>
-        );
-      })}
-    </div>
-  );
-
-  if (step === 0) {
+  // ── The frame (spec §2): title, step bar, the step's own header control; the step;
+  // a Prev / Next bar fixed above the tab bar. ──────────────────────────────────────
+  if (!draft) {
+    const start = nextDateForShoppingDay(db.settings?.shoppingDay || "Wednesday");
     return (
-      <div>
-        <WeekSelector db={db} persistDB={persistDB} />
-        {hasDraft && <StepNav />}
-        <div style={S.body}>
-          <PlanWelcome
-            onStart={startFresh}
-            onStartNext={startNextWeek}
-            onResume={hasDraft ? () => goToStep(initMaxStep) : null}
-            draft={draft}
-            persistDB={persistDB}
-            db={db}
-            onGoToImport={onGoToImport}
-            onGoToUnassigned={onGoToUnassigned}
-          />
-        </div>
+      <div className="plan">
+        <header className="plan-head">
+          <div className="plan-title-row"><h1 className="ui-screen-title">{weekLabel(start)}</h1><div className="ui-icons">{headerIcons}</div></div>
+          <StepBar step={-1} maxStep={-1} />
+        </header>
+        <div className="plan-empty"><BlockButton onClick={() => { const next = startPlan(db, start); if (next) persistDB(next); }}>Plan this week</BlockButton></div>
       </div>
     );
   }
 
+  const dates = weekDates(draft.weekStartDate, extraDaysOf(draft));
+  const SUBS = ["Calendar", "Who's home", "Time"];
+  const LOCS = INVENTORY_LOCS;
+  const nav = (() => {
+    if (step === 0) return {
+      prev: weekSub > 0 ? { label: `‹ ${SUBS[weekSub - 1]}`, go: () => goSub(weekSub - 1) } : null,
+      next: weekSub < 2 ? { label: `Next: ${SUBS[weekSub + 1]} ›`, go: () => goSub(weekSub + 1) } : { label: "Next: Meals ›", go: () => goToStep(1) },
+    };
+    if (step === 1) return { prev: { label: "‹ Week", go: () => goToStep(0) }, next: { label: "Next: Inventory ›", go: () => { setLocIdx(0); goToStep(2); } } };
+    if (step === 2) return {
+      prev: locIdx > 0 ? { label: `‹ ${LOCS[locIdx - 1]}`, go: () => setLocIdx(locIdx - 1) } : { label: "‹ Meals", go: () => goToStep(1) },
+      next: locIdx < LOCS.length - 1 ? { label: `Next: ${LOCS[locIdx + 1]} ›`, go: () => setLocIdx(locIdx + 1) } : { label: "Next: Confirm ›", go: () => goToStep(3) },
+    };
+    if (step === 3) return { prev: { label: "‹ Inventory", go: () => { setLocIdx(LOCS.length - 1); goToStep(2); } }, next: { label: "Next: Order ›", go: () => { beforeNext.current?.(); goToStep(4); } } };
+    return { prev: { label: "‹ Confirm", go: () => goToStep(3) }, next: { label: "Finish plan", go: () => { beforeNext.current?.(); finishPlan(); } } };
+  })();
+
   return (
-    <div>
-      <WeekSelector db={db} persistDB={persistDB} />
-      <StepNav />
-      <div style={S.body}>
-        {step === 1 && <PlanMeals   mealPlan={mealPlan} plates={plates} setMealPlan={setMealPlanP} commitMealToPlan={commitMealToPlan} timeLevels={timeLevels} setTimeLevels={setTimeLevelsP} presence={presence} setPresence={setPresenceP} weekStartDate={draft?.weekStartDate} adventurousWeek={!!draft?.adventurousWeek} setAdventurousWeek={v => saveDraft({ adventurousWeek: v })} meals={meals} onNext={() => goToStep(2)} days={days} daysFull={daysFull} dayNotes={dayNotes} setDayNotes={setDayNotesP} dayPills={dayPills} setDayPills={setDayPillsP} db={db} persistDB={persistDB} extraDays={extraDays} canExtend={canExtend} setExtraDays={setExtraDays} />}
-        {step === 2 && <PlanInventory checkedIds={checkedIds} setCheckedIds={setCheckedIdsP} stapleFlags={stapleFlags} setOrdering={setOrdering} quantities={quantities} setQuantities={setQuantitiesP} mealPlan={mealPlan} meals={meals} ingredients={ingredients} onNext={() => goToStep(3)} days={days} onUpdateItem={updateItem} keptIds={keptIds} />}
-        {step === 3 && <PlanConfirm mode="confirm" onUpdateItem={updateItem} keptIds={keptIds} checkedIds={checkedIds} setOrdering={setOrdering} addedOff={addedOff} setAddedOff={setAddedOffP} addedItems={addedItems} setAddedItems={setAddedItemsP} stapleFlags={stapleFlags} quantities={quantities} setQuantities={setQuantitiesP} mealPlan={mealPlan} meals={meals} ingredients={ingredients} onNext={() => goToStep(4)} db={db} persistDB={persistDB} days={days} daysFull={daysFull} />}
-        {step === 4 && <PlanConfirm mode="sparky" onUpdateItem={updateItem} keptIds={keptIds} checkedIds={checkedIds} setOrdering={setOrdering} addedOff={addedOff} setAddedOff={setAddedOffP} addedItems={addedItems} setAddedItems={setAddedItemsP} stapleFlags={stapleFlags} quantities={quantities} setQuantities={setQuantitiesP} mealPlan={mealPlan} meals={meals} ingredients={ingredients} onFinish={finishPlan} db={db} persistDB={persistDB} days={days} daysFull={daysFull} />}
-        {step > 1 && (
-          <button style={{ background:"none", border:`1px solid ${C.border}`, borderRadius:10, padding:"10px 16px", fontSize:14, color:C.muted, cursor:"pointer", width:"100%", marginTop:4 }} onClick={() => goToStep(step - 1)}>
-            ← Back
-          </button>
+    <div className="plan">
+      <header className="plan-head">
+        <div className="plan-title-row"><h1 className="ui-screen-title">{weekLabel(draft.weekStartDate)}</h1><div className="ui-icons">{headerIcons}</div></div>
+        <StepBar step={step} maxStep={maxStep} onGo={i => (i === 0 ? goSub(weekSub) : goToStep(i))} />
+        {step === 0 && (
+          <Segmented label="Week setup" value={weekSub} onChange={goSub}
+            options={SUBS.map((l, i) => ({ value: i, label: <span className="plan-sub">{i <= weekSubMax && i !== weekSub && <span className="plan-sub-done" aria-label="done">✓</span>}{l}</span> }))} />
         )}
-        <button style={{ background:"none", border:"none", fontSize:13, color:C.faint, cursor:"pointer", width:"100%", marginTop:8, padding:6 }} onClick={() => setStep(0)}>
-          Save &amp; exit to start — your progress is kept
-        </button>
+      </header>
+      <div className="plan-body">
+        {step === 0 && <WeekStep sub={weekSub} db={db} persistDB={persistDB} days={days} dates={dates} dayNotes={dayNotes} setDayNotes={setDayNotesP}
+          dayPills={dayPills} setDayPills={setDayPillsP} presence={presence} setPresence={setPresenceP} timeLevels={timeLevels} setTimeLevels={setTimeLevelsP}
+          adventurous={!!draft.adventurousWeek} setAdventurous={v => saveDraft({ adventurousWeek: v })} />}
+        <div className={step > 0 ? "shell-legacy-flow" : undefined}>
+          {step === 1 && <PlanMeals inFlow mealPlan={mealPlan} plates={plates} setMealPlan={setMealPlanP} commitMealToPlan={commitMealToPlan} timeLevels={timeLevels} setTimeLevels={setTimeLevelsP} presence={presence} setPresence={setPresenceP} weekStartDate={draft.weekStartDate} adventurousWeek={!!draft.adventurousWeek} setAdventurousWeek={v => saveDraft({ adventurousWeek: v })} meals={meals} onNext={() => goToStep(2)} days={days} daysFull={daysFull} dayNotes={dayNotes} setDayNotes={setDayNotesP} dayPills={dayPills} setDayPills={setDayPillsP} db={db} persistDB={persistDB} extraDays={extraDays} canExtend={canExtend} setExtraDays={setExtraDays} />}
+          {step === 2 && <PlanInventory inFlow locIdx={locIdx} setLocIdx={setLocIdx} checkedIds={checkedIds} setCheckedIds={setCheckedIdsP} stapleFlags={stapleFlags} setOrdering={setOrdering} quantities={quantities} setQuantities={setQuantitiesP} mealPlan={mealPlan} meals={meals} ingredients={ingredients} onNext={() => goToStep(3)} days={days} onUpdateItem={updateItem} keptIds={keptIds} />}
+          {step === 3 && <PlanConfirm inFlow registerNext={fn => { beforeNext.current = fn; }} mode="confirm" onUpdateItem={updateItem} keptIds={keptIds} checkedIds={checkedIds} setOrdering={setOrdering} addedOff={addedOff} setAddedOff={setAddedOffP} addedItems={addedItems} setAddedItems={setAddedItemsP} stapleFlags={stapleFlags} quantities={quantities} setQuantities={setQuantitiesP} mealPlan={mealPlan} meals={meals} ingredients={ingredients} onNext={() => goToStep(4)} db={db} persistDB={persistDB} days={days} daysFull={daysFull} />}
+          {step === 4 && <PlanConfirm inFlow registerNext={fn => { beforeNext.current = fn; }} mode="sparky" onUpdateItem={updateItem} keptIds={keptIds} checkedIds={checkedIds} setOrdering={setOrdering} addedOff={addedOff} setAddedOff={setAddedOffP} addedItems={addedItems} setAddedItems={setAddedItemsP} stapleFlags={stapleFlags} quantities={quantities} setQuantities={setQuantitiesP} mealPlan={mealPlan} meals={meals} ingredients={ingredients} onFinish={finishPlan} db={db} persistDB={persistDB} days={days} daysFull={daysFull} />}
+        </div>
       </div>
+      <ActionBar>
+        <div className="plan-nav">
+          {nav.prev && <button type="button" className="plan-prev" onClick={nav.prev.go}>{nav.prev.label}</button>}
+          <BlockButton onClick={nav.next.go}>{nav.next.label}</BlockButton>
+        </div>
+      </ActionBar>
+      <div className="plan-nav-spacer" aria-hidden="true" />
     </div>
   );
 }
 
-function PlanWelcome({ onStart, onStartNext, onResume, draft, persistDB, db, onGoToImport, onGoToUnassigned }) {
-  // Resolve the resume-step label from the draft's own version stamp — initMaxStep
-  // lives in PlanTab, not here, so migrate locally. Mirrors PlanTab's migration.
-  const _mV2 = s => [0,1,1,2,3,4,4,5][s] ?? 0;
-  const _mV3 = s => [0,1,2,3,4,5][s] ?? 0;
-  const _mV4 = s => s === 5 ? 4 : s;
-  const _ver = draft?._stepsVer || (draft?._stepsV2 ? 2 : 1);
-  const _rawStep = draft?.maxStep ?? draft?.step ?? 0;
-  const _resumeStep = draft ? _mV4(_ver < 2 ? _mV3(_mV2(_rawStep)) : _ver < 3 ? _mV3(_rawStep) : _rawStep) : 0;
-  const draftStepName  = draft ? PLAN_STEPS[_resumeStep] : null;
-  const draftMealCount = draft ? Object.values(draft.mealPlan || {}).flat().length : 0;
-  const draftStarted   = draft?.startedAt ? new Date(draft.startedAt).toLocaleDateString("en-US",{weekday:"short",month:"short",day:"numeric"}) : null;
-
+// The 5-part step bar (Week · Meals · Inventory · Confirm · Order): done parts filled, the
+// current one bold; a reached step is a tap target.
+function StepBar({ step, maxStep, onGo }) {
   return (
-    <div>
-      <div style={{ ...S.card, background:C.primary, color:"#E8F5EE" }}>
-        <div style={{ fontSize:28, marginBottom:8 }}>🛒</div>
-        <div style={{ fontSize:22, fontWeight:700, marginBottom:6 }}>Weekly Grocery Planner</div>
-        <div style={{ fontSize:14, opacity:0.8, lineHeight:1.5 }}>Plan the week's dinners, then the grocery order</div>
-      </div>
-
-      <RefreshReminder dayNotes={draft?.dayNotes} />
-
-      <div className="sync-welcome"><SyncRow db={db} persistDB={persistDB} /></div>
-
-      {onResume && draft && (
-        <div style={{ ...S.card, border:`2px solid ${C.accent}`, background:C.primaryLight }}>
-          <div style={S.sectionLabel}>{db.activePlan === "next" ? "Next week's plan" : "Current plan"}</div>
-          <div style={{ fontWeight:700, fontSize:16, marginBottom:4 }}>Left off at: {draftStepName}</div>
-          <div style={{ fontSize:13, color:C.muted, marginBottom:8 }}>
-            {draftStarted && <span>Started {draftStarted}</span>}
-            {draftStarted && draftMealCount > 0 && <span> · </span>}
-            {draftMealCount > 0 && <span>{draftMealCount} meal{draftMealCount!==1?"s":""} planned</span>}
-          </div>
-          <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:12, fontSize:12, color:C.muted }}>
-            <span style={{ fontWeight:700 }}>{weekLabel(draft.weekStartDate)}</span>
-            {/* This date drives day-ordering for the whole plan (see getWeekFromDate), so it's editable rather than fixed to the settings default — shopping day shifts week to week. */}
-            <input type="date" value={draft.weekStartDate || ""} onChange={e => e.target.value && persistDB(writeActivePlan(db, { ...draft, weekStartDate:e.target.value, endDate:endDateFor(e.target.value, extraDaysOf(draft)) }))}
-              style={{ fontSize:12, border:`1px solid ${C.border}`, borderRadius:6, padding:"3px 5px", color:C.muted }} />
-          </div>
-          <button style={{ ...S.btn, ...S.btnP, marginBottom:0 }} onClick={onResume}>Open / edit plan</button>
-          {!db.plans?.next && (
-            <button style={{ ...S.btn, ...S.btnS, marginTop:8, marginBottom:0 }} onClick={onStartNext}>
-              Start next week's plan →
-            </button>
-          )}
-          {/* Edge case (SPEC-active-plan-app-wide.md): next already exists but
-              this card is showing current — instead of a silent no-op, offer
-              to switch to it. Not shown when db.activePlan is already "next"
-              (this card would then BE next's own draft). */}
-          {db.plans?.next && db.activePlan !== "next" && (
-            <button style={{ ...S.btn, ...S.btnS, marginTop:8, marginBottom:0 }} onClick={() => persistDB({ ...db, activePlan:"next" })}>
-              Next week already exists — switch to it? →
-            </button>
-          )}
-        </div>
-      )}
-
-      {/* The one actionable line from the old "at a glance" counts card: items
-          with no storage location never come up on the Inventory walk. */}
-      {db && (() => {
-        const unassigned = (db.ingredients || []).filter(i => i.storageLocation === "Unassigned").length;
-        if (!unassigned) return null;
-        return (
-          <button style={{ display:"block", width:"100%", textAlign:"left", fontSize:13, fontWeight:600, color:C.warning, background:C.warningLight, border:"none", borderRadius:8, padding:"10px 12px", marginBottom:12, cursor:onGoToUnassigned?"pointer":"default" }}
-            onClick={onGoToUnassigned} disabled={!onGoToUnassigned}>
-            ⚠️ {unassigned} item{unassigned === 1 ? "" : "s"} need{unassigned === 1 ? "s" : ""} a location ›
+    <ol className="plan-steps" aria-label="Plan steps">
+      {PLAN_STEPS.map((label, i) => (
+        <li key={label} aria-current={i === step ? "step" : undefined} className={i <= Math.max(step, maxStep) && step >= 0 ? "is-reached" : undefined}>
+          <button type="button" disabled={!onGo || i > maxStep || i === step} onClick={() => onGo?.(i)}>
+            <span className="plan-step-bar" aria-hidden="true" /><span className="plan-step-label">{label}</span>
           </button>
-        );
-      })()}
-
-      {onGoToImport && (
-        <div style={{ textAlign:"center", marginBottom:8 }}>
-          <button style={{ background:"none", border:"none", color:C.accentMuted, fontSize:13, cursor:"pointer", textDecoration:"underline" }} onClick={onGoToImport}>
-            📥 Import → Config
-          </button>
-        </div>
-      )}
-
-      {!onResume && <button style={{ ...S.btn, ...S.btnP }} onClick={onStart}>Start planning</button>}
-    </div>
+        </li>
+      ))}
+    </ol>
   );
 }
 

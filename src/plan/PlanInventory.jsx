@@ -7,8 +7,9 @@ import { Check } from "../components/common.jsx";
 import { ItemEditPanel } from "../components/ItemEditPanel.jsx";
 import { isOrdering } from "./ordering.js";
 
-function PlanInventory({ checkedIds, stapleFlags, setOrdering, quantities, setQuantities, mealPlan, meals, ingredients, onNext, days, onUpdateItem, keptIds = [] }) {
-  const [locIdx, setLocIdx] = useState(0);
+function PlanInventory({ inFlow, locIdx: locIdxIn, setLocIdx: setLocIdxIn, checkedIds, stapleFlags, setOrdering, quantities, setQuantities, mealPlan, meals, ingredients, onNext, days, onUpdateItem, keptIds = [] }) {
+  const [ownLoc, setOwnLoc] = useState(0);
+  const locIdx = locIdxIn ?? ownLoc, setLocIdx = setLocIdxIn ?? setOwnLoc;   // the Plan frame's footer drives the walk
   const [editId, setEditId] = useState(null);     // item whose "⋯ edit" panel is open
   const [moveNote, setMoveNote] = useState(null); // what happened to an item moved to another location
   const [slowOpen, setSlowOpen] = useState(null);   // slow staples card expanded? null = decide from the data
@@ -193,13 +194,13 @@ function PlanInventory({ checkedIds, stapleFlags, setOrdering, quantities, setQu
         <div style={{ ...S.card, textAlign:"center", color:C.faint, padding:24 }}>No items stored here</div>
       )}
 
-      <div style={{ display:"flex", gap:10 }}>
+      {!inFlow && <div style={{ display:"flex", gap:10 }}>
         {locIdx > 0 && <button style={{ ...S.btn, ...S.btnS, flex:1, marginBottom:0 }} onClick={() => setLocIdx(l=>l-1)}>Back</button>}
         {locIdx < LOCS.length-1
           ? <button style={{ ...S.btn, ...S.btnP, flex:1, marginBottom:0, marginTop:10 }} onClick={() => setLocIdx(l=>l+1)}>Next: {LOCS[locIdx+1]}</button>
           : <button style={{ ...S.btn, ...S.btnP, flex:1, marginBottom:0, marginTop:10 }} onClick={onNext}>Build my list</button>
         }
-      </div>
+      </div>}
       <div style={{ display:"flex", gap:6, marginTop:12, flexWrap:"wrap" }}>
         {LOCS.map((l, i) => (
           <button key={l} onClick={() => setLocIdx(i)} style={{ padding:"4px 10px", borderRadius:20, border:"none", fontSize:12, fontWeight:600, cursor:"pointer", background:i===locIdx?C.primary:i<locIdx?"#B8E8CA":"#EEE", color:i===locIdx?"#fff":i<locIdx?C.primary:"#888" }}>{l}</button>

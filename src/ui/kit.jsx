@@ -173,8 +173,8 @@ export const Switch = ({ checked, onChange, label }) => (
 );
 
 // ── Segmented choice ─────────────────────────────────────────────────────────
-export const Segmented = ({ options, value, onChange, label }) => (
-  <div className="ui-seg" role="group" aria-label={label}>
+export const Segmented = ({ options, value, onChange, label, tone }) => (
+  <div className={tone === "forest" ? "ui-seg ui-seg-forest" : "ui-seg"} role="group" aria-label={label}>
     {options.map(o => <button key={o.value} type="button" aria-pressed={value === o.value} onClick={() => onChange(o.value)}>{o.label}{o.dot && <span className="ui-seg-dot" aria-label="Something to finish" />}</button>)}
   </div>
 );

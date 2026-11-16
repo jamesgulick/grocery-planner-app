@@ -4,7 +4,7 @@ import React, { useEffect, useRef, useState } from "react";
 import { buildExportDB, buildPublished, downloadBackup, previewImportOk, stripExportNodes } from "./app/exportData.js";
 import { IS_PREVIEW, PREVIEW_SLOT, extractJSON, formatSavedAt, todayLocalISO } from "./app/globals.js";
 import { pruneEnded } from "./app/awayDates.js";
-import { autoRetirePlans, migrateDB, planCount } from "./app/plans.js";
+import { autoRetirePlans, landingPlanKey, migrateDB, planCount, startPlan } from "./app/plans.js";
 import { prepareImport } from "./app/dataIO.js";
 import { DEFAULT_DB } from "./app/seed.js";
 import { clearRecovery, getStorageHealth, loadDB, loadRecovery, saveDB, saveRecovery, seedPreviewFromLive } from "./app/storage.js";
@@ -235,10 +235,12 @@ export default function App() {
   // Home → Plan: open that week on its Meals step (shell only: the week view and plate sheet
   // come later), or on `atStep` (Continue: the first unfinished step). "start-next" lands on
   // Plan's Welcome, where next week is started.
-  const openPlan = (key, atStep) => {
+  // From Home: open a week's plan (at a step), or start one for an unplanned week (`start`).
+  const openPlan = (key, atStep, start) => {
     const plans = db.plans || {};
-    if (key === "start-next" || !plans[key]) {
-      if (plans.current) persistDB({ ...db, activePlan:"current", plans:{ ...plans, current:{ ...plans.current, step:0 } } }, { background:true });
+    if (!key || !plans[key]) {
+      const next = start && startPlan(db, start);
+      if (next) persistDB(next);
       setTab("plan"); return;
     }
     const p = plans[key];
@@ -320,13 +322,14 @@ export default function App() {
           </div>
         )}
         {tab==="home" && <HomeScreen db={db} dataDot={dataDot} onOpenData={() => setSheet("data")} onOpenSettings={() => setSheet("settings")} onOpenPlan={openPlan} />}
-        {tab==="plan" && <>
-          <TopBar title="Plan">{headerIcons}</TopBar>
-          <PlanTab key={db.activePlan || "current"} db={db} persistDB={persistDB} onGoToImport={() => setSheet("data")} onGoToUnassigned={() => { setLibraryView("items"); setTab("library"); }} />
-        </>}
+        {tab==="plan" && <PlanTab key={db.activePlan || "current"} db={db} persistDB={persistDB} headerIcons={headerIcons} onDone={() => setTab("home")} />}
         {tab==="library" && <LibraryTab db={db} persistDB={persistDB} view={libraryView} setView={setLibraryView} headerIcons={headerIcons} resetKey={tabTaps} openRequest={libOpen} onGrab={init => setGrab(init)} />}
         <TabBarSpacer />
-        <TabBar tabs={TABS} active={tab} onSelect={id => { setTab(id); setTabTaps(n => n + 1); window.scrollTo(0, 0); }} action={{ label: "Grab", onClick: () => setGrab({ kind: "meal" }) }} />
+        <TabBar tabs={TABS} active={tab} onSelect={id => {
+          // The Plan tab opens the plan that needs you (spec §3.1).
+          if (id === "plan") { const k = landingPlanKey(db); if (k && k !== db.activePlan) persistDB({ ...db, activePlan: k }, { background: true }); }
+          setTab(id); setTabTaps(n => n + 1); window.scrollTo(0, 0);
+        }} action={{ label: "Grab", onClick: () => setGrab({ kind: "meal" }) }} />
         {sheet === "data" && <DataSheet db={db} persistDB={persistDB} overdue={dataDot} onClose={() => setSheet(null)} />}
         {sheet === "settings" && <SettingsSheet db={db} persistDB={persistDB} onClose={() => setSheet(null)} />}
         {grab && <GrabSheet db={db} persistDB={persistDB} init={grab} onClose={() => setGrab(null)} onOpenPage={openLibraryPage} />}

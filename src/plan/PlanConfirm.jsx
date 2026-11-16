@@ -8,7 +8,7 @@ import { ItemEditPanel } from "../components/ItemEditPanel.jsx";
 import { Icon } from "../ui/kit.jsx";
 import { isExplicitNo, isOrdering, isRelevant } from "./ordering.js";
 
-function PlanConfirm({ mode = "confirm", onUpdateItem, keptIds = [], checkedIds, setOrdering, addedOff = [], setAddedOff, addedItems, setAddedItems, stapleFlags, quantities = {}, setQuantities, mealPlan, meals, ingredients, onNext, onFinish, db, persistDB, days, daysFull }) {
+function PlanConfirm({ inFlow, registerNext, mode = "confirm", onUpdateItem, keptIds = [], checkedIds, setOrdering, addedOff = [], setAddedOff, addedItems, setAddedItems, stapleFlags, quantities = {}, setQuantities, mealPlan, meals, ingredients, onNext, onFinish, db, persistDB, days, daysFull }) {
   const [newItem, setNewItem]   = useState("");
   const [view, setView]         = useState("meal");
   const [copied, setCopied]     = useState(false);
@@ -211,6 +211,8 @@ function PlanConfirm({ mode = "confirm", onUpdateItem, keptIds = [], checkedIds,
       : { weekStartDate:today, notes:"", dismissedShared:[], meals:mealPlan, items:listItems };
     persistDB(writeActivePlan(db, updated), { background: true }); // a snapshot of the list, not an edit
   };
+  // In the Plan frame, its fixed Next saves the order snapshot first (as the old button did).
+  registerNext?.(savePlan);
 
   const QtyChip = ({ ing }) => {
     const override = quantities[ing.id];
@@ -367,7 +369,7 @@ function PlanConfirm({ mode = "confirm", onUpdateItem, keptIds = [], checkedIds,
         </div>
       </div>
 
-      <button style={{ ...S.btn, ...S.btnP }} onClick={() => { savePlan(); onNext(); }}>Next: Order ›</button>
+      {!inFlow && <button style={{ ...S.btn, ...S.btnP }} onClick={() => { savePlan(); onNext(); }}>Next: Order ›</button>}
       </>}
 
       {mode === "sparky" && <>
@@ -431,7 +433,7 @@ function PlanConfirm({ mode = "confirm", onUpdateItem, keptIds = [], checkedIds,
           <button style={{ ...S.btn, ...S.btnS, marginBottom:0 }} onClick={() => setManualBatch(null)}>Done</button>
         </div>
       )}
-      <button style={{ ...S.btn, ...S.btnP }} onClick={() => { try { savePlan(); } finally { onFinish && onFinish(); } }}>Finish plan</button>
+      {!inFlow && <button style={{ ...S.btn, ...S.btnP }} onClick={() => { try { savePlan(); } finally { onFinish && onFinish(); } }}>Finish plan</button>}
       </>}
     </div>
   );

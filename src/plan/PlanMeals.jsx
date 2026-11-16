@@ -83,7 +83,7 @@ function sideBadge(dish) {
 // stored value and the engine's timeLevel stay none / some / much.
 const TIME_LABEL = { none:"Little", some:"Some", much:"Lots" };
 
-function PlanMeals({ mealPlan, plates, setMealPlan, commitMealToPlan, timeLevels, setTimeLevels, presence, setPresence, weekStartDate, adventurousWeek, setAdventurousWeek, meals, onNext, days, daysFull, dayNotes, setDayNotes, dayPills, setDayPills, db, persistDB, extraDays = 0, canExtend = false, setExtraDays }) {
+function PlanMeals({ inFlow, mealPlan, plates, setMealPlan, commitMealToPlan, timeLevels, setTimeLevels, presence, setPresence, weekStartDate, adventurousWeek, setAdventurousWeek, meals, onNext, days, daysFull, dayNotes, setDayNotes, dayPills, setDayPills, db, persistDB, extraDays = 0, canExtend = false, setExtraDays }) {
   const [editing, setEditing] = useState(null);
   const [moving,  setMoving]  = useState(null);
   const [search,  setSearch]  = useState("");
@@ -164,14 +164,8 @@ function PlanMeals({ mealPlan, plates, setMealPlan, commitMealToPlan, timeLevels
     fetchLiveForecast(Object.values(dateOfDay)).then(f => { if (!cancelled) setForecastByDate(f); });
     return () => { cancelled = true; };
   }, [planDatesKey]);
-  // Notes safety net (carried over from the old Partner step): if this step opens
-  // with every day note blank, fill from the baked schedule once. Fires only when
-  // ALL are empty, so it never clobbers edits. New plans seed notes in startFresh;
-  // this covers in-progress drafts that predate that.
-  useEffect(() => {
-    const allEmpty = days.every(d => !((dayNotes||{})[d] || "").trim());
-    if (allEmpty) setDayNotes(prev => { const next = { ...prev }; days.forEach(d => { next[d] = defaultNotes[d] || ""; }); return next; }, { background: true });
-  }, []);
+  // (The blank-notes safety net is gone: the app never writes day notes on its own,
+  // spec SPEC-plan-flow-v2 §3.2, decided 11/16.)
   const [pillEditDay, setPillEditDay] = useState(null);
   const [newPillLabel, setNewPillLabel] = useState("");
   const togglePill = (day, label) => setDayPills(prev => {
@@ -665,7 +659,7 @@ function PlanMeals({ mealPlan, plates, setMealPlan, commitMealToPlan, timeLevels
           )}
         </div>
       )}
-      <button style={{ ...S.btn, ...S.btnP }} onClick={onNext} disabled={totalMeals===0}>Looks good</button>
+      {!inFlow && <button style={{ ...S.btn, ...S.btnP }} onClick={onNext} disabled={totalMeals===0}>Looks good</button>}
     </div>
   );
 }

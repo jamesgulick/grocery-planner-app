@@ -100,6 +100,7 @@
   --problem-outline: 1.5px;
   --plus-size: 48px;                      /* the + in the tab bar (Grab) */
   --grab-recipe-h: 96px;               /* a detail page's field with a problem */
+  --label-pill-h: 28px;                   /* day labels on the Week step */
   --chip-pad-tight: 10px;                 /* filter chips on one line beside the sort button */
   --chip-gap-tight: 6px;
   --check: 24px;                          /* square check box */

@@ -86,7 +86,7 @@ function weekState(w, today) {
   if (!w.plan || !hasMeals(w.plan)) return { kind: "unplanned" };
   if (w.plan.orderedAt) return { kind: "ordered" };
   if (w.start <= today) return { kind: "running" };
-  const reached = Math.min(Math.max(w.plan.maxStep ?? w.plan.step ?? 1, 1), STEP_BAR.length - 1);
+  const reached = Math.min(Math.max(w.plan.maxStep ?? w.plan.step ?? 0, 0), STEP_BAR.length - 1);
   return { kind: "progress", next: reached };
 }
 
@@ -160,7 +160,7 @@ export function HomeScreen({ db, dataDot, onOpenData, onOpenSettings, onOpenPlan
 
   // Plan / the week title: open that week (a week with no plan slot yet starts one).
   // Continue: the first unfinished step.
-  const openWeek = w => onOpenPlan(w.key || "start-next");
+  const openWeek = w => onOpenPlan(w.key, undefined, w.start);
   const continueWeek = (w, state) => onOpenPlan(w.key, state.next);
 
   const tPlan = tonightWeek.plan && hasMeals(tonightWeek.plan) ? tonightWeek.plan : null;

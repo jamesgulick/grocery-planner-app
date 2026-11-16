@@ -362,4 +362,34 @@ const autoRetirePlans = db => {
   };
 };
 
+// ── Starting a week (phase 2: Welcome is gone; Home's week rows and the empty Plan tab start
+// plans). A fresh plan opens on the Week step. No day notes are seeded: the app never writes
+// notes on its own (spec §3.2, decided 11/16). Length: 7 days for now; the 5–9 day rule comes
+// with pickup day (spec §5).
+export const PLAN_STEPS_VER = 5;
+export function newPlan(weekStartDate) {
+  return {
+    weekStartDate, endDate: endDateFor(weekStartDate), notes: "", meals: {}, items: [], dismissedShared: [],
+    step: 0, maxStep: 0, weekSub: 0, timeLevels: Object.fromEntries(DAYS_ALL.map(d => [d, seedTimeLevel(d)])), presence: {},
+    mealPlan: Object.fromEntries(DAYS_ALL.map(d => [d, []])), plates: {}, checkedIds: [], addedOff: [], addedItems: [],
+    dayNotes: {}, dayPills: {}, stapleFlags: {}, quantities: {}, _stepsVer: PLAN_STEPS_VER, startedAt: new Date().toISOString(),
+  };
+}
+/** The DB with a new plan starting `weekStartDate`, in the free slot (current, else next), made active. */
+export function startPlan(db, weekStartDate) {
+  const plans = db.plans && !Array.isArray(db.plans) ? db.plans : { current: null, next: null };
+  const slot = !plans.current ? "current" : !plans.next ? "next" : null;
+  if (!slot) return null;
+  return { ...db, plans: { ...plans, [slot]: newPlan(weekStartDate) }, activePlan: slot };
+}
+/** Which plan the Plan tab opens (spec §3.1): next if started and not ordered, else current if
+ *  not ordered, else the most recent; null when there are none. */
+export function landingPlanKey(db) {
+  const p = db.plans || {};
+  const started = x => x && Object.values(x.mealPlan || {}).some(a => (a || []).length);
+  if (p.next && started(p.next) && !p.next.orderedAt) return "next";
+  if (p.current && !p.current.orderedAt) return "current";
+  return p.next ? "next" : p.current ? "current" : null;
+}
+
 export { autoRetirePlans, getActivePlan, getCurrentPlan, mapBothPlans, migrateDB, planCount, resolvePlanForDate, writeActivePlan };

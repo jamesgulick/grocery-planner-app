@@ -1,0 +1,47 @@
+/* The Plan flow (phase 2, SPEC-plan-flow-v2 stage 4a). Tokens only. */
+
+/* ── Frame: title, step bar, the step's header control; fixed Prev / Next ── */
+.plan { padding: 0 var(--gutter); }
+.plan-head { position: sticky; top: var(--safe-top); z-index: 50; margin: 0 calc(-1 * var(--gutter)); padding: 0 var(--gutter) var(--space-3); background: var(--bg); display: flex; flex-direction: column; gap: var(--space-3); }
+.plan-title-row { display: flex; align-items: center; gap: var(--space-2); min-height: var(--topbar-height); }
+.plan-title-row .ui-screen-title { flex: 1; min-width: 0; margin: 0; }
+.plan-steps { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: var(--space-1); }
+.plan-steps button { width: 100%; display: flex; flex-direction: column; gap: var(--space-1); padding: 0; border: 0; background: none; font: inherit; text-align: left; cursor: pointer; color: inherit; }
+.plan-steps button:disabled { cursor: default; }
+.plan-step-bar { display: block; height: var(--step-bar-h); border-radius: var(--step-bar-h); background: var(--step-off); }
+.plan-steps .is-reached .plan-step-bar { background: var(--action); }
+.plan-step-label { font-size: var(--caption-size); line-height: var(--caption-line); color: var(--text-muted); }
+.plan-steps [aria-current="step"] .plan-step-label { color: var(--text); font-weight: 700; }
+.plan-sub { display: inline-flex; align-items: center; gap: var(--space-1); }
+.plan-sub-done { color: var(--action); font-weight: 700; }
+.plan-body { padding-top: var(--space-1); display: flex; flex-direction: column; gap: var(--space-4); }
+.plan-empty { padding: var(--space-6) 0; }
+.plan-nav { display: flex; gap: var(--space-2); }
+.plan-nav .ui-block-button { flex: 1; }
+.plan-prev { flex: none; min-height: var(--block-button); padding: 0 var(--space-4); border: 0; border-radius: var(--radius-control); background: var(--surface); color: var(--action); font: inherit; font-size: var(--body-size); font-weight: 600; cursor: pointer; }
+.plan-nav-spacer { height: calc(var(--block-button) + var(--space-5)); }
+
+/* ── Week step ── */
+.wk { display: flex; flex-direction: column; gap: var(--space-4); }
+.wk-day { position: relative; display: flex; flex-direction: column; gap: var(--space-2); padding: var(--space-3) var(--space-4); }
+.wk-day + .wk-day::before { content: ""; position: absolute; top: 0; left: var(--space-4); right: 0; height: 1px; background: var(--divider); }
+.wk-day-head { display: flex; align-items: baseline; flex-wrap: wrap; gap: var(--space-2); }
+.wk-dow { font-size: var(--body-size); font-weight: 700; }
+.wk-out { font-size: var(--meta-size); font-weight: 600; color: var(--text-muted); }
+.wk-note { font: inherit; font-size: var(--body-size); line-height: var(--body-line); width: 100%; box-sizing: border-box; padding: var(--space-half) 0 var(--space-1); border: 0; border-bottom: 1px dashed var(--control-border); background: none; color: var(--text); resize: none; overflow: hidden; }
+.wk-note::placeholder { color: var(--text-muted); }
+.wk-note:focus { outline: none; border-bottom-style: solid; border-bottom-color: var(--action); }
+.wk-note-read { font-size: var(--meta-size); line-height: var(--meta-line); color: var(--text); }
+.wk-labels { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
+.wk-label { display: inline-flex; align-items: center; gap: var(--space-1); min-height: var(--label-pill-h); padding: 0 var(--space-1) 0 var(--space-2); border: var(--pill-outline) solid var(--text); border-radius: var(--radius-pill); font-size: var(--label-size); font-weight: 700; }
+.wk-label button { border: 0; background: none; padding: 0 var(--space-1); font: inherit; color: var(--text-muted); cursor: pointer; }
+.wk-label-add { min-height: var(--label-pill-h); padding: 0 var(--space-2); border: 1px dashed var(--control-border); border-radius: var(--radius-pill); background: none; color: var(--text-muted); font: inherit; font-size: var(--caption-size); font-weight: 600; cursor: pointer; }
+.wk-label-input { min-height: var(--label-pill-h); padding: 0 var(--space-2); border: 1px solid var(--control-border); border-radius: var(--radius-pill); font: inherit; font-size: var(--label-size); }
+.wk-chips { display: flex; flex-wrap: wrap; gap: var(--space-2); }
+/* Who's home, option D (11/16): the dash always means "this comes from Away dates". */
+.wk-chip { min-height: var(--chip-height); padding: 0 var(--space-3); border-radius: var(--radius-pill); border: var(--pill-outline) solid transparent; font: inherit; font-size: var(--body-size); font-weight: 600; cursor: pointer; }
+.wk-chip.is-home { background: var(--tint); border-color: var(--tint); color: var(--action); }
+.wk-chip.is-home.is-despite { border: var(--pill-outline) dashed var(--action); }
+.wk-chip.is-out { background: var(--surface); border-color: var(--control-border); color: var(--text-muted); text-decoration: line-through; }
+.wk-chip.is-out.is-away { border-style: dashed; }
+.wk-time { display: inline-flex; align-items: center; gap: var(--space-2); }
