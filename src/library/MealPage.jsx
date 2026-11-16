@@ -68,14 +68,14 @@ export function PageHeader({ name, sub, onBack, onRename, renameProblem, renameE
   );
 }
 
-// A section: label (+ ⓘ) over a white card that opens its sheet. `problem` turns it amber.
-function SectionCard({ label, info, onInfo, value, problem, onClick, children }) {
+// A section: label (+ ⓘ) over a white card that opens its sheet. `problem`: a field problem
+// on a detail page (brief, field problems): a 1.5px amber outline and amber text.
+export function SectionCard({ label, info, onInfo, value, problem, onClick, children }) {
   return (
     <div className="lib-section">
       {label && <FieldLabel info={label} onInfo={info ? () => onInfo(info) : undefined}>{label}</FieldLabel>}
       <button type="button" className={problem ? "lib-card lib-card-problem" : "lib-card"} onClick={onClick}>
         <span className="lib-card-body">
-          {problem && <span className="ui-problem-dot" aria-hidden="true" />}
           {children || (value == null ? <span className="lib-notset">Not set</span> : value)}
         </span>
         <svg aria-hidden="true" className="ui-chevron-icon lib-card-chev" viewBox="0 0 8 14" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round"><path d="M1 1l6 6-6 6" /></svg>

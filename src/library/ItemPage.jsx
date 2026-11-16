@@ -8,7 +8,7 @@ import { useEffect, useState } from "react";
 import { INVENTORY_LOCS } from "../app/globals.js";
 import { DeleteButton, FieldLabel, Group, Row } from "../ui/kit.jsx";
 import { DeleteSheet, PickListSheet, TextSheet } from "./LibrarySheets.jsx";
-import { PageHeader } from "./MealPage.jsx";
+import { PageHeader, SectionCard } from "./MealPage.jsx";
 import { BUY_OPTIONS, buyOf, buyPatch, buyWord, isSide, itemDeleteImpact, placeOf, weekOfWords, withField, withoutItem } from "./libraryModel.js";
 
 const key = s => String(s || "").trim().toLowerCase();
@@ -65,14 +65,8 @@ export function ItemPage({ db, persistDB, itemId, onBack, onOpenMeal }) {
             ))}
           </Group>
         </div>
-        <div className="lib-section">
-          <FieldLabel>Usual amount</FieldLabel>
-          <Group><Row title={item.defaultQuantity || <span className="lib-notset">Not set</span>} onClick={() => setSheet("amount")} /></Group>
-        </div>
-        <div className="lib-section">
-          <FieldLabel>Kept in</FieldLabel>
-          <Group><Row title={place || <span className="ui-problem">No storage place</span>} onClick={() => setSheet("place")} /></Group>
-        </div>
+        <SectionCard label="Usual amount" onClick={() => setSheet("amount")} value={item.defaultQuantity || null} />
+        <SectionCard label="Kept in" onClick={() => setSheet("place")} problem={!place} value={place || "No storage place"} />
         {usedIn.length > 0 && (
           <div className="lib-section">
             <FieldLabel>{`Used in · ${usedIn.length}`}</FieldLabel>
