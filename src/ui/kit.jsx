@@ -19,6 +19,7 @@ const PATHS = {
   sort:     <><path d="M4 7h16" /><path d="M4 12h11" /><path d="M4 17h6" /></>,   /* three shortening lines = sort */
   search:   <><circle cx="11" cy="11" r="6" /><path d="M20 20l-4.5-4.5" /></>,
   close:    <><path d="M6 6l12 12" /><path d="M18 6L6 18" /></>,
+  plus:     <><path d="M12 5v14" /><path d="M5 12h14" /></>,
   trash:    <><path d="M4 7h16" /><path d="M10 11v6M14 11v6" /><path d="M6 7l1 13a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1l1-13" /><path d="M9 7V4h6v3" /></>,
 };
 
@@ -70,9 +71,10 @@ export const PillButton = ({ children, onClick, secondary, inline, disabled }) =
   <button type="button" disabled={disabled} onClick={onClick}
     className={`ui-pill ${secondary ? "ui-pill-secondary" : "ui-pill-primary"}${inline ? " ui-pill-inline" : ""}`}>{children}</button>
 );
-export const BlockButton = ({ children, onClick }) => <button type="button" className="ui-block-button" onClick={onClick}>{children}</button>;
+// A disabled filled button is grey (buttons rule, 11/15).
+export const BlockButton = ({ children, onClick, disabled }) => <button type="button" className="ui-block-button" disabled={disabled} onClick={onClick}>{children}</button>;
 // Full-width outlined button: the second action (three-button rule, 11/15).
-export const OutlineButton = ({ children, onClick }) => <button type="button" className="ui-block-button ui-block-outline" onClick={onClick}>{children}</button>;
+export const OutlineButton = ({ children, onClick, disabled }) => <button type="button" className="ui-block-button ui-block-outline" disabled={disabled} onClick={onClick}>{children}</button>;
 // Deleting a whole record: the one place red is used (destructive #B42318).
 // `filled`: the speed bump's own Delete (filled red); the page's button is outlined.
 export const DeleteButton = ({ children, onClick, filled }) => (
@@ -219,14 +221,20 @@ export function Sheet({ title, sub, onClose, onBack, backLabel, onCancel, onDone
 }
 
 // ── Tab bar ──────────────────────────────────────────────────────────────────
-export const TabBar = ({ tabs, active, onSelect }) => (
+// `action`: the + in the last slot (a filled circle; opens Grab over any screen, 11/13).
+export const TabBar = ({ tabs, active, onSelect, action }) => (
   <nav className="ui-tabbar" aria-label="Main">
-    <div className="ui-tabbar-inner">
+    <div className={action ? "ui-tabbar-inner ui-tabbar-4" : "ui-tabbar-inner"}>
       {tabs.map(t => (
         <button key={t.id} type="button" className="ui-tab" aria-current={active === t.id ? "page" : undefined} onClick={() => onSelect(t.id)}>
           <Icon name={t.icon} size={24} strong={active === t.id} />{t.label}
         </button>
       ))}
+      {action && (
+        <button type="button" className="ui-tab ui-tab-action" aria-label={action.label} onClick={action.onClick}>
+          <span className="ui-tab-plus"><Icon name="plus" size={26} strong /></span>
+        </button>
+      )}
     </div>
   </nav>
 );

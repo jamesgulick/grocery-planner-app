@@ -17,7 +17,8 @@ import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { todayLocalISO } from "../app/globals.js";
 import { mealNameProblem, renameMeal } from "../mealRename.js";
 import { FACET_VOCAB } from "../app/vocab.js";
-import { Clocks, DeleteButton, FieldLabel, Icon, Segmented, Switch } from "../ui/kit.jsx";
+import { Clocks, DeleteButton, FieldLabel, Icon, OutlineButton, Segmented, Switch } from "../ui/kit.jsx";
+import { sendToAI } from "../app/sendToAI.js";
 import {
   DeleteSheet, HowOftenSheet, InfoSheet, IngredientsSheet, LeftoversSheet, PairsSheet,
   TagSheet, TextSheet, TimeCostSheet, WeatherSheet, WhoEatsSheet,
@@ -305,6 +306,8 @@ export function MealPage({ db, persistDB, mealId, onBack, backLabel = "Library" 
       <section className="lib-group">
         <h2 className="lib-group-head">Notes</h2>
         <GroupCard><FieldRow onClick={() => setSheet("notes")} value={notes ? <span className="lib-row-note">{notes}</span> : null} /></GroupCard>
+        {/* Fill in this one meal with AI (board "Fill in existing meals with AI", 11/15). */}
+        <OutlineButton onClick={() => sendToAI(db, persistDB, { purpose: "enrich", meals: [meal.id] })}>Send to AI</OutlineButton>
         <DeleteButton onClick={() => setSheet("delete")}>Delete meal</DeleteButton>
       </section>
 

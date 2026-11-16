@@ -80,6 +80,11 @@ button.ui-row:active { background: var(--pressed); }
   .ui-tabbar { background: var(--bar-bg); -webkit-backdrop-filter: var(--bar-blur); backdrop-filter: var(--bar-blur); }
 }
 .ui-tabbar-inner { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); width: 100%; max-width: var(--app-max); padding: var(--space-1) var(--space-2) 0; box-sizing: border-box; }
+.ui-tabbar-4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.ui-tab-plus { display: inline-flex; align-items: center; justify-content: center; width: var(--plus-size); height: var(--plus-size); border-radius: 50%; background: var(--action); color: var(--on-action); }
+.ui-block-button:disabled { background: var(--track); color: var(--disabled); cursor: default; }
+.ui-block-outline:disabled { background: var(--surface); border-color: var(--track); color: var(--disabled); }
+.ui-link:disabled { color: var(--disabled); cursor: default; }
 .ui-tab { min-height: var(--tab-height); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: var(--space-half); font: inherit; font-size: var(--tab-label-size); font-weight: 600; color: var(--text-muted); background: none; border: 0; cursor: pointer; }
 .ui-tab[aria-current="page"] { color: var(--action); font-weight: 700; }
 /* Sticky action bar: sits on top of the tab bar (same translucent bar background). */

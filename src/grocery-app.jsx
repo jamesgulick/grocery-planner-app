@@ -17,6 +17,7 @@ import { HomeScreen } from "./home/HomeScreen.jsx";
 import { DataSheet } from "./shell/DataSheet.jsx";
 import { ImportCheck } from "./shell/ImportCheck.jsx";
 import { SettingsSheet } from "./shell/SettingsSheet.jsx";
+import { GrabSheet } from "./shell/GrabSheet.jsx";
 import { IconButton, PillButton, Segmented, TabBar, TabBarSpacer, TopBar } from "./ui/kit.jsx";
 import "./ui/ui.css";
 import "./shell/shell.css";
@@ -87,6 +88,19 @@ export default function App() {
   const [db, setDB]               = useState(null);
   const [tab, setTab]             = useState("home");
   const [tabTaps, setTabTaps]     = useState(0);         // a bottom-tab tap returns that tab to its top (11/16)
+  const [grab, setGrab]           = useState(null);      // Grab sheet: { kind, name, link } while open
+  const [libOpen, setLibOpen]     = useState(null);      // a Library page to open: { kind, id, n }
+  // An iOS Share Shortcut opens the app with ?name= and/or &link=: Grab opens prefilled.
+  useEffect(() => {
+    try {
+      const q = new URLSearchParams(window.location.search);
+      if (q.has("name") || q.has("link")) {
+        setGrab({ kind: "meal", name: q.get("name") || "", link: q.get("link") || "" });
+        window.history.replaceState(null, "", window.location.pathname + window.location.hash);
+      }
+    } catch { /* no URL params */ }
+  }, []);
+  const openLibraryPage = p => { setTab("library"); setLibraryView(p.kind === "item" ? "items" : "meals"); setLibOpen({ ...p, n: Date.now() }); };
   const [sheet, setSheet]         = useState(null);       // "data" | "settings" | null
   const [libraryView, setLibraryView] = useState("meals"); // Library: Meals | Items
   const [loading, setLoading]     = useState(true);
@@ -310,11 +324,12 @@ export default function App() {
           <TopBar title="Plan">{headerIcons}</TopBar>
           <PlanTab key={db.activePlan || "current"} db={db} persistDB={persistDB} onGoToImport={() => setSheet("data")} onGoToUnassigned={() => { setLibraryView("items"); setTab("library"); }} />
         </>}
-        {tab==="library" && <LibraryTab db={db} persistDB={persistDB} view={libraryView} setView={setLibraryView} headerIcons={headerIcons} resetKey={tabTaps} />}
+        {tab==="library" && <LibraryTab db={db} persistDB={persistDB} view={libraryView} setView={setLibraryView} headerIcons={headerIcons} resetKey={tabTaps} openRequest={libOpen} onGrab={init => setGrab(init)} />}
         <TabBarSpacer />
-        <TabBar tabs={TABS} active={tab} onSelect={id => { setTab(id); setTabTaps(n => n + 1); window.scrollTo(0, 0); }} />
+        <TabBar tabs={TABS} active={tab} onSelect={id => { setTab(id); setTabTaps(n => n + 1); window.scrollTo(0, 0); }} action={{ label: "Grab", onClick: () => setGrab({ kind: "meal" }) }} />
         {sheet === "data" && <DataSheet db={db} persistDB={persistDB} overdue={dataDot} onClose={() => setSheet(null)} />}
         {sheet === "settings" && <SettingsSheet db={db} persistDB={persistDB} onClose={() => setSheet(null)} />}
+        {grab && <GrabSheet db={db} persistDB={persistDB} init={grab} onClose={() => setGrab(null)} onOpenPage={openLibraryPage} />}
       </div>
     </ErrorBoundary>
   );

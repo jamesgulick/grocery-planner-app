@@ -89,3 +89,7 @@
 .lib-row-stacked.lib-row-nolabel { flex-direction: row; align-items: flex-start; gap: var(--space-3); }
 .lib-row-nolabel .lib-row-below { flex: 1; min-width: 0; }
 .lib-row-nolabel .lib-row-go { min-height: var(--body-line); }
+
+/* To finish › Send to AI: a 32px outlined pill on the label row */
+.ui-section-label.lib-sticky-row { display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); }
+.lib-ai-pill { min-height: var(--pill-height); padding: 0 var(--space-4); border-radius: var(--radius-pill); border: var(--pill-outline) solid var(--action); background: var(--surface); color: var(--action); font: inherit; font-size: var(--meta-size); font-weight: 700; cursor: pointer; }

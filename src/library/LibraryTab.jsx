@@ -5,11 +5,11 @@
 // Meals: To finish → New → Mains → Sides. Items: To finish → by place (Inventory order), by
 // buy type, or one list. To finish and New stay on top whatever the sort. A stable amber dot
 // on Meals / Items while that tab has anything to finish (none on the Library tab itself).
-// A search with no results offers Add "<text>": the new meal (New, Wanted soon on) or item
-// (no place yet) opens on its page.
+// A search with no results offers Add "<text>", which opens Grab with the name filled in.
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { todayLocalISO, toSentenceCase } from "../app/globals.js";
 import { Chip, Group, Row, SearchField, Segmented, SortMenu, TopBar } from "../ui/kit.jsx";
+import { sendToAI } from "../app/sendToAI.js";
 import { ItemPage } from "./ItemPage.jsx";
 import { MealPage } from "./MealPage.jsx";
 import {
@@ -22,7 +22,7 @@ const ITEM_FILTERS = [{ value: "always", label: "Always" }, { value: "staples", 
 // Pages open as a stack (11/16): the back link names the screen you came from and returns to
 // it at its scroll position ("‹ Corn on the cob" after Item › Used in › meal). Tapping the
 // Library tab (`resetKey` changes) always returns to the list's top.
-export function LibraryTab({ db, persistDB, view, setView, headerIcons, resetKey }) {
+export function LibraryTab({ db, persistDB, view, setView, headerIcons, resetKey, openRequest, onGrab }) {
   const today = todayLocalISO();
   const [stack, setStack] = useState([]);           // [{ kind: "meal" | "item", id, scroll }]
   const page = stack[stack.length - 1] || null;
@@ -45,6 +45,8 @@ export function LibraryTab({ db, persistDB, view, setView, headerIcons, resetKey
   // back to where you left it. Runs after the page's own scroll-to-top.
   useEffect(() => { window.scrollTo(0, restoreTo.current); }, [stack.length, page?.id]);
   useEffect(() => { if (resetKey) { scrollRef.current = 0; restoreTo.current = 0; setStack([]); } }, [resetKey]);
+  // A page opened from elsewhere (Grab › Add details) opens on top of the list.
+  useEffect(() => { if (openRequest) { restoreTo.current = 0; scrollRef.current = 0; setStack([{ kind: openRequest.kind, id: openRequest.id }]); } }, [openRequest]);
   const openPage = p => {
     const y = window.scrollY;   // read now: the next screen scrolls to its top before React runs the updater
     if (!stack.length) scrollRef.current = y;
@@ -65,19 +67,8 @@ export function LibraryTab({ db, persistDB, view, setView, headerIcons, resetKey
   const meals = db.meals || [], items = db.ingredients || [];
   const hist = mealHistoryIndex(db, today);
   const groups = view === "meals" ? mealGroups(meals, hist, s) : itemGroups(items, s);
-  const addNew = () => {
-    const name = toSentenceCase(s.q.trim());
-    const now = new Date().toISOString();
-    if (view === "meals") {
-      const id = "m" + Date.now() + Math.random().toString(36).slice(2, 5);
-      persistDB({ ...db, meals: [...meals, { id, createdAt: now, name, type: "dinner", rotation: "experimental", soon: true, leftovers: "none", preferences: [], notes: "", ingredients: [] }] });
-      set({ q: "" }); openPage({ kind: "meal", id });
-    } else {
-      const id = "i" + Date.now() + Math.random().toString(36).slice(2, 5);
-      persistDB({ ...db, ingredients: [...items, { id, createdAt: now, name, storageLocation: "Unassigned", tier: "specialty", defaultQuantity: "" }] });
-      set({ q: "" }); openPage({ kind: "item", id });
-    }
-  };
+  // A search with no results offers Add "<text>": the Grab sheet, with the name filled in.
+  const addNew = () => { onGrab?.({ kind: view === "meals" ? "meal" : "item", name: s.q.trim() }); set({ q: "" }); };
 
   return (
     <div className="lib">
@@ -100,7 +91,13 @@ export function LibraryTab({ db, persistDB, view, setView, headerIcons, resetKey
 
       {groups.map(g => (
         <section key={g.key} className="lib-list-group">
-          <div className="ui-section-label lib-sticky" style={{ top: headH }}>{`${g.label} · ${g.rows.length}`}</div>
+          <div className="ui-section-label lib-sticky lib-sticky-row" style={{ top: headH }}>
+            <span>{`${g.label} · ${g.rows.length}`}</span>
+            {/* To finish › Send to AI: fills in every meal in the group in one round trip (11/15). */}
+            {view === "meals" && g.key === "finish" && (
+              <button type="button" className="lib-ai-pill" onClick={() => sendToAI(db, persistDB, { purpose: "enrich", meals: g.rows.map(r => r.meal.id) })}>Send to AI</button>
+            )}
+          </div>
           <Group>
             {g.rows.map(r => view === "meals"
               ? <Row key={r.meal.id} title={r.meal.name} strong={!isSide(r.meal)} sub={r.line} problem={r.problem} onClick={() => openPage({ kind: "meal", id: r.meal.id })} />
