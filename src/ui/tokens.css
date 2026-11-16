@@ -97,6 +97,8 @@
   --disabled: #A1A1A6;                    /* a disabled text button (Done) */
   --toast-bg: #1C1C1E;
   --chip-height: 40px;
+  --chip-pad-tight: 10px;                 /* filter chips on one line beside the sort button */
+  --chip-gap-tight: 6px;
   --check: 24px;                          /* square check box */
   --radius-check: 6px;
   --menu-w: 200px;                        /* sort menu */

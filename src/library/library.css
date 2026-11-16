@@ -4,10 +4,14 @@
 .lib { padding: 0 var(--gutter); display: flex; flex-direction: column; gap: var(--space-5); }
 .lib-head { position: sticky; top: var(--safe-top); z-index: 50; margin: 0 calc(-1 * var(--gutter)); padding: 0 var(--gutter) var(--space-1); background: var(--bg); display: flex; flex-direction: column; gap: var(--space-2); }
 .lib-head .ui-topbar { position: static; margin: 0 calc(-1 * var(--gutter)); }
-.lib-filters { display: flex; align-items: center; gap: var(--space-2); }
-.lib-chips { flex: 1; min-width: 0; flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; }
+/* The filter row never wraps (11/16): chips stay on one line (scrolling sideways if a narrow
+   phone needs it) and the sort button stays at the top of the row. */
+.lib-filters { display: flex; align-items: flex-start; gap: var(--space-2); }
+.ui-chips.lib-chips { flex: 1; min-width: 0; min-height: var(--touch); align-items: center; flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; }
 .lib-chips::-webkit-scrollbar { display: none; }
-.lib-chips .ui-chip { min-height: var(--pill-height); flex: none; }
+.ui-chips.lib-chips { gap: var(--chip-gap-tight); }
+.lib-chips .ui-chip { min-height: var(--pill-height); flex: none; padding: 0 var(--chip-pad-tight); font-size: var(--meta-size); white-space: nowrap; }
+.lib-filters .ui-sort-button { gap: var(--space-1); font-size: var(--meta-size); padding: 0; }
 /* Sticky headings (11/16): 24 above the heading's text (.lib gap), 12 from its text box to its card. */
 .lib-list-group { display: flex; flex-direction: column; gap: var(--space-3); }
 .ui-section-label.lib-sticky { position: sticky; z-index: 40; background: var(--bg); padding: var(--space-2) 0; margin: calc(-1 * var(--space-2)) 0; }
