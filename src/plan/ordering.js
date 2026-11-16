@@ -17,7 +17,8 @@ export const isRelevant = (ing, st) =>
 export const isOrdering = (ing, st) => {
   if (!isRelevant(ing, st)) return false;
   const skipped = st.checkedIds.includes(ing.id);
-  if (ing.tier === "staple") return st.stapleFlags[ing.id] === true && !skipped;
+  // A staple a planned meal needs starts as buying; unchecking it is an explicit no (decided 11/16).
+  if (ing.tier === "staple") return (st.stapleFlags[ing.id] === true || (!!st.mealIngIds?.has(ing.id) && st.stapleFlags[ing.id] !== false)) && !skipped;
   return !skipped;
 };
 

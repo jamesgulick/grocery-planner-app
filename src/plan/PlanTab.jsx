@@ -107,12 +107,12 @@ function PlanTab({ db, persistDB, onGoToImport, onGoToUnassigned }) {
     const mealNeeds = meals.some(m => planned.includes(m.name) && (m.ingredients || []).includes(id));
     const skipped = checkedIds.includes(id);
     const wasOn = ing.tier === "always" ? !skipped
-      : ing.tier === "staple" ? !!stapleFlags[id] && !skipped
+      : ing.tier === "staple" ? (stapleFlags[id] === true || (mealNeeds && stapleFlags[id] !== false)) && !skipped
       : (mealNeeds || keptIds.includes(id)) && !skipped;
     let nChecked = checkedIds.filter(x => x !== id), nFlags = { ...stapleFlags }, nKept = keptIds.filter(x => x !== id);
     delete nFlags[id];
     if (patch.tier === "always" && !wasOn) nChecked.push(id);
-    if (patch.tier === "staple" && wasOn) nFlags[id] = true;
+    if (patch.tier === "staple") { if (wasOn) nFlags[id] = true; else if (mealNeeds) nFlags[id] = false; }
     if (patch.tier === "specialty") {
       if (wasOn && !mealNeeds) nKept.push(id);
       if (!wasOn && mealNeeds) nChecked.push(id);
