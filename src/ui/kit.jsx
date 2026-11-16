@@ -14,6 +14,11 @@ const PATHS = {
   print:    <><path d="M6 9V3h12v6" /><rect x="4" y="9" width="16" height="8" rx="2" /><path d="M7 17h10v4H7z" /></>,
   chevron:  <path d="M9 6l6 6-6 6" />,
   back:     <path d="M15 6l-6 6 6 6" />,
+  info:     <><circle cx="12" cy="12" r="9" /><path d="M12 11v5" /><path d="M12 7.5v.5" /></>,
+  pencil:   <><path d="M4 20l4-1 11-11-3-3L5 16z" /><path d="M14 6l3 3" /></>,
+  sort:     <><path d="M4 7h16" /><path d="M4 12h11" /><path d="M4 17h6" /></>,   /* three shortening lines = sort */
+  search:   <><circle cx="11" cy="11" r="6" /><path d="M20 20l-4.5-4.5" /></>,
+  close:    <><path d="M6 6l12 12" /><path d="M18 6L6 18" /></>,
   trash:    <><path d="M4 7h16" /><path d="M10 11v6M14 11v6" /><path d="M6 7l1 13a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1l1-13" /><path d="M9 7V4h6v3" /></>,
 };
 
@@ -46,10 +51,10 @@ export const RowChevron = ({ top }) => (
 );
 
 // `dim`: a row that's past (an ended away stretch) reads in the muted colour.
-export function Row({ title, sub, value, onClick, trailing, dim, chevron = !!onClick }) {
+export function Row({ title, sub, value, onClick, trailing, dim, strong, problem, chevron = !!onClick }) {
   const body = (
     <>
-      <span className="ui-row-main"><span>{title}</span>{sub && <span className="ui-meta">{sub}</span>}</span>
+      <span className="ui-row-main"><span className={strong ? "ui-strong" : undefined}>{title}</span>{sub && <span className={problem ? "ui-meta ui-problem" : "ui-meta"}>{sub}</span>}</span>
       {value != null && <span className="ui-row-value">{value}</span>}
       {trailing}
       {chevron && <RowChevron top={!!sub} />}
@@ -69,9 +74,61 @@ export const BlockButton = ({ children, onClick }) => <button type="button" clas
 // Full-width outlined button: the second action (three-button rule, 11/15).
 export const OutlineButton = ({ children, onClick }) => <button type="button" className="ui-block-button ui-block-outline" onClick={onClick}>{children}</button>;
 // Deleting a whole record: the one place red is used (destructive #B42318).
-export const DeleteButton = ({ children, onClick }) => (
-  <button type="button" className="ui-block-button ui-block-delete" onClick={onClick}><Icon name="trash" size={20} />{children}</button>
+// `filled`: the speed bump's own Delete (filled red); the page's button is outlined.
+export const DeleteButton = ({ children, onClick, filled }) => (
+  <button type="button" className={filled ? "ui-block-button ui-block-delete ui-block-delete-filled" : "ui-block-button ui-block-delete"} onClick={onClick}>{!filled && <Icon name="trash" size={20} />}{children}</button>
 );
+
+// ── ⓘ: opens a short sheet explaining a field (one icon, one meaning) ────────────
+export const InfoButton = ({ label, onClick }) => (
+  <button type="button" className="ui-info" aria-label={"About " + label} onClick={onClick}><Icon name="info" size={18} /></button>
+);
+// A section label with an optional ⓘ, aligned with the card edge.
+export const FieldLabel = ({ children, onInfo, info }) => (
+  <div className="ui-section-label ui-field-label">{children}{onInfo && <InfoButton label={info || "this"} onClick={onInfo} />}</div>
+);
+
+// ── Check box (square; the move sheet's) and a row built on it ─────────────────
+export const CheckBox = ({ on }) => <span className="ui-checkbox" aria-hidden="true" data-on={on ? "1" : "0"}>{on && "✓"}</span>;
+export const CheckRow = ({ on, onClick, children, sub, strong }) => (
+  <button type="button" role="checkbox" aria-checked={!!on} className="ui-row ui-check-row" onClick={onClick}>
+    <CheckBox on={on} />
+    <span className="ui-row-main"><span className={strong ? "ui-strong" : undefined}>{children}</span>{sub && <span className="ui-meta">{sub}</span>}</span>
+  </button>
+);
+
+// ── Search field: 44 tall, border included ────────────────────────────────────
+export const SearchField = ({ value, onChange, placeholder }) => (
+  <label className="ui-search">
+    <Icon name="search" size={18} />
+    <input type="search" value={value} placeholder={placeholder} aria-label={placeholder} onChange={e => onChange(e.target.value)} />
+    {value && <button type="button" className="ui-search-clear" aria-label="Clear" onClick={() => onChange("")}><Icon name="close" size={16} /></button>}
+  </label>
+);
+
+// ── Sort button: shows the current order; opens a short menu with a check ───────
+export function SortMenu({ options, value, onChange }) {
+  const [open, setOpen] = useState(false);
+  const cur = options.find(o => o.value === value) || options[0];
+  return (
+    <div className="ui-sort">
+      <button type="button" className="ui-sort-button" aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen(o => !o)}>
+        <Icon name="sort" size={18} />{cur.label}
+      </button>
+      {open && <>
+        <div className="ui-sort-scrim" onClick={() => setOpen(false)} />
+        <div className="ui-sort-menu" role="menu">
+          {options.map(o => (
+            <button key={o.value} type="button" role="menuitemradio" aria-checked={o.value === value} className="ui-sort-item"
+              onClick={() => { onChange(o.value); setOpen(false); }}>
+              <span>{o.label}</span>{o.value === value && <span className="shell-check" aria-hidden="true">✓</span>}
+            </button>
+          ))}
+        </div>
+      </>}
+    </div>
+  );
+}
 
 // ── Chips: multi-select tags and people (on = pale green + ✓, off = white outline) ──
 export const Chip = ({ on, onClick, children }) => (
@@ -80,7 +137,7 @@ export const Chip = ({ on, onClick, children }) => (
 
 // ── A labelled field in a typed sheet ────────────────────────────────────────
 export const Field = ({ label, children }) => (
-  <div className="ui-field"><div className="ui-section-label">{label}</div>{children}</div>
+  <div className="ui-field">{label && <div className="ui-section-label">{label}</div>}{children}</div>
 );
 
 // ── Toast: one line, bottom of the screen, gone after a moment ───────────────
@@ -102,7 +159,7 @@ export const Switch = ({ checked, onChange, label }) => (
 // ── Segmented choice ─────────────────────────────────────────────────────────
 export const Segmented = ({ options, value, onChange, label }) => (
   <div className="ui-seg" role="group" aria-label={label}>
-    {options.map(o => <button key={o.value} type="button" aria-pressed={value === o.value} onClick={() => onChange(o.value)}>{o.label}</button>)}
+    {options.map(o => <button key={o.value} type="button" aria-pressed={value === o.value} onClick={() => onChange(o.value)}>{o.label}{o.dot && <span className="ui-seg-dot" aria-label="Something to finish" />}</button>)}
   </div>
 );
 
@@ -111,7 +168,8 @@ export const Segmented = ({ options, value, onChange, label }) => (
 // green "‹ Settings" line above the title instead (board "Settings, reviewed").
 // `onCancel`: a typed sheet (Cancel · Done); `doneDisabled` greys Done out.
 // `sub` is a line under the title; `footer` is pinned under the scrolling body (a primary action).
-export function Sheet({ title, sub, onClose, onBack, backLabel, onCancel, onDone, doneDisabled, doneLabel = "Done", footer, children }) {
+// `onInfo`: an ⓘ after the title, for a sheet that is one field (Who eats it, How often).
+export function Sheet({ title, sub, onClose, onBack, backLabel, onCancel, onDone, doneDisabled, doneLabel = "Done", footer, onInfo, children }) {
   const [drag, setDrag] = useState(0);
   const start = useRef(null);
   useEffect(() => {
@@ -133,6 +191,7 @@ export function Sheet({ title, sub, onClose, onBack, backLabel, onCancel, onDone
           <div className="ui-sheet-header">
             {onBack && !backLabel && <span className="ui-sheet-back"><IconButton icon="back" label="Back" onClick={onBack} /></span>}
             {sub ? <div className="ui-sheet-titles"><h2 className="ui-heading">{title}</h2><span className="ui-meta">{sub}</span></div>
+              : onInfo ? <div className="ui-sheet-titles ui-sheet-title-info"><h2 className="ui-heading">{title}</h2><InfoButton label={title} onClick={onInfo} /></div>
               : <h2 className="ui-heading">{title}</h2>}
             {onCancel && <button type="button" className="ui-sheet-done ui-sheet-cancel" onClick={onCancel}>Cancel</button>}
             <button type="button" className="ui-sheet-done" disabled={doneDisabled} onClick={onDone || onClose}>{doneLabel}</button>

@@ -104,7 +104,39 @@ button.ui-row:active { background: var(--pressed); }
 
 /* ── Outlined and delete buttons (full width, 52) ─────────────────────── */
 .ui-block-outline { background: var(--surface); color: var(--action); border: var(--pill-outline) solid var(--action); }
+.ui-block-delete-filled { background: var(--destructive); color: var(--on-action); }
+.ui-sheet-title-info { flex-direction: row; align-items: center; gap: var(--space-1); }
+.ui-sheet-header .ui-sheet-title-info .ui-heading { flex: none; }
 .ui-block-delete { background: var(--surface); color: var(--destructive); border: var(--pill-outline) solid var(--destructive); display: flex; align-items: center; justify-content: center; gap: var(--space-2); }
+
+/* ── ⓘ, field labels ──────────────────────────────────────────────────── */
+.ui-field-label { display: flex; align-items: center; gap: var(--space-1); }
+.ui-info { display: inline-flex; align-items: center; justify-content: center; width: var(--touch-compact); height: var(--touch-compact); margin: calc(-1 * var(--space-2)) 0; padding: 0; border: 0; background: none; color: var(--text-muted); cursor: pointer; }
+.ui-strong { font-weight: 600; }
+
+/* ── Check box + check row ────────────────────────────────────────────── */
+.ui-checkbox { flex: none; width: var(--check); height: var(--check); box-sizing: border-box; border-radius: var(--radius-check); border: 1.5px solid var(--control-border); display: inline-flex; align-items: center; justify-content: center; font-size: var(--meta-size); font-weight: 700; color: var(--on-action); background: var(--surface); }
+.ui-checkbox[data-on="1"] { background: var(--action); border-color: var(--action); }
+.ui-check-row { gap: var(--space-3); }
+.ui-check-row + .ui-check-row::before { left: calc(var(--space-4) + var(--check) + var(--space-3)); }
+
+/* ── Search field ─────────────────────────────────────────────────────── */
+.ui-search { display: flex; align-items: center; gap: var(--space-2); height: var(--touch); box-sizing: border-box; padding: 0 var(--space-3); border-radius: var(--radius-control); border: 1px solid var(--divider); background: var(--surface); color: var(--text-muted); }
+.ui-search input { flex: 1; min-width: 0; border: 0; outline: none; background: none; font: inherit; font-size: var(--body-size); color: var(--text); -webkit-appearance: none; appearance: none; }
+.ui-search input::-webkit-search-cancel-button { display: none; }
+.ui-search:focus-within { outline: 2px solid var(--action); outline-offset: 1px; }
+.ui-search-clear { display: inline-flex; border: 0; background: none; color: var(--text-muted); padding: var(--space-1); cursor: pointer; }
+
+/* ── Sort button + menu ───────────────────────────────────────────────── */
+.ui-sort { position: relative; flex: none; }
+.ui-sort-button { display: inline-flex; align-items: center; gap: var(--space-2); min-height: var(--touch); padding: 0 var(--space-1); border: 0; background: none; font: inherit; font-size: var(--body-size); font-weight: 600; color: var(--action); cursor: pointer; }
+.ui-sort-scrim { position: fixed; inset: 0; z-index: 60; }
+.ui-sort-menu { position: absolute; right: 0; top: 100%; z-index: 61; min-width: var(--menu-w); background: var(--surface); border-radius: var(--radius-control); box-shadow: 0 6px 24px var(--seg-shadow); display: flex; flex-direction: column; overflow: hidden; }
+.ui-sort-item { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); min-height: var(--touch); padding: 0 var(--space-4); border: 0; background: none; font: inherit; font-size: var(--body-size); color: var(--text); text-align: left; cursor: pointer; }
+.ui-sort-item + .ui-sort-item { border-top: 1px solid var(--divider); }
+
+/* ── Segmented: a to-finish dot on an option ──────────────────────────── */
+.ui-seg-dot { display: inline-block; width: var(--dot); height: var(--dot); border-radius: 50%; background: var(--problem); margin-left: var(--space-2); vertical-align: middle; }
 
 /* ── Chips ────────────────────────────────────────────────────────────── */
 .ui-chips { display: flex; flex-wrap: wrap; gap: var(--space-2); }

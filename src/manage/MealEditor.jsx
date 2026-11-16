@@ -493,4 +493,4 @@ function MealEditor({ meal, allMeals, ingredients, onSave, onCancel, onDelete, o
   );
 }
 
-export { MealEditor, mealMatches };
+export { FACET_VOCAB, MealEditor, mealMatches, PasteReview, RecipePasteRow, recipeRowFrom };

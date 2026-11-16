@@ -22,7 +22,7 @@ run("lint", "npx", ["eslint", "src"]);
 // the new UI layer (src/ui, src/home, src/shell) that may hold a raw colour.
 console.log("\n▶ ui stylesheets use tokens");
 {
-  const dirs = ["src/ui", "src/home", "src/shell"].filter(d => existsSync(d));
+  const dirs = ["src/ui", "src/home", "src/shell", "src/library"].filter(d => existsSync(d));
   const bad = dirs.flatMap(d => readdirSync(d).filter(f => f.endsWith(".css") && !(d === "src/ui" && f === "tokens.css")).map(f => `${d}/${f}`))
     .flatMap(p => readFileSync(p, "utf8").split(/\r?\n/)
       .map((l, i) => /#[0-9a-fA-F]{3,8}\b/.test(l.replace(/\/\*.*?\*\//g, "")) ? `  ${p}:${i + 1}: ${l.trim()}` : null).filter(Boolean));

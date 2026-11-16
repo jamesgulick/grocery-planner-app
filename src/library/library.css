@@ -1,0 +1,58 @@
+/* Library: lists, meal and item pages (phase 2 milestone 3). Tokens only. */
+
+/* ── Lists ────────────────────────────────────────────────────────────── */
+.lib { padding: 0 var(--gutter); display: flex; flex-direction: column; gap: var(--space-5); }
+.lib-head { position: sticky; top: var(--safe-top); z-index: 50; margin: 0 calc(-1 * var(--gutter)); padding: var(--space-2) var(--gutter) var(--space-1); background: var(--bg); display: flex; flex-direction: column; gap: var(--space-2); }
+.lib-head-top { display: flex; align-items: center; gap: var(--space-2); }
+.lib-toggle { flex: 1; min-width: 0; }
+.lib-filters { display: flex; align-items: center; gap: var(--space-2); }
+.lib-chips { flex: 1; min-width: 0; flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; }
+.lib-chips::-webkit-scrollbar { display: none; }
+.lib-chips .ui-chip { min-height: var(--pill-height); flex: none; }
+.lib-list-group { display: flex; flex-direction: column; gap: var(--space-2); }
+.lib-sticky { position: sticky; z-index: 40; background: var(--bg); padding: var(--space-2) 0; margin: calc(-1 * var(--space-2)) 0; }
+
+/* ── Pages ────────────────────────────────────────────────────────────── */
+.lib-page { padding: 0 var(--gutter) var(--space-5); display: flex; flex-direction: column; gap: var(--space-5); }
+.lib-pagebar { position: sticky; top: var(--safe-top); z-index: 50; height: var(--topbar-height); margin: 0 calc(-1 * var(--gutter)); padding: 0 var(--space-2); display: flex; align-items: center; background: var(--bg); border-bottom: 1px solid transparent; }
+.lib-back, .lib-bar-done { font: inherit; font-size: var(--body-size); color: var(--action); background: none; border: 0; min-height: var(--touch); padding: 0 var(--space-2); cursor: pointer; flex: none; }
+.lib-bar-done { font-weight: 700; margin-left: auto; }
+.lib-bar-done:disabled { color: var(--disabled); cursor: default; }
+.lib-pagebar-title { position: absolute; left: 50%; transform: translateX(-50%); max-width: 55%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: var(--title-size); font-weight: var(--title-weight); opacity: 0; transition: opacity 0.15s; pointer-events: none; }
+.lib-pagebar-title[data-show="1"] { opacity: 1; }
+.lib-pagehead { display: flex; flex-direction: column; gap: var(--space-half); margin-top: calc(-1 * var(--space-3)); }
+.lib-title-row { display: flex; align-items: center; gap: var(--space-2); }
+.lib-title { margin: 0; min-width: 0; overflow-wrap: anywhere; }
+.lib-pencil { flex: none; display: inline-flex; align-items: center; justify-content: center; width: var(--touch); height: var(--touch); border: 0; background: none; color: var(--action); cursor: pointer; }
+.lib-sub { margin: 0; }
+.lib-rename input { font-size: var(--title-size); font-weight: var(--title-weight); }
+
+.lib-group { display: flex; flex-direction: column; gap: var(--space-4); }
+.lib-group-head { position: sticky; top: calc(var(--safe-top) + var(--topbar-height)); z-index: 40; margin: 0 calc(-1 * var(--gutter)); padding: var(--space-2) var(--gutter); background: var(--bg); font-size: var(--heading-size); line-height: var(--heading-line); font-weight: var(--heading-weight); border-top: 1px solid var(--divider); }
+.lib-section { display: flex; flex-direction: column; gap: var(--space-2); }
+.lib-card { display: flex; align-items: center; gap: var(--space-3); width: 100%; box-sizing: border-box; min-height: var(--row-height); padding: var(--space-3) var(--space-4); border: 0; border-radius: var(--radius-group); background: var(--surface); font: inherit; font-size: var(--body-size); line-height: var(--body-line); color: var(--text); text-align: left; cursor: pointer; }
+.lib-card:active { background: var(--pressed); }
+.lib-card-static { flex-direction: column; align-items: stretch; cursor: default; padding: var(--space-2); }
+.lib-card-static:active { background: var(--surface); }
+.lib-card-body { flex: 1; min-width: 0; }
+.lib-card-chev { flex: none; width: var(--chev-w); height: var(--chev-h); stroke-width: var(--chev-stroke); color: var(--control-border); }
+.lib-card-problem .lib-card-body { color: var(--problem); font-weight: 600; }
+.lib-notset { color: var(--text-muted); }
+.lib-more { color: var(--text-muted); }
+.lib-notes { white-space: pre-wrap; }
+.lib-rot-line { padding: var(--space-2) var(--space-2) 0; }
+.lib-tags { display: inline-flex; flex-wrap: wrap; gap: var(--space-1); }
+.lib-tag { display: inline-flex; align-items: center; min-height: var(--pill-height); padding: 0 var(--space-3); border-radius: var(--radius-pill); border: 1px solid var(--text); font-size: var(--meta-size); font-weight: 600; }
+.lib-switch-title { display: inline-flex; align-items: center; gap: var(--space-1); }
+.lib-with-clocks { display: inline-flex; align-items: center; gap: var(--space-2); }
+.lib-clocks { display: inline-flex; gap: var(--space-half); }
+.lib-clocks span { width: var(--clock); height: var(--clock); border-radius: 50%; background: var(--text); }
+.lib-clocks span[data-on="0"] { background: var(--divider); }
+.lib-paste-link { align-self: flex-start; }
+.lib-group-flat { gap: var(--space-5); }
+
+/* ── Sheets ───────────────────────────────────────────────────────────── */
+.lib-info p { margin: 0 0 var(--space-3); font-size: var(--body-size); line-height: var(--body-line); }
+.lib-person-name { font-size: var(--body-size); font-weight: 600; }
+.lib-cant-undo { font-size: var(--meta-size); color: var(--text-muted); }
+.lib-open-link { align-self: flex-start; text-decoration: none; display: inline-flex; align-items: center; }

@@ -10,8 +10,8 @@ import { DEFAULT_DB } from "./app/seed.js";
 import { clearRecovery, getStorageHealth, loadDB, loadRecovery, saveDB, saveRecovery, seedPreviewFromLive } from "./app/storage.js";
 import { C, S } from "./app/styles.js";
 import { formatAsOf } from "./manage/ManageConfig.jsx";
-import { ManageItems } from "./manage/ManageItems.jsx";
-import { ManageMeals } from "./manage/ManageMeals.jsx";
+import { LibraryTab } from "./library/LibraryTab.jsx";
+import "./library/library.css";
 import { PlanTab } from "./plan/PlanTab.jsx";
 import { HomeScreen } from "./home/HomeScreen.jsx";
 import { DataSheet } from "./shell/DataSheet.jsx";
@@ -95,7 +95,6 @@ export default function App() {
   const [sessionError, setSessionError]         = useState("");
   const [saveOk, setSaveOk]                     = useState(true);
   const [recovery, setRecovery]                 = useState(null); // { savedAt, db } awaiting restore
-  const [manageItemsLoc, setManageItemsLoc]     = useState(undefined); // Welcome's "need location" line lands Items on Unassigned; any tab-bar tap clears it
   const dbRef = useRef(null);
 
   useEffect(() => {
@@ -308,17 +307,11 @@ export default function App() {
         {tab==="home" && <HomeScreen db={db} dataDot={dataDot} onOpenData={() => setSheet("data")} onOpenSettings={() => setSheet("settings")} onOpenPlan={openPlan} />}
         {tab==="plan" && <>
           <TopBar title="Plan">{headerIcons}</TopBar>
-          <PlanTab key={db.activePlan || "current"} db={db} persistDB={persistDB} onGoToImport={() => setSheet("data")} onGoToUnassigned={() => { setLibraryView("items"); setManageItemsLoc("Unassigned"); setTab("library"); }} />
+          <PlanTab key={db.activePlan || "current"} db={db} persistDB={persistDB} onGoToImport={() => setSheet("data")} onGoToUnassigned={() => { setLibraryView("items"); setTab("library"); }} />
         </>}
-        {tab==="library" && <>
-          <TopBar title="Library">{headerIcons}</TopBar>
-          <div className="shell-library-switch">
-            <Segmented label="Library" value={libraryView} onChange={v => { setManageItemsLoc(undefined); setLibraryView(v); }} options={[{ value:"meals", label:"Meals" }, { value:"items", label:"Items" }]} />
-          </div>
-          {libraryView === "meals" ? <ManageMeals db={db} persistDB={persistDB} /> : <ManageItems key={manageItemsLoc || "all"} db={db} persistDB={persistDB} initialLoc={manageItemsLoc} />}
-        </>}
+        {tab==="library" && <LibraryTab db={db} persistDB={persistDB} view={libraryView} setView={setLibraryView} headerIcons={headerIcons} />}
         <TabBarSpacer />
-        <TabBar tabs={TABS} active={tab} onSelect={id => { setManageItemsLoc(undefined); setTab(id); }} />
+        <TabBar tabs={TABS} active={tab} onSelect={setTab} />
         {sheet === "data" && <DataSheet db={db} persistDB={persistDB} overdue={dataDot} onClose={() => setSheet(null)} />}
         {sheet === "settings" && <SettingsSheet db={db} persistDB={persistDB} onClose={() => setSheet(null)} />}
       </div>
