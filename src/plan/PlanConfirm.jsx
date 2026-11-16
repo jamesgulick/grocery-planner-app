@@ -5,16 +5,15 @@ import { getActivePlan, writeActivePlan } from "../app/plans.js";
 import { C, S, TIER_COLORS } from "../app/styles.js";
 import { Check } from "../components/common.jsx";
 import { ItemEditPanel } from "../components/ItemEditPanel.jsx";
+import { Icon } from "../ui/kit.jsx";
 import { isExplicitNo, isOrdering, isRelevant } from "./ordering.js";
 
 function PlanConfirm({ mode = "confirm", onUpdateItem, keptIds = [], checkedIds, setOrdering, addedOff = [], setAddedOff, addedItems, setAddedItems, stapleFlags, quantities = {}, setQuantities, mealPlan, meals, ingredients, onNext, onFinish, db, persistDB, days, daysFull }) {
   const [newItem, setNewItem]   = useState("");
   const [view, setView]         = useState("meal");
   const [copied, setCopied]     = useState(false);
-  const [copiedRows, setCopiedRows] = useState(() => new Set()); // Order rows copied this visit
-  const [manualBatch, setManualBatch] = useState(null); // { idx, text } when clipboard fails
+  const [manualBatch, setManualBatch] = useState(null); // { text } when clipboard fails
   const [lastDropped, setLastDropped] = useState(null); // shared item just dropped from the cart check (Undo)
-  const [sharedSparkyCopied, setSharedSparkyCopied] = useState(false);
   const [editId, setEditId]     = useState(null);        // item whose "⋯ edit" panel is open
 
   const activePlan         = getActivePlan(db);
@@ -169,18 +168,37 @@ function PlanConfirm({ mode = "confirm", onUpdateItem, keptIds = [], checkedIds,
     return ok;
   };
 
-  // Order rows: Intro, then each batch. Copied rows dim with ✓; the first uncopied one is next up.
+  // Sending (decided 11/16): every Sparky button opens the share sheet with its text, called
+  // straight from the tap. A row is sent only when the share completes (a cancel leaves it next
+  // up); with no share sheet, or a share error other than a cancel, it copies and counts as sent.
+  // What was sent is kept on the plan (orderSent: one key per text) so the ✓ survives the
+  // Confirm ↔ Order mounts and drops off by itself when a batch's text changes.
+  const textKey  = t => { let h = 5381; for (let i = 0; i < t.length; i++) h = ((h << 5) + h + t.charCodeAt(i)) | 0; return (h >>> 0).toString(36); };
+  const orderSent = activePlan?.orderSent || [];
+  const isSent    = text => orderSent.includes(textKey(text));
+  const markSent  = text => {
+    const plan = getActivePlan(db);
+    const key  = textKey(text);
+    if (!plan || (plan.orderSent || []).includes(key)) return;
+    persistDB(writeActivePlan(db, { ...plan, orderSent: [...(plan.orderSent || []), key] }), { background: true });
+  };
+  const sendText = async text => {
+    if (navigator.share) {
+      try { await navigator.share({ text }); markSent(text); setManualBatch(null); return; }
+      catch (e) { if (e?.name === "AbortError") return; }
+    }
+    const ok = copyText(text);
+    markSent(text);
+    // If neither copy path worked, surface the text so it can be selected by hand.
+    setManualBatch(ok ? null : { text });
+  };
+
+  // Order rows: Intro, then each batch. Sent rows dim with ✓; the first unsent one is next up.
   const orderRows = [
     { key:"intro", label:"Intro", text:introText },
     ...batches.map((b, i) => ({ key:"b" + i, label:`Batch ${i + 1}`, meta:`${b.length} items`, text:framedBatchText(i) })),
   ];
-  const nextRow = orderRows.find(r => !copiedRows.has(r.key))?.key;
-  const copyRow = row => {
-    const ok = copyText(row.text);
-    setCopiedRows(prev => new Set(prev).add(row.key));
-    // If neither copy path worked, surface the text so it can be selected by hand.
-    setManualBatch(ok ? null : { idx:row.key, text:row.text });
-  };
+  const nextRow = orderRows.find(r => !isSent(r.text))?.key;
   // Shared items: × drops one from the cart check (dismissedShared), with Undo.
   const dropShared = item => { toggleDismissShared(item.id); setLastDropped(item); };
   const undoDrop   = () => { if (lastDropped) toggleDismissShared(lastDropped.id); setLastDropped(null); };
@@ -353,16 +371,16 @@ function PlanConfirm({ mode = "confirm", onUpdateItem, keptIds = [], checkedIds,
       </>}
 
       {mode === "sparky" && <>
-      {/* ORDER (canvas 11/12): Intro + Batch rows in one list. Tap a row to copy it; copied rows
+      {/* ORDER (canvas 11/12): Intro + Batch rows in one list. Tap a row to share it (11/16); sent rows
           dim with ✓; the next one up is highlighted. The careful-matching rules are always in the
           intro (no toggle). No helper copy. */}
       <div style={{ ...S.card, padding:"0 16px" }}>
-        <div style={{ ...S.sectionLabel, padding:"12px 0 6px", marginBottom:0 }}>Copy for Sparky</div>
+        <div style={{ ...S.sectionLabel, padding:"12px 0 6px", marginBottom:0 }}>Send to Sparky</div>
         {orderRows.map((row, k) => {
-          const done   = copiedRows.has(row.key);
+          const done   = isSent(row.text);
           const isNext = row.key === nextRow;
           return (
-            <button key={row.key} type="button" onClick={() => copyRow(row)}
+            <button key={row.key} type="button" aria-label={`Share ${row.label}`} onClick={() => sendText(row.text)}
               style={{ display:"flex", alignItems:"center", gap:10, width:"100%", minHeight:52, padding:"8px 0", background:"none", border:"none", borderTop: k ? `1px solid ${C.border}` : "none", cursor:"pointer", textAlign:"left", opacity: done && !isNext ? 0.45 : 1 }}>
               <span style={{ flex:1, minWidth:0 }}>
                 <span style={{ display:"block", fontSize:15, fontWeight:600, color:C.text }}>{row.label}</span>
@@ -371,8 +389,8 @@ function PlanConfirm({ mode = "confirm", onUpdateItem, keptIds = [], checkedIds,
               {done
                 ? <span style={{ fontSize:13, fontWeight:700, color:C.primary }}>✓</span>
                 : isNext
-                  ? <span style={{ fontSize:13, fontWeight:700, color:"#fff", background:C.primary, borderRadius:18, padding:"8px 14px" }}>Copy</span>
-                  : <span style={{ fontSize:13, fontWeight:600, color:C.primary }}>Copy</span>}
+                  ? <span style={{ display:"inline-flex", alignItems:"center", justifyContent:"center", height:32, minWidth:48, borderRadius:16, color:"#fff", background:C.primary }}><Icon name="share" size={18} /></span>
+                  : <span style={{ display:"inline-flex", alignItems:"center", justifyContent:"center", height:32, minWidth:48, color:C.primary }}><Icon name="share" size={18} /></span>}
             </button>
           );
         })}
@@ -398,8 +416,8 @@ function PlanConfirm({ mode = "confirm", onUpdateItem, keptIds = [], checkedIds,
           )}
           {activeShared.length > 0 && (
             <div style={{ padding:"8px 0 12px" }}>
-              <button type="button" style={{ ...S.btn, ...S.btnP, marginBottom:0 }} onClick={() => { const ok = copyText(sharedSparkyText); setSharedSparkyCopied(true); setTimeout(()=>setSharedSparkyCopied(false),2000); if(!ok) setManualBatch({ idx:-1, text:sharedSparkyText }); }}>
-                {sharedSparkyCopied ? "Copied" : "Copy cart check"}
+              <button type="button" style={{ ...S.btn, ...(isSent(sharedSparkyText) ? S.btnS : S.btnP), marginBottom:0, display:"flex", alignItems:"center", justifyContent:"center", gap:8 }} onClick={() => sendText(sharedSparkyText)}>
+                {isSent(sharedSparkyText) ? "✓" : <Icon name="share" size={18} />} Cart check
               </button>
             </div>
           )}
