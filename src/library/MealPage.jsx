@@ -184,7 +184,7 @@ export function MealPage({ db, persistDB, mealId, onBack }) {
       <section className="lib-group">
         <h2 className="lib-group-head">The plate</h2>
         <div className="lib-section">
-          <FieldLabel>Type</FieldLabel>
+          <FieldLabel info="Type" onInfo={() => setInfo("type")}>Type</FieldLabel>
           <Segmented label="Type" value={meal.type || "dinner"} onChange={v => save(db.meals.map(m => (m.id === meal.id ? { ...m, type: v } : m)))} options={TYPE_OPTIONS} />
         </div>
         <SectionCard label="Style" info="style" onInfo={setInfo} onClick={() => setSheet("style")} problem={gaps.style}

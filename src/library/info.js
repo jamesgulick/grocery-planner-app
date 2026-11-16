@@ -5,6 +5,12 @@
 // Each entry is a list of [label, text] lines; a null label is a plain line.
 
 export const INFO = {
+  // Type: wording from the walkthrough (Decisions 11/16: "Type keeps its existing ⓘ").
+  type: { title: "Type", lines: [
+    ["Batch", "made ahead to cover several meals."],
+    ["Takeout", "nothing to cook or buy."],
+    ["Remix", "built from another meal's leftovers."],
+  ] },
   whoEats: { title: "Who eats it", lines: [
     ["Won't eat", "the planner never counts this meal as their dinner. It finds them something else that night (a side that can be someone's dinner, or leftovers), or tells you when it can't."],
     ["Likes", "nudges the meal forward on nights they're home."],
