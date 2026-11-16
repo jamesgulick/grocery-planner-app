@@ -1,6 +1,7 @@
-// Library (boards "Library lists", "Scrolling pattern"; Decisions 11/15). No title: the
-// Meals | Items toggle heads the page beside the header icons, then search, then the filter
-// chips and the sort button. These controls stay with the header; group labels stick.
+// Library (boards "Library lists", "Scrolling pattern"; Decisions 11/15–16). A title row,
+// "Library", with the data and gear icons on its right as on Home (11/16, reversing 'no
+// title'); then the Meals | Items toggle, search, and the filter chips with the sort button.
+// The whole header stays on scroll; group labels stick under it.
 // Meals: To finish → New → Mains → Sides. Items: To finish → by place (Inventory order), by
 // buy type, or one list. To finish and New stay on top whatever the sort. A stable amber dot
 // on Meals / Items while that tab has anything to finish (none on the Library tab itself).
@@ -8,7 +9,7 @@
 // (no place yet) opens on its page.
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { todayLocalISO, toSentenceCase } from "../app/globals.js";
-import { Chip, Group, Row, SearchField, Segmented, SortMenu } from "../ui/kit.jsx";
+import { Chip, Group, Row, SearchField, Segmented, SortMenu, TopBar } from "../ui/kit.jsx";
 import { ItemPage } from "./ItemPage.jsx";
 import { MealPage } from "./MealPage.jsx";
 import {
@@ -62,15 +63,11 @@ export function LibraryTab({ db, persistDB, view, setView, headerIcons }) {
   return (
     <div className="lib">
       <div className="lib-head" ref={headRef}>
-        <div className="lib-head-top">
-          <div className="lib-toggle">
-            <Segmented label="Library" value={view} onChange={setView} options={[
-              { value: "meals", label: "Meals", dot: mealsToFinish(meals, hist) },
-              { value: "items", label: "Items", dot: itemsToFinish(items) },
-            ]} />
-          </div>
-          <div className="ui-icons">{headerIcons}</div>
-        </div>
+        <TopBar title="Library">{headerIcons}</TopBar>
+        <Segmented label="Meals or items" value={view} onChange={setView} options={[
+          { value: "meals", label: "Meals", dot: mealsToFinish(meals, hist) },
+          { value: "items", label: "Items", dot: itemsToFinish(items) },
+        ]} />
         <SearchField value={s.q} onChange={q => set({ q })} placeholder={view === "meals" ? "Search meals" : "Search items"} />
         <div className="lib-filters">
           <div className="ui-chips lib-chips">

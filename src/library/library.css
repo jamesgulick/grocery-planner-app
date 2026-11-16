@@ -2,18 +2,18 @@
 
 /* ── Lists ────────────────────────────────────────────────────────────── */
 .lib { padding: 0 var(--gutter); display: flex; flex-direction: column; gap: var(--space-5); }
-.lib-head { position: sticky; top: var(--safe-top); z-index: 50; margin: 0 calc(-1 * var(--gutter)); padding: var(--space-2) var(--gutter) var(--space-1); background: var(--bg); display: flex; flex-direction: column; gap: var(--space-2); }
-.lib-head-top { display: flex; align-items: center; gap: var(--space-2); }
-.lib-toggle { flex: 1; min-width: 0; }
+.lib-head { position: sticky; top: var(--safe-top); z-index: 50; margin: 0 calc(-1 * var(--gutter)); padding: 0 var(--gutter) var(--space-1); background: var(--bg); display: flex; flex-direction: column; gap: var(--space-2); }
+.lib-head .ui-topbar { position: static; margin: 0 calc(-1 * var(--gutter)); }
 .lib-filters { display: flex; align-items: center; gap: var(--space-2); }
 .lib-chips { flex: 1; min-width: 0; flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; }
 .lib-chips::-webkit-scrollbar { display: none; }
 .lib-chips .ui-chip { min-height: var(--pill-height); flex: none; }
-.lib-list-group { display: flex; flex-direction: column; gap: var(--space-2); }
-.lib-sticky { position: sticky; z-index: 40; background: var(--bg); padding: var(--space-2) 0; margin: calc(-1 * var(--space-2)) 0; }
+/* Sticky headings (11/16): 24 above the heading's text (.lib gap), 12 from its text box to its card. */
+.lib-list-group { display: flex; flex-direction: column; gap: var(--space-3); }
+.ui-section-label.lib-sticky { position: sticky; z-index: 40; background: var(--bg); padding: var(--space-2) 0; margin: calc(-1 * var(--space-2)) 0; }
 
 /* ── Pages ────────────────────────────────────────────────────────────── */
-.lib-page { padding: 0 var(--gutter) var(--space-5); display: flex; flex-direction: column; gap: var(--space-5); }
+.lib-page { padding: 0 var(--gutter) var(--space-5); display: flex; flex-direction: column; gap: var(--space-3); }
 .lib-pagebar { position: sticky; top: var(--safe-top); z-index: 50; height: var(--topbar-height); margin: 0 calc(-1 * var(--gutter)); padding: 0 var(--space-2); display: flex; align-items: center; background: var(--bg); border-bottom: 1px solid transparent; }
 .lib-back, .lib-bar-done { font: inherit; font-size: var(--body-size); color: var(--action); background: none; border: 0; min-height: var(--touch); padding: 0 var(--space-2); cursor: pointer; flex: none; }
 .lib-bar-done { font-weight: 700; margin-left: auto; }
@@ -28,7 +28,9 @@
 .lib-rename input { font-size: var(--title-size); font-weight: var(--title-weight); }
 
 .lib-group { display: flex; flex-direction: column; gap: var(--space-4); }
-.lib-group-head { position: sticky; top: calc(var(--safe-top) + var(--topbar-height)); z-index: 40; margin: 0 calc(-1 * var(--gutter)); padding: var(--space-2) var(--gutter); background: var(--bg); font-size: var(--heading-size); line-height: var(--heading-line); font-weight: var(--heading-weight); border-top: 1px solid var(--divider); }
+/* 24 above the heading's text: the page's 12 gap + the divider + 11; 12 from its text box to
+   the first card: 8 padding + the group's 16 gap - 12. */
+.lib-group-head { position: sticky; top: calc(var(--safe-top) + var(--topbar-height)); z-index: 40; margin: 0 calc(-1 * var(--gutter)) calc(var(--space-3) - var(--space-2) - var(--space-4)); padding: calc(var(--space-3) - 1px) var(--gutter) var(--space-2); background: var(--bg); font-size: var(--heading-size); line-height: var(--heading-line); font-weight: var(--heading-weight); border-top: 1px solid var(--divider); }
 .lib-section { display: flex; flex-direction: column; gap: var(--space-2); }
 .lib-card { display: flex; align-items: center; gap: var(--space-3); width: 100%; box-sizing: border-box; min-height: var(--row-height); padding: var(--space-3) var(--space-4); border: 0; border-radius: var(--radius-group); background: var(--surface); font: inherit; font-size: var(--body-size); line-height: var(--body-line); color: var(--text); text-align: left; cursor: pointer; }
 .lib-card:active { background: var(--pressed); }
