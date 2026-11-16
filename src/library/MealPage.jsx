@@ -15,9 +15,9 @@ import { useEffect, useRef, useState } from "react";
 import { todayLocalISO } from "../app/globals.js";
 import { mealNameProblem, renameMeal } from "../mealRename.js";
 import { FACET_VOCAB } from "../manage/MealEditor.jsx";
-import { DeleteButton, FieldLabel, Group, Icon, Row, Segmented, Switch } from "../ui/kit.jsx";
+import { Clocks, DeleteButton, FieldLabel, Group, Icon, Row, Segmented, Switch } from "../ui/kit.jsx";
 import {
-  Clocks, DeleteSheet, HowOftenSheet, InfoSheet, IngredientsSheet, LeftoversSheet, PairsSheet,
+  DeleteSheet, HowOftenSheet, InfoSheet, IngredientsSheet, LeftoversSheet, PairsSheet,
   TagSheet, TextSheet, TimeCostSheet, WeatherSheet, WhoEatsSheet,
 } from "./LibrarySheets.jsx";
 import {

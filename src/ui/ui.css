@@ -138,6 +138,12 @@ button.ui-row:active { background: var(--pressed); }
 /* ── Segmented: a to-finish dot on an option ──────────────────────────── */
 .ui-seg-dot { display: inline-block; width: var(--dot); height: var(--dot); border-radius: 50%; background: var(--problem); margin-left: var(--space-2); vertical-align: middle; }
 
+/* ── Time clocks ──────────────────────────────────────────────────────── */
+.ui-clocks { flex: none; width: var(--clocks-w); height: var(--clocks-h); }
+.ui-clock-on { fill: currentColor; }
+.ui-clock-off { fill: var(--clock-off); }
+.ui-clock-hand { stroke: var(--surface); stroke-width: 1.2; stroke-linecap: round; fill: none; }
+
 /* ── Chips ────────────────────────────────────────────────────────────── */
 .ui-chips { display: flex; flex-wrap: wrap; gap: var(--space-2); }
 .ui-chip { font: inherit; font-size: var(--body-size); font-weight: 600; min-height: var(--chip-height); padding: 0 var(--space-4); border-radius: var(--radius-pill); border: 1px solid var(--divider); background: var(--surface); color: var(--text); display: inline-flex; align-items: center; gap: var(--space-2); cursor: pointer; }

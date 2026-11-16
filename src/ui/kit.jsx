@@ -130,6 +130,20 @@ export function SortMenu({ options, value, onChange }) {
   );
 }
 
+// ── Time clocks: three clock faces, n of them filled (Decisions 11/14; the same icon as
+// Week › Time, board "Plan, week: time"). Filled faces take the text colour; hands are cut
+// out in the surface colour; the rest are the pale "off" grey.
+export const Clocks = ({ n }) => (
+  <svg aria-hidden="true" className="ui-clocks" viewBox="0 0 34 10">
+    {[5, 17, 29].map((x, k) => (
+      <g key={x}>
+        <circle cx={x} cy="5" r="4.5" className={k < n ? "ui-clock-on" : "ui-clock-off"} />
+        <path d={`M${x} 5V2.4M${x} 5h2`} className="ui-clock-hand" />
+      </g>
+    ))}
+  </svg>
+);
+
 // ── Chips: multi-select tags and people (on = pale green + ✓, off = white outline) ──
 export const Chip = ({ on, onClick, children }) => (
   <button type="button" className="ui-chip" aria-pressed={!!on} onClick={onClick}>{on && <span aria-hidden="true">✓</span>}{children}</button>

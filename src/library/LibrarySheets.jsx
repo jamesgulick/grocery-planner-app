@@ -3,7 +3,7 @@
 // tapping again undoes it. Typed sheets (link, notes, usual amount) keep Cancel · Done.
 // ⓘ beside field labels opens the explanation sheet.
 import { useState } from "react";
-import { CheckRow, Chip, DeleteButton, Field, FieldLabel, Group, Row, SearchField, Segmented, Sheet, Switch } from "../ui/kit.jsx";
+import { CheckRow, Chip, Clocks, DeleteButton, Field, FieldLabel, Group, Row, SearchField, Segmented, Sheet, Switch } from "../ui/kit.jsx";
 import { INFO } from "./info.js";
 import {
   COST_OPTIONS, EFFORT_OPTIONS, FEEL_OPTIONS, PREF_OPTIONS, CADENCE_OPTIONS,
@@ -114,9 +114,6 @@ export function WeatherSheet({ meal, onField, onClose }) {
   );
 }
 
-export const Clocks = ({ n }) => (
-  <span className="lib-clocks" aria-hidden="true">{[1, 2, 3].map(k => <span key={k} data-on={k <= n ? "1" : "0"} />)}</span>
-);
 
 export function TimeCostSheet({ meal, onField, onClose }) {
   const [label, info] = useInfo();
@@ -124,7 +121,7 @@ export function TimeCostSheet({ meal, onField, onClose }) {
     <Sheet title="Time needed and cost" onClose={onClose}>
       <div className="ui-field">{label("Time needed", "timeNeeded")}
         <Segmented label="Time needed" value={meal.effort} onChange={v => onField("effort", v)}
-          options={EFFORT_OPTIONS.map(o => ({ value: o.value, label: <><Clocks n={o.n} />{o.label}</> }))} />
+          options={EFFORT_OPTIONS.map(o => ({ value: o.value, label: <span className="lib-with-clocks"><Clocks n={o.n} />{o.label}</span> }))} />
       </div>
       <div className="ui-field">{label("Cost", "cost")}
         <Segmented label="Cost" value={meal.cost || "none"} onChange={v => onField("cost", v === "none" ? undefined : v)} options={COST_OPTIONS} />

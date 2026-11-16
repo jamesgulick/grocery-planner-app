@@ -100,7 +100,9 @@
   --check: 24px;                          /* square check box */
   --radius-check: 6px;
   --menu-w: 200px;                        /* sort menu */
-  --clock: 10px;                          /* time-needed clocks */
+  --clocks-w: 37px;                       /* the three time clocks (board "Plan, week: time") */
+  --clocks-h: 11px;
+  --clock-off: #D0D0CB;
   --step-off: #DDDDD8;                    /* step bar: a step not done yet */
   --step-bar-h: 4px;
   /* Row chevron (decided 11/14): one fixed icon everywhere, never a text glyph. */
