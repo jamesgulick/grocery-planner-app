@@ -1,7 +1,7 @@
 // The confirmation bar's host (brief standing rules, 11/17). Mounted once in the app root. A dark
 // bar, 16 from each side, floating just above the bottom chrome: the tab bar (and a screen's
 // action bar over it), or a sheet's footer when a sheet is open. About 2 s, or 5 s with Undo.
-import { useEffect, useState } from "react";
+import { useEffect, useLayoutEffect, useState } from "react";
 import { bindToast } from "./toast.js";
 
 const PLAIN_MS = 2000, UNDO_MS = 5000;
@@ -24,7 +24,10 @@ function bottomOffset() {
 export function ToastHost() {
   const [toast, setToast] = useState(null);
   const [bottom, setBottom] = useState(0);
-  useEffect(() => bindToast(t => { setBottom(bottomOffset()); setToast(t); }), []);
+  useEffect(() => bindToast(setToast), []);
+  // Measured after the screen has updated (before paint): an action that shows a bar and closes
+  // its sheet in the same tap must place the bar for the screen left behind, not the sheet.
+  useLayoutEffect(() => { if (toast) setBottom(bottomOffset()); }, [toast]);
   useEffect(() => {
     if (!toast) return;
     const timer = setTimeout(() => setToast(null), toast.undo ? UNDO_MS : PLAIN_MS);
