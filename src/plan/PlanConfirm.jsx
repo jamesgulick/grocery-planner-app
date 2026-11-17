@@ -203,7 +203,7 @@ function PlanConfirm({ mode = "confirm", onUpdateItem, keptIds = [], checkedIds,
   // Order rows: Intro, then each batch. Sent rows dim with ✓; the first unsent one is next up.
   const orderRows = [
     { key:"intro", label:"Intro", text:introText },
-    ...batches.map((b, i) => ({ key:"b" + i, label:`Batch ${i + 1}`, meta:`${b.length} items`, text:framedBatchText(i) })),
+    ...batches.map((b, i) => ({ key:"b" + i, label: batches.length > 1 ? `Batch ${i + 1} of ${batches.length}` : "Batch 1", meta:`${b.length} item${b.length === 1 ? "" : "s"}`, text:framedBatchText(i) })),
   ];
   const nextRow = orderRows.find(r => !isSent(r.text))?.key;
   // Shared items: × drops one from the cart check (dismissedShared); Undo is on the confirmation bar.
@@ -382,36 +382,38 @@ function PlanConfirm({ mode = "confirm", onUpdateItem, keptIds = [], checkedIds,
       </>}
 
       {mode === "sparky" && <>
-      {/* ORDER (canvas 11/12): Intro + Batch rows in one list. Tap a row to share it (11/16); sent rows
-          dim with ✓; the next one up is highlighted. The careful-matching rules are always in the
-          intro (no toggle). No helper copy. */}
-      <div style={{ ...S.card, padding:"0 16px" }}>
-        <div style={{ ...S.sectionLabel, padding:"12px 0 6px", marginBottom:0 }}>Send to Sparky</div>
+      {/* ORDER (canvas 11/12; board "Send to Sparky", 11/17): Intro + Batch rows in one list. Tap a
+          row to share it (11/16). The next row is tinted with a filled "Share" pill; sent rows grey
+          with "✓ Sent"; later rows show a grey share icon and can still be sent out of order. Lines
+          between rows run the card's full width. The careful-matching rules are always in the intro
+          (no toggle). No helper copy. */}
+      <div style={{ ...S.card, padding:0, overflow:"hidden" }}>
+        <div style={{ ...S.sectionLabel, padding:"12px 16px 6px", marginBottom:0 }}>Send to Sparky · {listLines.length} item{listLines.length === 1 ? "" : "s"}</div>
         {orderRows.map((row, k) => {
           const done   = isSent(row.text);
           const isNext = row.key === nextRow;
           return (
             <button key={row.key} type="button" aria-label={`Share ${row.label}`} onClick={() => sendText(row.text)}
-              style={{ display:"flex", alignItems:"center", gap:10, width:"100%", minHeight:52, padding:"8px 0", background:"none", border:"none", borderTop: k ? `1px solid ${C.border}` : "none", cursor:"pointer", textAlign:"left", opacity: done && !isNext ? 0.45 : 1 }}>
+              style={{ display:"flex", alignItems:"center", gap:10, width:"100%", minHeight:56, padding:"8px 16px", background: isNext ? C.primaryLight : "none", border:"none", borderTop:`1px solid ${C.border}`, cursor:"pointer", textAlign:"left" }}>
               <span style={{ flex:1, minWidth:0 }}>
-                <span style={{ display:"block", fontSize:15, fontWeight:600, color:C.text }}>{row.label}</span>
-                {row.meta && <span style={{ display:"block", fontSize:12, color:C.faint }}>{row.meta}</span>}
+                <span style={{ display:"block", fontSize:15, fontWeight:700, color: done ? C.faint : C.text }}>{row.label}</span>
+                {row.meta && <span style={{ display:"block", fontSize:12, color: done ? C.faint : C.muted }}>{row.meta}</span>}
               </span>
               {done
-                ? <span style={{ fontSize:13, fontWeight:700, color:C.primary }}>✓</span>
+                ? <span style={{ fontSize:13, fontWeight:600, color:C.faint, whiteSpace:"nowrap" }}>✓ Sent</span>
                 : isNext
-                  ? <span style={{ display:"inline-flex", alignItems:"center", justifyContent:"center", height:32, minWidth:48, borderRadius:16, color:"#fff", background:C.primary }}><Icon name="share" size={18} /></span>
-                  : <span style={{ display:"inline-flex", alignItems:"center", justifyContent:"center", height:32, minWidth:48, color:C.primary }}><Icon name="share" size={18} /></span>}
+                  ? <span style={{ display:"inline-flex", alignItems:"center", gap:6, height:32, padding:"0 14px", borderRadius:16, color:"#fff", background:C.primary, fontSize:14, fontWeight:700 }}><Icon name="share" size={16} />Share</span>
+                  : <span style={{ display:"inline-flex", alignItems:"center", justifyContent:"center", height:32, minWidth:48, color:C.faint }}><Icon name="share" size={18} /></span>}
             </button>
           );
         })}
       </div>
 
       {sharedItems.length > 0 && (
-        <div style={{ ...S.card, padding:"0 16px" }}>
-          <div style={{ ...S.sectionLabel, padding:"12px 0 6px", marginBottom:0 }}>Shared items</div>
+        <div style={{ ...S.card, padding:0, overflow:"hidden" }}>
+          <div style={{ ...S.sectionLabel, padding:"12px 16px 6px", marginBottom:0 }}>Shared items</div>
           {activeShared.map(s => (
-            <div key={s.id} style={{ display:"flex", alignItems:"center", gap:10, minHeight:44, borderTop:`1px solid ${C.border}`, fontSize:14 }}>
+            <div key={s.id} style={{ display:"flex", alignItems:"center", gap:10, minHeight:44, padding:"0 4px 0 16px", borderTop:`1px solid ${C.border}`, fontSize:14 }}>
               <span style={{ flex:1, minWidth:0 }}>{s.name}</span>
               <span style={{ fontWeight:700, color:C.muted }}>×{s.n}</span>
               {/* × drops it from the cart check only; it stays in the order (Confirm removes from the order). */}
@@ -420,9 +422,9 @@ function PlanConfirm({ mode = "confirm", onUpdateItem, keptIds = [], checkedIds,
             </div>
           ))}
           {activeShared.length > 0 && (
-            <div style={{ padding:"8px 0 12px" }}>
+            <div style={{ padding:"8px 16px 12px", borderTop:`1px solid ${C.border}` }}>
               <button type="button" style={{ ...S.btn, ...(isSent(sharedSparkyText) ? S.btnS : S.btnP), marginBottom:0, display:"flex", alignItems:"center", justifyContent:"center", gap:8 }} onClick={() => sendText(sharedSparkyText)}>
-                {isSent(sharedSparkyText) ? "✓" : <Icon name="share" size={18} />} Cart check
+                {isSent(sharedSparkyText) ? "Sent ✓" : <><Icon name="share" size={18} />Share cart check</>}
               </button>
             </div>
           )}
