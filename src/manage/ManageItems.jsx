@@ -3,6 +3,8 @@ import { useState } from "react";
 import { DEFAULT_SUBTYPE, STORAGE_LOCATIONS, TIERS, TIER_SUBTYPES, tierOptions, tierValueOf, toSentenceCase } from "../app/globals.js";
 import { mapBothPlans } from "../app/plans.js";
 import { RowChevron } from "../ui/kit.jsx";
+import { showToast } from "../ui/toast.js";
+import { latestDB } from "../app/latestDB.js";
 import { SEED_TS } from "../app/seed.js";
 import { C, S, TIER_COLORS } from "../app/styles.js";
 import { FieldGroup, PillSelect, SearchBar } from "../components/common.jsx";
@@ -118,6 +120,9 @@ function ManageItems({ db, persistDB, initialLoc }) {
         persistDB(mapBothPlans({...db, ingredients, meals}, p => ({...p, items:(p.items||[]).filter(i => i.ingredientId !== id)})));
         setEditing(null);
         setConfirmDelete(null);
+        // Undo puts back the item, its place in meals and on the plans' order lists, as they were.
+        const before = { ingredients: db.ingredients, meals: db.meals, plans: db.plans };
+        showToast(`Deleted ${ing.name}`, () => persistDB({ ...latestDB(), ...before }));
       }
     });
   };

@@ -17,6 +17,8 @@ import { DataSheet } from "./shell/DataSheet.jsx";
 import { ImportCheck } from "./shell/ImportCheck.jsx";
 import { SettingsSheet } from "./shell/SettingsSheet.jsx";
 import { IconButton, PillButton, Segmented, TabBar, TabBarSpacer, TopBar } from "./ui/kit.jsx";
+import { ToastHost } from "./ui/Toast.jsx";
+import { registerLatestDB } from "./app/latestDB.js";
 import "./ui/ui.css";
 import "./shell/shell.css";
 
@@ -96,6 +98,7 @@ export default function App() {
   const [recovery, setRecovery]                 = useState(null); // { savedAt, db } awaiting restore
   const [manageItemsLoc, setManageItemsLoc]     = useState(undefined); // Welcome's "need location" line lands Items on Unassigned; any tab-bar tap clears it
   const dbRef = useRef(null);
+  registerLatestDB(() => dbRef.current);   // Undo restores onto this (src/app/latestDB.js)
 
   useEffect(() => {
     (async () => {
@@ -314,6 +317,7 @@ export default function App() {
         <TabBar tabs={TABS} active={tab} onSelect={id => { setManageItemsLoc(undefined); setTab(id); }} />
         {sheet === "data" && <DataSheet db={db} persistDB={persistDB} overdue={dataDot} onClose={() => setSheet(null)} />}
         {sheet === "settings" && <SettingsSheet db={db} persistDB={persistDB} onClose={() => setSheet(null)} />}
+        <ToastHost />
       </div>
     </ErrorBoundary>
   );

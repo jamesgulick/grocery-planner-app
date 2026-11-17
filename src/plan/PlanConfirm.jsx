@@ -6,6 +6,8 @@ import { C, S, TIER_COLORS } from "../app/styles.js";
 import { Check } from "../components/common.jsx";
 import { ItemEditPanel } from "../components/ItemEditPanel.jsx";
 import { Icon } from "../ui/kit.jsx";
+import { showToast } from "../ui/toast.js";
+import { latestDB } from "../app/latestDB.js";
 import { isExplicitNo, isOrdering, isRelevant } from "./ordering.js";
 
 function PlanConfirm({ mode = "confirm", onUpdateItem, keptIds = [], checkedIds, setOrdering, addedOff = [], setAddedOff, addedItems, setAddedItems, stapleFlags, quantities = {}, setQuantities, mealPlan, meals, ingredients, onNext, onFinish, db, persistDB, days, daysFull }) {
@@ -13,7 +15,6 @@ function PlanConfirm({ mode = "confirm", onUpdateItem, keptIds = [], checkedIds,
   const [view, setView]         = useState("meal");
   const [copied, setCopied]     = useState(false);
   const [manualBatch, setManualBatch] = useState(null); // { text } when clipboard fails
-  const [lastDropped, setLastDropped] = useState(null); // shared item just dropped from the cart check (Undo)
   const [editId, setEditId]     = useState(null);        // item whose "⋯ edit" panel is open
 
   const activePlan         = getActivePlan(db);
@@ -83,10 +84,16 @@ function PlanConfirm({ mode = "confirm", onUpdateItem, keptIds = [], checkedIds,
     const ids = new Set(idList.filter(id => changedAmounts.some(i => i.id === id)));
     if (!ids.size) return;
     persistDB({ ...db, ingredients: db.ingredients.map(i => ids.has(i.id) ? { ...i, defaultQuantity: quantities[i.id] } : i) });
+    showToast(ids.size === 1 ? `${changedAmounts.find(i => ids.has(i.id)).name} saved as usual` : "Saved as usual amounts");
   };
   const justThisWeek = () => {
     if (!activePlan) return;
+    const before = activePlan.usualPromptDismissed;
     persistDB(writeActivePlan(db, { ...activePlan, usualPromptDismissed: changedSig }));
+    showToast("Amounts kept for this week only", () => {
+      const cur = latestDB(), p = cur && getActivePlan(cur);
+      if (p) persistDB(writeActivePlan(cur, { ...p, usualPromptDismissed: before }));
+    });
   };
 
   // Shared ingredients = EVERY multi-meal item this week, regardless of status.
@@ -199,9 +206,14 @@ function PlanConfirm({ mode = "confirm", onUpdateItem, keptIds = [], checkedIds,
     ...batches.map((b, i) => ({ key:"b" + i, label:`Batch ${i + 1}`, meta:`${b.length} items`, text:framedBatchText(i) })),
   ];
   const nextRow = orderRows.find(r => !isSent(r.text))?.key;
-  // Shared items: × drops one from the cart check (dismissedShared), with Undo.
-  const dropShared = item => { toggleDismissShared(item.id); setLastDropped(item); };
-  const undoDrop   = () => { if (lastDropped) toggleDismissShared(lastDropped.id); setLastDropped(null); };
+  // Shared items: × drops one from the cart check (dismissedShared); Undo is on the confirmation bar.
+  const dropShared = item => {
+    toggleDismissShared(item.id);
+    showToast(`Removed ${item.name} from the cart check`, () => {
+      const cur = latestDB(), p = cur && getActivePlan(cur);
+      if (p) persistDB(writeActivePlan(cur, { ...p, dismissedShared: (p.dismissedShared || []).filter(x => x !== item.id) }));
+    });
+  };
 
   // The order snapshot (the list as ordered). It goes to PlanTab with the step change and is
   // saved in that same write: saved on its own, the step change right after it re-saved the
@@ -407,12 +419,6 @@ function PlanConfirm({ mode = "confirm", onUpdateItem, keptIds = [], checkedIds,
                 style={{ width:44, height:44, flexShrink:0, background:"none", border:"none", cursor:"pointer", color:C.muted, fontSize:16 }}>✕</button>
             </div>
           ))}
-          {lastDropped && (
-            <div style={{ display:"flex", alignItems:"center", gap:10, minHeight:44, borderTop:`1px solid ${C.border}`, fontSize:13, color:C.muted }}>
-              <span style={{ flex:1, minWidth:0 }}>Dropped {lastDropped.name}</span>
-              <button type="button" onClick={undoDrop} style={{ minHeight:44, padding:"0 4px", background:"none", border:"none", cursor:"pointer", fontSize:13, fontWeight:700, color:C.primary }}>Undo</button>
-            </div>
-          )}
           {activeShared.length > 0 && (
             <div style={{ padding:"8px 0 12px" }}>
               <button type="button" style={{ ...S.btn, ...(isSent(sharedSparkyText) ? S.btnS : S.btnP), marginBottom:0, display:"flex", alignItems:"center", justifyContent:"center", gap:8 }} onClick={() => sendText(sharedSparkyText)}>

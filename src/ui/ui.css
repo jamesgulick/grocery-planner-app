@@ -101,3 +101,11 @@ button.ui-row:active { background: var(--pressed); }
 /* ── Text input ───────────────────────────────────────────────────────── */
 .ui-textarea { font: inherit; font-size: var(--meta-size); width: 100%; box-sizing: border-box; min-height: var(--textarea-height); padding: var(--space-3); border-radius: var(--radius-control); border: 1px solid var(--control-border); background: var(--surface); color: var(--text); resize: vertical; }
 .ui-textarea:focus { outline: 2px solid var(--action); outline-offset: 1px; }
+
+/* ── Confirmation bar (toast; brief standing rules, 11/17) ─────────────────── */
+.ui-toast-live { position: fixed; left: 0; right: 0; bottom: 0; height: 0; z-index: 300; pointer-events: none; }
+.ui-toast { position: fixed; left: 50%; transform: translateX(-50%); width: calc(min(100%, var(--app-max)) - 2 * var(--space-4)); box-sizing: border-box; min-height: var(--toast-min-h); display: flex; align-items: center; gap: var(--space-3); padding: var(--space-2) var(--space-2) var(--space-2) var(--space-4); background: var(--toast-bg); color: var(--toast-text); border-radius: var(--radius-control); font-family: var(--font); font-size: var(--body-size); line-height: var(--body-line); pointer-events: auto; animation: ui-toast-in 0.15s ease-out; }
+.ui-toast-text { flex: 1; min-width: 0; }
+.ui-toast-undo { flex: none; min-height: var(--touch); padding: 0 var(--space-3); font: inherit; font-weight: 700; color: var(--toast-text); background: none; border: 0; cursor: pointer; }
+@keyframes ui-toast-in { from { opacity: 0; transform: translate(-50%, var(--space-2)); } to { opacity: 1; transform: translateX(-50%); } }
+@media (prefers-reduced-motion: reduce) { .ui-toast { animation: none; } }
