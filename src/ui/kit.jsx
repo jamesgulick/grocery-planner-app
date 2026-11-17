@@ -14,6 +14,7 @@ const PATHS = {
   print:    <><path d="M6 9V3h12v6" /><rect x="4" y="9" width="16" height="8" rx="2" /><path d="M7 17h10v4H7z" /></>,
   chevron:  <path d="M9 6l6 6-6 6" />,
   back:     <path d="M15 6l-6 6 6 6" />,
+  cart:     <><circle cx="9" cy="20" r="1.4" /><circle cx="18" cy="20" r="1.4" /><path d="M2 3h3l2.6 12.2a1 1 0 0 0 1 .8h9.6a1 1 0 0 0 1-.8L21 7H6.1" /></>,   /* pickup: groceries arrive this day */
 };
 
 export function Icon({ name, size = 22, strong = false }) {

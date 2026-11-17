@@ -45,6 +45,9 @@ export function dayKeyForDate(plan, iso) {
   return null;
 }
 
+/** The pickup date: pickupDate when set, else the plan's first day (RULING 15). */
+export const pickupDateOf = (plan) => (plan && (plan.pickupDate || plan.weekStartDate)) || null;
+
 // ── Time to cook (B1) ─────────────────────────────────────────────────────────────
 
 export const TIME_LEVELS = ['none', 'some', 'much'];

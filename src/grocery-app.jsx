@@ -298,7 +298,7 @@ export default function App() {
             </div>
           </div>
         )}
-        {tab==="home" && <HomeScreen db={db} dataDot={dataDot} onOpenData={() => setSheet("data")} onOpenSettings={() => setSheet("settings")} onOpenPlan={openPlan} />}
+        {tab==="home" && <HomeScreen db={db} dataDot={dataDot} onOpenData={() => setSheet("data")} onOpenSettings={() => setSheet("settings")} onOpenPlan={openPlan} persistDB={persistDB} />}
         {tab==="plan" && <>
           <TopBar title="Plan">{headerIcons}</TopBar>
           <PlanTab key={db.activePlan || "current"} db={db} persistDB={persistDB} onGoToImport={() => setSheet("data")} onGoToUnassigned={() => { setLibraryView("items"); setManageItemsLoc("Unassigned"); setTab("library"); }} />

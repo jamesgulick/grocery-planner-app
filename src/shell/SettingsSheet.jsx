@@ -1,5 +1,5 @@
 // Settings sheet (polish Phase 2; canvas board, to review): Household (Family, Away dates),
-// Cooking (Grill season), Shopping (Plans start on), Calendar (Sync instructions: free text,
+// Cooking (Grill season), Shopping (Usual shopping day), Calendar (Sync instructions: free text,
 // written into every export's _meta for Send to AI; never in the code), Help. No learn-mode switch (decided
 // 11/12: the plate sheet's Reasons switch replaces it). Away dates and Help reuse today's
 // editors inside the sheet until their own redraw.
@@ -52,7 +52,7 @@ export function SettingsSheet({ db, persistDB, onClose }) {
     </Sheet>
   );
   if (page === "start") return (
-    <Sheet title="Plans start on" onClose={onClose} onBack={back}>
+    <Sheet title="Usual shopping day" onClose={onClose} onBack={back}>
       <Group>
         {WEEKDAYS.map(d => (
           <Row key={d} title={d} onClick={() => upd("shoppingDay", d)} chevron={false}
@@ -81,7 +81,7 @@ export function SettingsSheet({ db, persistDB, onClose }) {
         </Group>
       </Section>
       <Section label="Shopping">
-        <Group><Row title="Plans start on" value={settings.shoppingDay || "Wednesday"} onClick={() => setPage("start")} /></Group>
+        <Group><Row title="Usual shopping day" value={settings.shoppingDay || "Wednesday"} onClick={() => setPage("start")} /></Group>
       </Section>
       <Section label="Calendar">
         <Group><Row title="Sync instructions" value={settings.syncInstructions?.trim() ? "Set" : "Not set"} onClick={() => setPage("sync")} /></Group>

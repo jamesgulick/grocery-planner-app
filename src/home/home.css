@@ -37,3 +37,16 @@
 .home-share .ui-tile-button:disabled { opacity: 0.45; cursor: default; }
 .home-share .ui-tile-button { background: var(--bg); }   /* tiles read as tiles on the white bar */
 .home-share-spacer { height: calc(var(--touch) + var(--space-4) + 1px); flex: none; margin-top: calc(-1 * var(--space-5)); }
+
+/* Pickup (brief §6): the cart under the day name, and after "Tonight" when the pickup is today.
+   Same icon and size in both; the tap area reaches --touch without growing the row. */
+.home-day-abbr { display: flex; flex-direction: column; align-items: flex-start; gap: var(--space-1); }
+.home-cart { position: relative; display: inline-flex; color: var(--text-muted); cursor: pointer; }
+.home-cart::after { content: ""; position: absolute; inset: calc(-1 * var(--space-3)); }
+.home-cart:focus-visible { outline: 2px solid var(--action); outline-offset: 2px; border-radius: var(--radius-seg); }
+.home-tonight-label { display: inline-flex; align-items: center; gap: var(--space-2); }
+
+/* The Pickup sheet's day chips: day, date, and "Start" under the plan's first day. */
+.pickup-days button { display: flex; flex-direction: column; align-items: center; gap: var(--space-half); padding: var(--space-2) 0; }
+.pickup-date { font-size: var(--body-size); line-height: var(--body-line); font-weight: 700; }
+.pickup-start { min-height: var(--label-line); font-size: var(--tab-label-size); font-weight: 500; color: var(--text-muted); }
