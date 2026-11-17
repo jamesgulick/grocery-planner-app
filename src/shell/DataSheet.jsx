@@ -3,7 +3,8 @@
 // confirm-first, in plain text. Replaces the header status line and the backup banner.
 import { useRef, useState } from "react";
 import { prepareImport, readFileText } from "../app/dataIO.js";
-import { downloadBackup } from "../app/exportData.js";
+import { downloadBackup, exportFileName } from "../app/exportData.js";
+import { showToast } from "../ui/toast.js";
 import { extractJSON } from "../app/globals.js";
 import { DEFAULT_DB } from "../app/seed.js";
 import { BlockButton, Group, PillButton, Row, Section, Sheet } from "../ui/kit.jsx";
@@ -28,6 +29,7 @@ export function DataSheet({ db, persistDB, overdue, onClose }) {
   };
   const load = () => {
     persistDB(pending.db, { background: true });
+    showToast("Loaded");
     const { meals, items } = pending.summary;
     setResult({ ok: true, text: `Loaded ${meals} meals and ${items} items.` });
     setPending(null); setPaste(""); setPage("main");
@@ -61,7 +63,7 @@ export function DataSheet({ db, persistDB, overdue, onClose }) {
   if (page === "reset") return (
     <Sheet title="Reset to example data?" onClose={onClose} onBack={() => setPage("main")} doneLabel="Cancel">
       <div className="ui-meta">Your meals, items and plans on this device are replaced by the example data. Back up first if you might want them.</div>
-      <Group><Row title="Reset to example data" onClick={() => { persistDB(DEFAULT_DB); onClose(); }} chevron={false} /></Group>
+      <Group><Row title="Reset to example data" onClick={() => { persistDB(DEFAULT_DB); onClose(); showToast("Example data loaded"); }} chevron={false} /></Group>
     </Sheet>
   );
 
@@ -72,7 +74,7 @@ export function DataSheet({ db, persistDB, overdue, onClose }) {
           <span className={overdue ? "ui-problem" : "ui-meta"}>{overdue && <span className="ui-problem-dot" aria-hidden="true" />}{status}</span>
           {overdue && <span className="ui-meta"> · changes since</span>}
         </div>
-        <div className="shell-status-action"><BlockButton onClick={() => downloadBackup(db, persistDB)}>Back up · export file</BlockButton></div>
+        <div className="shell-status-action"><BlockButton onClick={() => { downloadBackup(db, persistDB); showToast(`Saved ${exportFileName()}`); }}>Back up · export file</BlockButton></div>
       </Group>
       <SyncRow db={db} persistDB={persistDB} />
       <Section>

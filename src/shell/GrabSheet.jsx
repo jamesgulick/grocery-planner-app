@@ -14,6 +14,7 @@ import { INVENTORY_LOCS, toSentenceCase } from "../app/globals.js";
 import { sendToAI } from "../app/sendToAI.js";
 import { BlockButton, Chip, Field, OutlineButton, Segmented, Sheet } from "../ui/kit.jsx";
 import { ReimportPill } from "./ReimportPill.jsx";
+import { showToast } from "../ui/toast.js";
 
 const newId = p => p + Date.now() + Math.random().toString(36).slice(2, 6);
 
@@ -36,7 +37,6 @@ export function GrabSheet({ db, persistDB, init = {}, onClose, onOpenPage }) {
   const [link, setLink] = useState(init.link || "");
   const [text, setText] = useState(init.text || "");
   const [role, setRole] = useState(init.role || "main");
-  const [sent, setSent] = useState(false);
   const [place, setPlace] = useState(null);
   const [often, setOften] = useState(null);   // always | weekly | slow | null (For meals)
   const clean = toSentenceCase(name.trim());
@@ -46,17 +46,18 @@ export function GrabSheet({ db, persistDB, init = {}, onClose, onOpenPage }) {
     const meal = { id, createdAt: new Date().toISOString(), name: clean, type: role === "side" ? "side" : "dinner", rotation: "experimental", soon: true,
       leftovers: "none", preferences: [], notes: "", ingredients: [], ...(link.trim() ? { link: link.trim() } : {}) };
     persistDB({ ...db, meals: [...(db.meals || []), meal] });
+    showToast(`Grabbed ${clean}`);
     return id;
   };
   const saveItem = () => {
     const id = newId("i");
     const buy = often === "always" ? { tier: "always" } : often ? { tier: "staple", stapleType: often } : { tier: "specialty" };
     persistDB({ ...db, ingredients: [...(db.ingredients || []), { id, createdAt: new Date().toISOString(), name: clean, storageLocation: place || "Unassigned", ...buy, defaultQuantity: "" }] });
+    showToast(`Grabbed ${clean}`);
     return id;
   };
   const send = async () => {
-    const res = await sendToAI(db, persistDB, { purpose: "recipe", name: clean, link: link.trim(), text: text.trim(), role });
-    if (res !== "cancelled") setSent(true);
+    await sendToAI(db, persistDB, { purpose: "recipe", name: clean, link: link.trim(), text: text.trim(), role });   // the bar says "Prompt copied"
   };
 
   const nameTaken = kind === "meal" && clean && (db.meals || []).some(m => m.name.trim().toLowerCase() === clean.toLowerCase());
@@ -73,7 +74,6 @@ export function GrabSheet({ db, persistDB, init = {}, onClose, onOpenPage }) {
             <span className="sync-chev" aria-hidden="true">›</span>
             <ReimportPill db={db} persistDB={persistDB} onLoaded={onClose} />
           </div>
-          {sent && <div className="ui-meta grab-sent">Prompt copied</div>}
           <button type="button" className="ui-link grab-details" disabled={!canSave} onClick={() => { const id = saveMeal(); onClose(); onOpenPage({ kind: "meal", id }); }}>Add details</button>
         </div>
       ) : (

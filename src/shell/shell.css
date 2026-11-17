@@ -14,7 +14,7 @@
 .imp-count-change { font-size: var(--caption-size); line-height: var(--caption-line); color: var(--text-muted); display: flex; flex-direction: column; }
 .imp-count-change.is-problem { color: var(--problem); font-weight: 600; }
 .imp-row { position: relative; display: flex; align-items: baseline; gap: var(--space-3); padding: var(--space-3) var(--space-4); }
-.imp-row + .imp-row::before { content: ""; position: absolute; top: 0; left: var(--space-4); right: 0; height: 1px; background: var(--divider); }
+.imp-row + .imp-row::before { content: ""; position: absolute; top: 0; left: 0; right: 0; height: 1px; background: var(--divider); }
 .imp-row-label { flex: none; font-size: var(--body-size); line-height: var(--body-line); }
 .imp-row-value { flex: 1; min-width: 0; font-size: var(--meta-size); line-height: var(--meta-line); color: var(--text-muted); text-align: right; display: flex; flex-direction: column; }
 .imp-row.is-problem .imp-row-label, .imp-row.is-problem .imp-row-value { color: var(--problem); font-weight: 600; }
@@ -57,4 +57,3 @@
 .grab-ai { display: flex; align-items: center; justify-content: center; gap: var(--space-2); flex-wrap: wrap; }
 .grab-ai .sync-pill:disabled { opacity: 0.4; cursor: default; }
 .grab-ai .reimport-error { flex-basis: 100%; text-align: center; }
-.grab-sent { align-self: center; }

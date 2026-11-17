@@ -9,6 +9,8 @@ import { INVENTORY_LOCS } from "../app/globals.js";
 import { DeleteButton, FieldLabel, Group, Row } from "../ui/kit.jsx";
 import { DeleteSheet, PickListSheet, TextSheet } from "./LibrarySheets.jsx";
 import { PageHeader, SectionCard } from "./MealPage.jsx";
+import { showToast } from "../ui/toast.js";
+import { latestDB } from "../app/latestDB.js";
 import { BUY_OPTIONS, buyOf, buyPatch, buyWord, isSide, itemDeleteImpact, placeOf, weekOfWords, withField, withoutItem } from "./libraryModel.js";
 
 const key = s => String(s || "").trim().toLowerCase();
@@ -41,7 +43,12 @@ export function ItemPage({ db, persistDB, itemId, onBack, backLabel, onOpenMeal 
       impact.meals.length ? ["Removed from", impact.meals.join(", ")] : null,
       impact.onLists.length ? ["On a list", impact.onLists.map(weekOfWords).join(", ")] : null,
     ].filter(Boolean);
-    open = <DeleteSheet name={item.name} lines={lines} onClose={close} onDelete={() => { persistDB(withoutItem(db, item.id)); onBack(); }} />;
+    open = <DeleteSheet name={item.name} lines={lines} onClose={close} onDelete={() => {
+      persistDB(withoutItem(db, item.id)); onBack();
+      // Undo puts back the item, its place in meals and on the plans' lists, as they were.
+      const before = { ingredients: db.ingredients, meals: db.meals, plans: db.plans };
+      showToast(`Deleted ${item.name}`, () => persistDB({ ...latestDB(), ...before }));
+    }} />;
   }
 
   return (

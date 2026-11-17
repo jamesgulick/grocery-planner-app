@@ -11,6 +11,7 @@ import { C, S } from "../app/styles.js";
 import { defaultNotes, fetchLiveForecast } from "../app/weather.js";
 import { AutoGrowTextarea, Toggle } from "../components/common.jsx";
 import { mealMatches } from "../manage/MealEditor.jsx";
+import { showToast } from "../ui/toast.js";
 
 // Carried-leftover notes arrive one per person ("Partner is covered by Chili carried from
 // 2026-09-26"). Display-only: group the people held by the same dish on the same night
@@ -83,7 +84,7 @@ function sideBadge(dish) {
 // stored value and the engine's timeLevel stay none / some / much.
 const TIME_LABEL = { none:"Little", some:"Some", much:"Lots" };
 
-function PlanMeals({ inFlow, mealPlan, plates, setMealPlan, commitMealToPlan, timeLevels, setTimeLevels, presence, setPresence, weekStartDate, adventurousWeek, setAdventurousWeek, meals, onNext, days, daysFull, dayNotes, setDayNotes, dayPills, setDayPills, db, persistDB, extraDays = 0, canExtend = false, setExtraDays }) {
+function PlanMeals({ inFlow, mealPlan, plates, setMealPlan, restoreMeals, commitMealToPlan, timeLevels, setTimeLevels, presence, setPresence, weekStartDate, adventurousWeek, setAdventurousWeek, meals, onNext, days, daysFull, dayNotes, setDayNotes, dayPills, setDayPills, db, persistDB, extraDays = 0, canExtend = false, setExtraDays }) {
   const [editing, setEditing] = useState(null);
   const [moving,  setMoving]  = useState(null);
   const [search,  setSearch]  = useState("");
@@ -198,7 +199,12 @@ function PlanMeals({ inFlow, mealPlan, plates, setMealPlan, commitMealToPlan, ti
   // old weighted-random getMealSuggestions). Days that already have anything on them are
   // never touched: they go to the engine as fixed context (alreadyPlaced), so spacing,
   // leftovers and the floor are worked out around them.
+  // Confirmation bar (brief standing rules, 11/17): the days as they were before an action, for
+  // its Undo, and a day's short name ("Thu", or "Fri" for an extra day).
+  const undoTo = () => { const snap = { mealPlan, plates }; return () => restoreMeals?.(snap); };
+  const dayShort = day => isExtraDay(day) ? daysFull[days.indexOf(day)].replace("Extra ", "").slice(0, 3) : day;
   const regenerate = async () => {
+    const undo = undoTo();
     setLoading(true);
     await new Promise(r => setTimeout(r, 30));   // let "Thinking..." paint
     const planKey = db.activePlan || "current";
@@ -220,6 +226,8 @@ function PlanMeals({ inFlow, mealPlan, plates, setMealPlan, commitMealToPlan, ti
       Object.entries(annotations).forEach(([d, a]) => { if (!(prev[d] || []).length) next[d] = a.dishes.map(x => x.name); });
       return next;
     }, annotations);
+    const filled = Object.entries(annotations).filter(([d, a]) => !(mealPlan[d] || []).length && a.dishes.length).length;
+    if (filled) showToast(`Filled ${filled} day${filled === 1 ? "" : "s"}`, undo);
     setSeenThisSession(out.sessionState?.seenThisSession || seenThisSession);
     setFillNotes(out.observations.filter(o => o.severity === "concern" && (o.property === "engine" || o.property === "input" || o.property === "pool")));
     setLoading(false);
@@ -276,7 +284,9 @@ function PlanMeals({ inFlow, mealPlan, plates, setMealPlan, commitMealToPlan, ti
   const fillDay = day => {
     const { ann, errs } = composeOneDay(day, []);
     if (!ann.dishes.length) { setFillNotes(errs.length ? errs : []); if (!errs.length) dayNote(day, "Nothing eligible could be placed on this day."); return; }
+    const undo = undoTo();
     applyDay(day, ann.dishes.map(d => d.name), ann.dishes, ann.leftovers);
+    showToast(`${dayShort(day)}: ${(ann.dishes.find(d => d.role === "main") || ann.dishes[0]).name}`, undo);
   };
 
   // ⟳ main → a SHORTLIST (Week 5): the next few mains in the engine's own ranking for the
@@ -381,14 +391,21 @@ function PlanMeals({ inFlow, mealPlan, plates, setMealPlan, commitMealToPlan, ti
     const next = { ...mealPlan, [day]:[...(mealPlan[day]||[]), name] };
     commitMealToPlan(next, isNew ? name : null);
     setEditing(null); setSearch("");
+    showToast(mealRec(name)?.type === "side" ? `Added ${name}` : `${dayShort(day)}: ${name}`);
   };
   const replaceMeal = (day, mealIdx, name, isNew=false) => {
     const u = [...(mealPlan[day]||[])]; u[mealIdx] = name;
     commitMealToPlan({ ...mealPlan, [day]:u }, isNew ? name : null);
     setEditing(null); setSearch("");
   };
-  const removeMeal = (day, idx) => setMealPlan(prev => ({ ...prev, [day]:(prev[day]||[]).filter((_,i)=>i!==idx) }));
+  const removeMeal = (day, idx) => {
+    const name = (mealPlan[day] || [])[idx], undo = undoTo();
+    setMealPlan(prev => ({ ...prev, [day]:(prev[day]||[]).filter((_,i)=>i!==idx) }));
+    if (name) showToast(`Removed ${name}`, undo);
+  };
   const moveMeal = (fromDay, mIdx, toDay) => {
+    const name = (mealPlan[fromDay] || [])[mIdx], undo = undoTo();
+    if (name) showToast(`${name} → ${dayShort(toDay)}`, undo);
     setMealPlan(prev => {
       const meal = (prev[fromDay]||[])[mIdx];
       return { ...prev, [fromDay]:(prev[fromDay]||[]).filter((_,i)=>i!==mIdx), [toDay]:[...(prev[toDay]||[]),meal] };

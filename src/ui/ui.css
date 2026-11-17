@@ -14,7 +14,8 @@
 .ui-group { background: var(--surface); border-radius: var(--radius-group); display: flex; flex-direction: column; overflow: hidden; }
 .ui-row { position: relative; display: flex; align-items: center; gap: var(--space-3); min-height: var(--row-height); padding: 0 var(--space-4); font: inherit; font-size: var(--body-size); line-height: var(--body-line); color: var(--text); background: none; border: 0; text-align: left; width: 100%; box-sizing: border-box; }
 /* Dividers start at the row's text edge (the row's 16px padding), not the card edge. */
-.ui-row + .ui-row::before { content: ""; position: absolute; top: 0; left: var(--space-4); right: 0; height: 1px; background: var(--divider); pointer-events: none; }
+/* Row dividers (11/17): full card width everywhere, no inset. */
+.ui-row + .ui-row::before { content: ""; position: absolute; top: 0; left: 0; right: 0; height: 1px; background: var(--divider); pointer-events: none; }
 button.ui-row { cursor: pointer; }
 button.ui-row:active { background: var(--pressed); }
 .ui-row-main { flex: 1; min-width: 0; display: flex; flex-direction: column; padding: var(--space-3) 0; }
@@ -163,7 +164,6 @@ button.ui-row:active { background: var(--pressed); }
 .ui-input:focus { outline: 2px solid var(--action); outline-offset: 1px; }
 
 /* ── Toast ────────────────────────────────────────────────────────────── */
-.ui-toast { position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(var(--bar-bottom) + var(--space-6)); z-index: 300; width: calc(100% - 2 * var(--gutter)); max-width: calc(var(--app-max) - 2 * var(--gutter)); box-sizing: border-box; padding: var(--space-3) var(--space-4); border-radius: var(--radius-control); background: var(--toast-bg); color: var(--on-action); font-size: var(--body-size); }
 
 /* ── Text input ───────────────────────────────────────────────────────── */
 .ui-textarea { font: inherit; font-size: var(--meta-size); width: 100%; box-sizing: border-box; min-height: var(--textarea-height); padding: var(--space-3); border-radius: var(--radius-control); border: 1px solid var(--control-border); background: var(--surface); color: var(--text); resize: vertical; }
@@ -173,3 +173,11 @@ button.ui-row:active { background: var(--pressed); }
 .ui-seg-forest button[aria-pressed="true"] { background: var(--action); color: var(--on-action); box-shadow: none; }
 .ui-seg-forest button[aria-pressed="true"] .ui-clock-hand { stroke: var(--action); }
 .ui-seg-forest button[aria-pressed="true"] .ui-clock-off { fill: var(--on-action); opacity: 0.35; }
+
+/* ── Confirmation bar (toast; brief standing rules, 11/17) ─────────────────── */
+.ui-toast-live { position: fixed; left: 0; right: 0; bottom: 0; height: 0; z-index: 300; pointer-events: none; }
+.ui-toast { position: fixed; left: 50%; transform: translateX(-50%); width: calc(min(100%, var(--app-max)) - 2 * var(--space-4)); box-sizing: border-box; min-height: var(--toast-min-h); display: flex; align-items: center; gap: var(--space-3); padding: var(--space-2) var(--space-2) var(--space-2) var(--space-4); background: var(--toast-bg); color: var(--toast-text); border-radius: var(--radius-control); font-family: var(--font); font-size: var(--body-size); line-height: var(--body-line); pointer-events: auto; animation: ui-toast-in 0.15s ease-out; }
+.ui-toast-text { flex: 1; min-width: 0; }
+.ui-toast-undo { flex: none; min-height: var(--touch); padding: 0 var(--space-3); font: inherit; font-weight: 700; color: var(--toast-text); background: none; border: 0; cursor: pointer; }
+@keyframes ui-toast-in { from { opacity: 0; transform: translate(-50%, var(--space-2)); } to { opacity: 1; transform: translateX(-50%); } }
+@media (prefers-reduced-motion: reduce) { .ui-toast { animation: none; } }

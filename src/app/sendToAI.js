@@ -12,6 +12,7 @@
 // (sent copy → returned file) from what changed here since (sent copy → device now), and to
 // judge the file's scope by the device's own record of the send, never by the file alone.
 import { copyToClipboard } from "./clipboard.js";
+import { showToast } from "../ui/toast.js";
 import { buildBackupPayload, downloadPayload, exportFileName } from "./exportData.js";
 import { KEY_SUFFIX } from "./globals.js";
 import { exportVocab } from "./vocab.js";
@@ -50,6 +51,7 @@ function saveSentCopy(record) {
  */
 export async function sendToAI(db, persistDB, job = null) {
   copyToClipboard(SEND_PROMPT);
+  showToast("Prompt copied");   // the confirmation bar, as the share sheet opens (11/17)
   const request = job ? { purpose: job.purpose, instructions: db.settings?.aiInstructions?.[job.purpose] || "", ...withoutPurpose(job) } : null;
   const extraMeta = { ...(request ? { request } : {}), vocab: exportVocab() };
   const payload = buildBackupPayload(db, extraMeta);

@@ -11,7 +11,7 @@
 .home-concern { font-size: var(--meta-size); line-height: var(--meta-line); font-weight: 600; color: var(--problem); }
 
 .ui-row.home-day { align-items: flex-start; }   /* beats .ui-row, which loads after this file */
-.home-day-abbr { width: var(--day-col); flex: none; padding-top: var(--space-3); font-size: var(--label-size); font-weight: 700; color: var(--text-muted); }
+.home-day-abbr { width: var(--day-col); flex: none; padding-top: calc(var(--space-3) + (var(--body-line) - var(--label-line)) / 2); font-size: var(--label-size); line-height: var(--label-line); font-weight: 700; color: var(--text-muted); }
 .home-day-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: var(--space-half); padding: var(--space-3) 0; }
 .home-day-main { font-size: var(--body-size); line-height: var(--body-line); font-weight: 600; }   /* main names are bold (decided 11/14) */
 
@@ -44,3 +44,20 @@
 button.home-pending-text { cursor: pointer; }
 .home-pending-x { flex: none; display: flex; align-items: center; justify-content: center; width: var(--touch); height: var(--touch); border: 0; background: none; color: var(--text-muted); cursor: pointer; }
 .home-pending .reimport-error { flex-basis: 100%; padding-bottom: var(--space-2); }
+/* Pickup (brief §6): the cart under the day name, and after "Tonight" when the pickup is today.
+   Same icon and size in both; the tap area reaches --touch without growing the row. */
+.home-day-abbr { display: flex; flex-direction: column; align-items: flex-start; gap: var(--space-1); padding-bottom: var(--space-3); }   /* a cart under the name: 4 below it, then the row's 12 before the line (Row dividers, 11/17) */
+.home-cart { position: relative; display: inline-flex; color: var(--text-muted); cursor: pointer; }
+.home-cart::after { content: ""; position: absolute; inset: calc(-1 * var(--space-3)); }
+.home-cart:focus-visible { outline: 2px solid var(--action); outline-offset: 2px; border-radius: var(--radius-seg); }
+.home-tonight-label { display: inline-flex; align-items: center; gap: var(--space-2); }
+
+/* The Pickup sheet's date strip (board "Pickup dates", 11/17): fixed chips scrolling sideways,
+   edge to edge so a cut-off chip shows there's more; no scrollbar. */
+.pickup-strip { display: flex; gap: var(--space-2); overflow-x: auto; scrollbar-width: none; margin: 0 calc(-1 * var(--space-4)); padding: 0 var(--space-4); scroll-padding: 0 var(--space-4); -webkit-overflow-scrolling: touch; }
+.pickup-strip::-webkit-scrollbar { display: none; }
+.pickup-chip { flex: none; width: var(--pickup-chip-w); display: flex; flex-direction: column; align-items: center; gap: var(--space-half); padding: var(--space-2) 0; font: inherit; font-size: var(--meta-size); font-weight: 600; color: var(--text); background: var(--surface); border: 0; border-radius: var(--radius-control); cursor: pointer; }
+.pickup-chip[aria-pressed="true"] { background: var(--action); color: var(--on-action); }
+.pickup-chip[aria-pressed="true"] .pickup-mark { color: var(--on-action); }
+.pickup-date { font-size: var(--body-size); line-height: var(--body-line); font-weight: 700; }
+.pickup-mark { min-height: var(--label-line); font-size: var(--tab-label-size); font-weight: 500; color: var(--text-muted); }

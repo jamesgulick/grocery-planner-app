@@ -5,6 +5,9 @@
 // Up next: <step> · Continue + step bar / Ordered · pickup <day>), followed by its planned days
 // (away info by name, plate concerns in amber, verbatim). Then Fridge report / Share with
 // family. No time icons, no app name, no instructional copy.
+// Pickup (brief §6, RULING 15): the cart sits under the day name on a plan's pickup day (even
+// when that day belongs to the previous plan), and right after "Tonight" when the pickup is
+// today; tapping it opens the Pickup sheet. No words with it.
 import { useMemo, useState } from "react";
 import { addDaysISO, checkWeek, dayKeyForDate, extraDaysOf, pickupDateOf, presentOn, weekDates } from "../engine/assembleInputs.js";
 import { evaluateWeek } from "../engine/composeWeek.js";
@@ -12,8 +15,9 @@ import { copyToClipboard } from "../app/clipboard.js";
 import { buildFridgeReportHTML } from "../app/fridgeReport.js";
 import { planDays, todayLocalISO, weekLabel } from "../app/globals.js";
 import { draftPlanText } from "../app/shareText.js";
-import { ActionBar, Group, Icon, IconButton, PillButton, RowChevron, Section } from "../ui/kit.jsx";
+import { ActionBar, Group, Icon, IconButton, PillButton, RowChevron, Section, SectionLabel } from "../ui/kit.jsx";
 import { ReimportPill } from "../shell/ReimportPill.jsx";
+import { PickupSheet } from "./PickupSheet.jsx";
 import "./home.css";
 
 const ABBR = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
@@ -131,6 +135,18 @@ export function HomeScreen({ db, dataDot, onOpenData, onOpenSettings, onOpenPlan
   const plans = db.plans || {};
   const shoppingDay = db.settings?.shoppingDay;
 
+  // Pickup days: date → the plan whose groceries arrive then (the later plan wins a tie).
+  const pickups = {};
+  for (const k of ["current", "next"]) { const d = pickupDateOf(plans[k]); if (d) pickups[d] = k; }
+  const [pickupKey, setPickupKey] = useState(null);
+  const cart = iso => pickups[iso] ? (
+    <span role="button" tabIndex={0} className="home-cart" aria-label="Pickup"
+      onClick={e => { e.stopPropagation(); setPickupKey(pickups[iso]); }}
+      onKeyDown={e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); e.stopPropagation(); setPickupKey(pickups[iso]); } }}>
+      <Icon name="cart" size={18} />
+    </span>
+  ) : null;
+
   // Tonight's week, then the list: tomorrow onward for LIST_DAYS days, grouped by week.
   const { tonightWeek, groups } = useMemo(() => {
     const find = weekFinder(plans, shoppingDay);
@@ -226,7 +242,8 @@ export function HomeScreen({ db, dataDot, onOpenData, onOpenSettings, onOpenPlan
           </Group>
         )}
 
-        <Section label="Tonight">
+        <section className="ui-section">
+          <SectionLabel><span className="home-tonight-label">Tonight{cart(today)}</span></SectionLabel>
           {tPlan ? (
             <button type="button" className="home-tonight" onClick={() => onOpenPlan(tonightWeek.key)}>
               <span className={tonight ? "home-tonight-main" : "home-tonight-none"}>{tonight?.main || "Nothing planned"}</span>
@@ -237,7 +254,7 @@ export function HomeScreen({ db, dataDot, onOpenData, onOpenSettings, onOpenPlan
           ) : (
             <div className="home-tonight"><span className="home-tonight-none">Nothing planned</span></div>
           )}
-        </Section>
+        </section>
 
         <Section label="Coming up">
           <Group>
@@ -253,7 +270,7 @@ export function HomeScreen({ db, dataDot, onOpenData, onOpenSettings, onOpenPlan
                     const note = d ? "" : (week.plan.dayNotes?.[key] || "").trim();
                     return (
                       <button key={iso} type="button" className="ui-row home-day" onClick={() => onOpenPlan(week.key)}>
-                        <span className="home-day-abbr">{abbrOf(iso)}</span>
+                        <span className="home-day-abbr">{abbrOf(iso)}{cart(iso)}</span>
                         <span className="home-day-body">
                           <span className={d ? "home-day-main" : "home-day-main home-day-empty"}>{d?.main || note || "—"}</span>
                           {d?.sides.length > 0 && <span className="home-sub">+ {d.sides.join(", ")}</span>}
@@ -272,6 +289,15 @@ export function HomeScreen({ db, dataDot, onOpenData, onOpenSettings, onOpenPlan
 
         <div className="home-share-spacer" aria-hidden="true" />
       </main>
+
+      {pickupKey && plans[pickupKey] && (
+        <PickupSheet plan={plans[pickupKey]} shoppingDay={shoppingDay} onClose={() => setPickupKey(null)}
+          onPick={iso => {
+            const rest = { ...plans[pickupKey] }; delete rest.pickupDate;
+            const plan = iso === rest.weekStartDate ? rest : { ...rest, pickupDate: iso };   // absent = the first day
+            persistDB({ ...db, plans: { ...plans, [pickupKey]: plan } });
+          }} />
+      )}
 
       <ActionBar>
         <div className="home-share">

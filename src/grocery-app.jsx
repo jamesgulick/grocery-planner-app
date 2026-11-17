@@ -20,6 +20,8 @@ import { SettingsSheet } from "./shell/SettingsSheet.jsx";
 import { GrabSheet } from "./shell/GrabSheet.jsx";
 import { clearPending, loadPending } from "./app/sendToAI.js";
 import { IconButton, PillButton, Segmented, TabBar, TabBarSpacer, TopBar } from "./ui/kit.jsx";
+import { ToastHost } from "./ui/Toast.jsx";
+import { registerLatestDB } from "./app/latestDB.js";
 import "./ui/ui.css";
 import "./shell/shell.css";
 
@@ -114,6 +116,7 @@ export default function App() {
   const [saveOk, setSaveOk]                     = useState(true);
   const [recovery, setRecovery]                 = useState(null); // { savedAt, db } awaiting restore
   const dbRef = useRef(null);
+  registerLatestDB(() => dbRef.current);   // Undo restores onto this (src/app/latestDB.js)
 
   useEffect(() => {
     (async () => {
@@ -341,6 +344,7 @@ export default function App() {
         {sheet === "data" && <DataSheet db={db} persistDB={persistDB} overdue={dataDot} onClose={() => setSheet(null)} />}
         {sheet === "settings" && <SettingsSheet db={db} persistDB={persistDB} onClose={() => setSheet(null)} />}
         {grab && <GrabSheet db={db} persistDB={persistDB} init={grab} onClose={() => setGrab(null)} onOpenPage={openLibraryPage} />}
+        <ToastHost />
       </div>
     </ErrorBoundary>
   );

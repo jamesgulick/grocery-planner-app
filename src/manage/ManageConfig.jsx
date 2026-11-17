@@ -7,6 +7,7 @@ import { extractJSON } from "../app/globals.js";
 import { planCount } from "../app/plans.js";
 import { DEFAULT_DB, DEFAULT_SETTINGS } from "../app/seed.js";
 import { C, S } from "../app/styles.js";
+import { showToast } from "../ui/toast.js";
 import { FieldGroup, Toggle } from "../components/common.jsx";
 
 // ── Meal editor ────────────────────────────────────────────────────────────────
@@ -38,7 +39,7 @@ function AwayPeriods({ contacts, ranges, onChange }) {
       {ranges.map(r => (
         <div key={r.id} style={{ display:"flex", alignItems:"center", gap:8, padding:"6px 0" }}>
           <div style={{ flex:1, fontSize:14 }}><span style={{ fontWeight:600 }}>{r.name}</span> <span style={{ color:C.muted }}>{describe(r)}</span></div>
-          <button style={{ background:"none", border:"none", color:C.faint, fontSize:18, cursor:"pointer", padding:"0 4px" }} title="Remove" onClick={() => onChange(ranges.filter(x => x.id !== r.id))}>×</button>
+          <button style={{ background:"none", border:"none", color:C.faint, fontSize:18, cursor:"pointer", padding:"0 4px" }} title="Remove" onClick={() => { onChange(ranges.filter(x => x.id !== r.id)); showToast("Away dates deleted"); }}>×</button>
         </div>
       ))}
       <div style={{ display:"flex", gap:6, flexWrap:"wrap", alignItems:"center", marginTop:6 }}>

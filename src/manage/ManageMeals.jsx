@@ -6,6 +6,7 @@ import { SEED_TS } from "../app/seed.js";
 import { C, EFFORT_COLORS, S } from "../app/styles.js";
 import { SearchBar } from "../components/common.jsx";
 import { RowChevron } from "../ui/kit.jsx";
+import { showToast } from "../ui/toast.js";
 import { MealEditor, mealMatches } from "./MealEditor.jsx";
 
 function ManageMeals({ db, persistDB }) {
@@ -41,7 +42,7 @@ function ManageMeals({ db, persistDB }) {
     setConfirmDelete({
       message: `Delete "${meal?.name}"?`,
       // Also drop the deleted meal from every side's pairsWith, so no link dangles.
-      onConfirm: () => { persistDB({...db, meals:db.meals.filter(m=>m.id!==id).map(m => (m.pairsWith||[]).includes(id) ? { ...m, pairsWith: m.pairsWith.filter(x => x !== id) } : m)}); setEditing(null); setConfirmDelete(null); }
+      onConfirm: () => { persistDB({...db, meals:db.meals.filter(m=>m.id!==id).map(m => (m.pairsWith||[]).includes(id) ? { ...m, pairsWith: m.pairsWith.filter(x => x !== id) } : m)}); setEditing(null); setConfirmDelete(null); showToast(`Deleted ${meal?.name}`); }
     });
   };
   const addIngredient = newIng => persistDB({...db, ingredients:[...db.ingredients, newIng]});

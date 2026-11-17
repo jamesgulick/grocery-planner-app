@@ -10,6 +10,8 @@ import { PlanMeals } from "./PlanMeals.jsx";
 import { orderingPatch } from "./ordering.js";
 import { WeekStep } from "./WeekStep.jsx";
 import "./plan.css";
+import { latestDB } from "../app/latestDB.js";
+import { showToast } from "../ui/toast.js";
 
 // ── PLAN TAB ───────────────────────────────────────────────────────────────────
 
@@ -149,6 +151,13 @@ function PlanTab({ db, persistDB, headerIcons, onDone }) {
     const np = reconcilePlates(mealPlan, nv, plates, db.meals || [], annotations);
     setMealPlan(nv); setPlates(np); saveDraft({ mealPlan: nv, plates: np });
   };
+  // Undo on the Meals step: put the days and plates back exactly as they were (plates too, so
+  // the engine's reasons and leftovers snapshots come back), onto the db as it is now.
+  const restoreMeals = snap => {
+    setMealPlan(snap.mealPlan); setPlates(snap.plates);
+    const cur = latestDB(), p = cur && getActivePlan(cur);
+    if (p) persistDB(writeActivePlan(cur, { ...p, mealPlan: snap.mealPlan, plates: snap.plates }));
+  };
   const setCheckedIdsP  = v => { const nv = typeof v === "function" ? v(checkedIds)  : v; setCheckedIds(nv);  saveDraft({ checkedIds: nv }); };
   const setAddedOffP    = v => { const nv = typeof v === "function" ? v(addedOff)    : v; setAddedOff(nv);    saveDraft({ addedOff: nv }); };
   // Checked = buying (Phase 1b): Inventory and Confirm both set the one decision per item;
@@ -206,7 +215,7 @@ function PlanTab({ db, persistDB, headerIcons, onDone }) {
   // Finish plan (Order's Next): the plan is ordered (Home reads "Ordered · pickup …"; set once,
   // later edits don't clear it, decided 11/12), then back to Home.
   // Confirm's order snapshot is saved in the same write.
-  const finishPlan = (snapshot = {}) => { saveDraft({ ...snapshot, ...(draft?.orderedAt ? {} : { orderedAt: new Date().toISOString() }) }); onDone?.(); };
+  const finishPlan = (snapshot = {}) => { saveDraft({ ...snapshot, ...(draft?.orderedAt ? {} : { orderedAt: new Date().toISOString() }) }); showToast(`${weekLabel(draft?.weekStartDate)} planned`); onDone?.(); };
 
   // Week sub-steps (Calendar › Who's home › Time), remembered on the plan in the background.
   const [weekSub, setWeekSub] = useState(Math.min(draft?.weekSub || 0, 2));
@@ -268,7 +277,7 @@ function PlanTab({ db, persistDB, headerIcons, onDone }) {
           dayPills={dayPills} setDayPills={setDayPillsP} presence={presence} setPresence={setPresenceP} timeLevels={timeLevels} setTimeLevels={setTimeLevelsP}
           adventurous={!!draft.adventurousWeek} setAdventurous={v => saveDraft({ adventurousWeek: v })} />}
         <div className={step > 0 ? "shell-legacy-flow" : undefined}>
-          {step === 1 && <PlanMeals inFlow mealPlan={mealPlan} plates={plates} setMealPlan={setMealPlanP} commitMealToPlan={commitMealToPlan} timeLevels={timeLevels} setTimeLevels={setTimeLevelsP} presence={presence} setPresence={setPresenceP} weekStartDate={draft.weekStartDate} adventurousWeek={!!draft.adventurousWeek} setAdventurousWeek={v => saveDraft({ adventurousWeek: v })} meals={meals} onNext={() => goToStep(2)} days={days} daysFull={daysFull} dayNotes={dayNotes} setDayNotes={setDayNotesP} dayPills={dayPills} setDayPills={setDayPillsP} db={db} persistDB={persistDB} extraDays={extraDays} canExtend={canExtend} setExtraDays={setExtraDays} />}
+          {step === 1 && <PlanMeals inFlow mealPlan={mealPlan} plates={plates} setMealPlan={setMealPlanP} restoreMeals={restoreMeals} commitMealToPlan={commitMealToPlan} timeLevels={timeLevels} setTimeLevels={setTimeLevelsP} presence={presence} setPresence={setPresenceP} weekStartDate={draft.weekStartDate} adventurousWeek={!!draft.adventurousWeek} setAdventurousWeek={v => saveDraft({ adventurousWeek: v })} meals={meals} onNext={() => goToStep(2)} days={days} daysFull={daysFull} dayNotes={dayNotes} setDayNotes={setDayNotesP} dayPills={dayPills} setDayPills={setDayPillsP} db={db} persistDB={persistDB} extraDays={extraDays} canExtend={canExtend} setExtraDays={setExtraDays} />}
           {step === 2 && <PlanInventory inFlow locIdx={locIdx} setLocIdx={setLocIdx} checkedIds={checkedIds} setCheckedIds={setCheckedIdsP} stapleFlags={stapleFlags} setOrdering={setOrdering} quantities={quantities} setQuantities={setQuantitiesP} mealPlan={mealPlan} meals={meals} ingredients={ingredients} onNext={() => goToStep(3)} days={days} onUpdateItem={updateItem} keptIds={keptIds} />}
           {step === 3 && <PlanConfirm inFlow registerNext={fn => { beforeNext.current = fn; }} mode="confirm" onUpdateItem={updateItem} keptIds={keptIds} checkedIds={checkedIds} setOrdering={setOrdering} addedOff={addedOff} setAddedOff={setAddedOffP} addedItems={addedItems} setAddedItems={setAddedItemsP} stapleFlags={stapleFlags} quantities={quantities} setQuantities={setQuantitiesP} mealPlan={mealPlan} meals={meals} ingredients={ingredients} onNext={() => goToStep(4)} db={db} persistDB={persistDB} days={days} daysFull={daysFull} />}
           {step === 4 && <PlanConfirm inFlow registerNext={fn => { beforeNext.current = fn; }} mode="sparky" onUpdateItem={updateItem} keptIds={keptIds} checkedIds={checkedIds} setOrdering={setOrdering} addedOff={addedOff} setAddedOff={setAddedOffP} addedItems={addedItems} setAddedItems={setAddedItemsP} stapleFlags={stapleFlags} quantities={quantities} setQuantities={setQuantitiesP} mealPlan={mealPlan} meals={meals} ingredients={ingredients} onFinish={finishPlan} db={db} persistDB={persistDB} days={days} daysFull={daysFull} />}

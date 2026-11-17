@@ -68,6 +68,10 @@
   --seg-shadow: rgba(0, 0, 0, 0.12);
   --scrim: rgba(20, 20, 22, 0.35);        /* behind a sheet */
   --app-max: 520px;                       /* the app column (matches #root) */
+  --pickup-chip-w: 56px;                  /* Pickup sheet date chip (board "Pickup dates") */
+  --toast-bg: #1C1C1E;                    /* confirmation bar (brief standing rules, 11/17) */
+  --toast-text: #FFFFFF;
+  --toast-min-h: 48px;
   --row-height: 44px;
   --block-button: 52px;                   /* full-width primary action */
   --touch-compact: 32px;                  /* inline text links that sit in running text */
@@ -95,7 +99,6 @@
   --tint: #E9EFEA;                        /* pale green: Home's week rows; on/off chips */
   --destructive: #B42318;                 /* deleting a whole record, and nothing else */
   --disabled: #A1A1A6;                    /* a disabled text button (Done) */
-  --toast-bg: #1C1C1E;
   --chip-height: 40px;
   --problem-outline: 1.5px;
   --plus-size: 48px;                      /* the + in the tab bar (Grab) */

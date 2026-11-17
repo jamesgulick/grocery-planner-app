@@ -23,6 +23,7 @@ import {
   DeleteSheet, HowOftenSheet, InfoSheet, IngredientsSheet, LeftoversSheet, PairsSheet,
   TagSheet, TextSheet, TimeCostSheet, WeatherSheet, WhoEatsSheet,
 } from "./LibrarySheets.jsx";
+import { showToast } from "../ui/toast.js";
 import {
   EFFORT_OPTIONS, ROTATION_OPTIONS, TYPE_OPTIONS, cadenceWord, dayShort, facetWord, isSide,
   mealDeleteImpact, mealGaps, mealHistoryIndex, monthDay, pairIdsOf,
@@ -218,7 +219,7 @@ export function MealPage({ db, persistDB, mealId, onBack, backLabel = "Library" 
       impact.linked ? [side ? "Goes with" : "Sides that go with it", `${impact.linked} ${side ? "main" : "side"}${impact.linked === 1 ? "" : "s"}`] : null,
       impact.onlyItems.length ? ["Ingredients only it uses", impact.onlyItems.join(", ")] : null,
     ].filter(Boolean);
-    open = <DeleteSheet name={meal.name} lines={lines} onClose={close} onDelete={() => { persistDB(withoutMeal(db, meal.id)); onBack(); }} />;
+    open = <DeleteSheet name={meal.name} lines={lines} onClose={close} onDelete={() => { persistDB(withoutMeal(db, meal.id)); onBack(); showToast(`Deleted ${meal.name}`); }} />;
   }
 
   // Short values (11/16: kept short so nothing wraps; the full detail is in each row's sheet).

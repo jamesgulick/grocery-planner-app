@@ -9,7 +9,8 @@
 import { useState } from "react";
 import { todayLocalISO } from "../app/globals.js";
 import { isEnded, sortStretches, stretchDates } from "../app/awayDates.js";
-import { Chip, DeleteButton, Field, Group, OutlineButton, Row, Sheet, Switch, Toast } from "../ui/kit.jsx";
+import { Chip, DeleteButton, Field, Group, OutlineButton, Row, Sheet, Switch } from "../ui/kit.jsx";
+import { showToast } from "../ui/toast.js";
 
 const newId = () => "r" + Date.now() + Math.random().toString(36).slice(2, 6);
 
@@ -57,7 +58,6 @@ export function AwayDates({ db, persistDB, onClose, onBack }) {
   const family = settings.familyContacts || [];
   const ranges = settings.awayRanges || [];
   const [editing, setEditing] = useState(null);   // null | "new" | a stretch
-  const [toast, setToast] = useState("");
   const write = next => persistDB({ ...db, settings: { ...settings, awayRanges: next } });
 
   if (editing) {
@@ -65,12 +65,12 @@ export function AwayDates({ db, persistDB, onClose, onBack }) {
     return (
       <StretchEditor stretch={stretch} family={family}
         onCancel={() => setEditing(null)}
-        onDelete={() => { write(ranges.filter(r => r.id !== stretch.id)); setEditing(null); }}
+        onDelete={() => { write(ranges.filter(r => r.id !== stretch.id)); setEditing(null); showToast("Away dates deleted"); }}
         onSave={({ who, from, to }) => {
           if (stretch) write(ranges.map(r => (r.id === stretch.id ? { ...r, name: who[0], from, to } : r)));
           else {
             write([...ranges, ...who.map(name => ({ id: newId(), name, from, to }))]);
-            setToast(`Added for ${who.join(", ")}`);
+            showToast(`Added for ${who.join(", ")}`);
           }
           setEditing(null);
         }} />
@@ -86,7 +86,6 @@ export function AwayDates({ db, persistDB, onClose, onBack }) {
         </Group>
       )}
       <OutlineButton onClick={() => setEditing("new")}>+ Add away dates</OutlineButton>
-      {toast && <Toast text={toast} onDone={() => setToast("")} />}
     </Sheet>
   );
 }
