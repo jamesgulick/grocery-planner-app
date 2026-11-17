@@ -203,14 +203,13 @@ function PlanConfirm({ mode = "confirm", onUpdateItem, keptIds = [], checkedIds,
   const dropShared = item => { toggleDismissShared(item.id); setLastDropped(item); };
   const undoDrop   = () => { if (lastDropped) toggleDismissShared(lastDropped.id); setLastDropped(null); };
 
-  const savePlan = () => {
-    const listItems = allNeeded.map(i => ({ ingredientId:i.id, status:"ordering", quantity:(quantities[i.id] !== undefined ? quantities[i.id] : (i.defaultQuantity||"")) }));
-    const today     = new Date().toISOString().split("T")[0];
-    const updated   = activePlan
-      ? { ...activePlan, meals:mealPlan, items:listItems }
-      : { weekStartDate:today, notes:"", dismissedShared:[], meals:mealPlan, items:listItems };
-    persistDB(writeActivePlan(db, updated));
-  };
+  // The order snapshot (the list as ordered). It goes to PlanTab with the step change and is
+  // saved in that same write: saved on its own, the step change right after it re-saved the
+  // plan from before the snapshot and dropped it.
+  const orderSnapshot = () => ({
+    meals: mealPlan,
+    items: allNeeded.map(i => ({ ingredientId:i.id, status:"ordering", quantity:(quantities[i.id] !== undefined ? quantities[i.id] : (i.defaultQuantity||"")) })),
+  });
 
   const QtyChip = ({ ing }) => {
     const override = quantities[ing.id];
@@ -367,7 +366,7 @@ function PlanConfirm({ mode = "confirm", onUpdateItem, keptIds = [], checkedIds,
         </div>
       </div>
 
-      <button style={{ ...S.btn, ...S.btnP }} onClick={() => { savePlan(); onNext(); }}>Next: Order ›</button>
+      <button style={{ ...S.btn, ...S.btnP }} onClick={() => onNext(orderSnapshot())}>Next: Order ›</button>
       </>}
 
       {mode === "sparky" && <>
@@ -431,7 +430,7 @@ function PlanConfirm({ mode = "confirm", onUpdateItem, keptIds = [], checkedIds,
           <button style={{ ...S.btn, ...S.btnS, marginBottom:0 }} onClick={() => setManualBatch(null)}>Done</button>
         </div>
       )}
-      <button style={{ ...S.btn, ...S.btnP }} onClick={() => { try { savePlan(); } finally { onFinish && onFinish(); } }}>Finish plan</button>
+      <button style={{ ...S.btn, ...S.btnP }} onClick={() => onFinish && onFinish(orderSnapshot())}>Finish plan</button>
       </>}
     </div>
   );

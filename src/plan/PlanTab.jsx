@@ -130,11 +130,12 @@ function PlanTab({ db, persistDB, onGoToImport, onGoToUnassigned }) {
 
   // Navigate to any step. maxStep only ever grows, so once you've visited a step
   // it stays unlocked even after you jump backward.
-  const goToStep = s => {
+  // `extra`: fields saved in the same write (Confirm's order snapshot).
+  const goToStep = (s, extra = {}) => {
     const newMax = Math.max(maxStep, s);
     setStep(s);
     setMaxStep(newMax);
-    saveDraft({ step: s, maxStep: newMax });
+    saveDraft({ step: s, maxStep: newMax, ...extra });
   };
 
   // Wrapped setters: update local state AND persist the draft in one shot.
@@ -272,10 +273,11 @@ function PlanTab({ db, persistDB, onGoToImport, onGoToUnassigned }) {
   // plan — it persists so exports keep publishing the week's meals and you can
   // resume to tweak. Retirement is date-driven (autoRetirePlans, on a later app
   // load), not triggered by finishing — this just returns to the welcome screen.
-  const finishPlan = () => {
+  const finishPlan = (snapshot = {}) => {
     // Ordered: Home's week row reads "Ordered · pickup <day>" from this. Set once; later
     // edits don't clear it (decided 11/12).
-    if (!draft?.orderedAt) saveDraft({ orderedAt: new Date().toISOString() });
+    // The order snapshot is saved in the same write.
+    saveDraft({ ...snapshot, ...(draft?.orderedAt ? {} : { orderedAt: new Date().toISOString() }) });
     // Return to Welcome. Don't read the raw draft's stored step here — after a
     // mode split/migration the raw value can be out of range; just reset cleanly.
     setStep(0);
@@ -340,7 +342,7 @@ function PlanTab({ db, persistDB, onGoToImport, onGoToUnassigned }) {
       <div style={S.body}>
         {step === 1 && <PlanMeals   mealPlan={mealPlan} plates={plates} setMealPlan={setMealPlanP} commitMealToPlan={commitMealToPlan} timeLevels={timeLevels} setTimeLevels={setTimeLevelsP} presence={presence} setPresence={setPresenceP} weekStartDate={draft?.weekStartDate} adventurousWeek={!!draft?.adventurousWeek} setAdventurousWeek={v => saveDraft({ adventurousWeek: v })} meals={meals} onNext={() => goToStep(2)} days={days} daysFull={daysFull} dayNotes={dayNotes} setDayNotes={setDayNotesP} dayPills={dayPills} setDayPills={setDayPillsP} db={db} persistDB={persistDB} extraDays={extraDays} canExtend={canExtend} setExtraDays={setExtraDays} />}
         {step === 2 && <PlanInventory checkedIds={checkedIds} setCheckedIds={setCheckedIdsP} stapleFlags={stapleFlags} setOrdering={setOrdering} quantities={quantities} setQuantities={setQuantitiesP} mealPlan={mealPlan} meals={meals} ingredients={ingredients} onNext={() => goToStep(3)} days={days} onUpdateItem={updateItem} keptIds={keptIds} />}
-        {step === 3 && <PlanConfirm mode="confirm" onUpdateItem={updateItem} keptIds={keptIds} checkedIds={checkedIds} setOrdering={setOrdering} addedOff={addedOff} setAddedOff={setAddedOffP} addedItems={addedItems} setAddedItems={setAddedItemsP} stapleFlags={stapleFlags} quantities={quantities} setQuantities={setQuantitiesP} mealPlan={mealPlan} meals={meals} ingredients={ingredients} onNext={() => goToStep(4)} db={db} persistDB={persistDB} days={days} daysFull={daysFull} />}
+        {step === 3 && <PlanConfirm mode="confirm" onUpdateItem={updateItem} keptIds={keptIds} checkedIds={checkedIds} setOrdering={setOrdering} addedOff={addedOff} setAddedOff={setAddedOffP} addedItems={addedItems} setAddedItems={setAddedItemsP} stapleFlags={stapleFlags} quantities={quantities} setQuantities={setQuantitiesP} mealPlan={mealPlan} meals={meals} ingredients={ingredients} onNext={snap => goToStep(4, snap)} db={db} persistDB={persistDB} days={days} daysFull={daysFull} />}
         {step === 4 && <PlanConfirm mode="sparky" onUpdateItem={updateItem} keptIds={keptIds} checkedIds={checkedIds} setOrdering={setOrdering} addedOff={addedOff} setAddedOff={setAddedOffP} addedItems={addedItems} setAddedItems={setAddedItemsP} stapleFlags={stapleFlags} quantities={quantities} setQuantities={setQuantitiesP} mealPlan={mealPlan} meals={meals} ingredients={ingredients} onFinish={finishPlan} db={db} persistDB={persistDB} days={days} daysFull={daysFull} />}
         {step > 1 && (
           <button style={{ background:"none", border:`1px solid ${C.border}`, borderRadius:10, padding:"10px 16px", fontSize:14, color:C.muted, cursor:"pointer", width:"100%", marginTop:4 }} onClick={() => goToStep(step - 1)}>
