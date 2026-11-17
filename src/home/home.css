@@ -44,7 +44,13 @@
 .home-cart { position: relative; display: inline-flex; color: var(--text-muted); cursor: pointer; }
 .home-cart::after { content: ""; position: absolute; inset: calc(-1 * var(--space-3)); }
 .home-cart:focus-visible { outline: 2px solid var(--action); outline-offset: 2px; border-radius: var(--radius-seg); }
-.home-tonight-label { display: inline-flex; align-items: center; gap: var(--space-2); }
+/* Tonight's band: the card's top edge in the action green, "Tonight" and the cart in white. */
+.home-tonight-card { display: flex; flex-direction: column; background: var(--surface); border-radius: var(--radius-group); overflow: hidden; }
+.home-tonight-card .home-tonight { border-radius: 0; }
+.home-main > .home-tonight-card:first-child { margin-top: var(--space-3); }   /* clear of the date title */
+.home-tonight-band { display: flex; align-items: center; gap: var(--space-2); min-height: var(--tonight-band-h); padding: 0 var(--space-4); background: var(--action); color: var(--on-action); font-size: var(--label-size); line-height: var(--label-line); font-weight: 700; }
+.home-tonight-band .home-cart { color: var(--on-action); }
+.home-tonight-band .home-cart:focus-visible { outline-color: var(--on-action); }
 
 /* The Pickup sheet's date strip (board "Pickup dates", 11/17): fixed chips scrolling sideways,
    edge to edge so a cut-off chip shows there's more; no scrollbar. */

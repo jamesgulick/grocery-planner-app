@@ -15,7 +15,7 @@ import { copyToClipboard } from "../app/clipboard.js";
 import { buildFridgeReportHTML } from "../app/fridgeReport.js";
 import { planDays, todayLocalISO, weekLabel } from "../app/globals.js";
 import { draftPlanText } from "../app/shareText.js";
-import { ActionBar, Group, Icon, IconButton, PillButton, RowChevron, Section, SectionLabel } from "../ui/kit.jsx";
+import { ActionBar, Group, Icon, IconButton, PillButton, RowChevron, Section } from "../ui/kit.jsx";
 import { PickupSheet } from "./PickupSheet.jsx";
 import "./home.css";
 
@@ -225,8 +225,10 @@ export function HomeScreen({ db, dataDot, onOpenData, onOpenSettings, onOpenPlan
           </Group>
         )}
 
-        <section className="ui-section">
-          <SectionLabel><span className="home-tonight-label">Tonight{cart(today)}</span></SectionLabel>
+        {/* Tonight (board "Tonight band", option G, 11/17): a dark green band across the top of the
+            card reads "Tonight", with the cart after it on pickup day; it stays when nothing is planned. */}
+        <section className="home-tonight-card" aria-label="Tonight">
+          <div className="home-tonight-band"><span>Tonight</span>{cart(today)}</div>
           {tPlan ? (
             <button type="button" className="home-tonight" onClick={() => onOpenPlan(tonightWeek.key)}>
               <span className={tonight ? "home-tonight-main" : "home-tonight-none"}>{tonight?.main || "Nothing planned"}</span>
