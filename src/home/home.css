@@ -37,3 +37,10 @@
 .home-share .ui-tile-button:disabled { opacity: 0.45; cursor: default; }
 .home-share .ui-tile-button { background: var(--bg); }   /* tiles read as tiles on the white bar */
 .home-share-spacer { height: calc(var(--touch) + var(--space-4) + 1px); flex: none; margin-top: calc(-1 * var(--space-5)); }
+
+/* The pending-request bar (brief §9): slim, one line; the text reopens Grab. */
+.home-pending { display: flex; align-items: center; gap: var(--space-2); min-height: var(--row-height); padding: 0 var(--space-1) 0 var(--space-4); background: var(--surface); border-radius: var(--radius-group); flex-wrap: wrap; }
+.home-pending-text { flex: 1; min-width: 0; padding: var(--space-2) 0; border: 0; background: none; font: inherit; font-size: var(--body-size); line-height: var(--body-line); color: var(--text); text-align: left; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+button.home-pending-text { cursor: pointer; }
+.home-pending-x { flex: none; display: flex; align-items: center; justify-content: center; width: var(--touch); height: var(--touch); border: 0; background: none; color: var(--text-muted); cursor: pointer; }
+.home-pending .reimport-error { flex-basis: 100%; padding-bottom: var(--space-2); }

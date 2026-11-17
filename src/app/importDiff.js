@@ -214,7 +214,7 @@ export function checkImport({ device, incoming, meta = null, sent = null }) {
   // New meals: in scope for recipe; anything else with a purpose is outside.
   for (const m of meals.added) {
     const row = { id: m.id, kind: "meal", name: m.name, strong: !isSideRec(m), meal: m,
-      line: [cap(m.type || "dinner"), m.effort ? `${EFFORT[m.effort]} time` : null, `${(m.ingredients || []).length} ingredient${(m.ingredients || []).length === 1 ? "" : "s"}`, ...noteFor(m.id)].filter(Boolean).join(" · ") };
+      line: [(m.type === "side" ? "Side" : "Main"), m.effort ? `${EFFORT[m.effort]} time` : null, `${(m.ingredients || []).length} ingredient${(m.ingredients || []).length === 1 ? "" : "s"}`, ...noteFor(m.id)].filter(Boolean).join(" · ") };
     if (!scoped || purpose === "recipe") out.newMeals.push(row);
     else out.outside.push({ ...row, problem: true, line: "Added" });
   }

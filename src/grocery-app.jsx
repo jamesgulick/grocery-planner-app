@@ -18,6 +18,7 @@ import { DataSheet } from "./shell/DataSheet.jsx";
 import { ImportCheck } from "./shell/ImportCheck.jsx";
 import { SettingsSheet } from "./shell/SettingsSheet.jsx";
 import { GrabSheet } from "./shell/GrabSheet.jsx";
+import { clearPending, loadPending } from "./app/sendToAI.js";
 import { IconButton, PillButton, Segmented, TabBar, TabBarSpacer, TopBar } from "./ui/kit.jsx";
 import "./ui/ui.css";
 import "./shell/shell.css";
@@ -88,7 +89,9 @@ export default function App() {
   const [db, setDB]               = useState(null);
   const [tab, setTab]             = useState("home");
   const [tabTaps, setTabTaps]     = useState(0);         // a bottom-tab tap returns that tab to its top (11/16)
-  const [grab, setGrab]           = useState(null);      // Grab sheet: { kind, name, link } while open
+  const [grab, setGrab]           = useState(null);      // Grab sheet: { kind, name, link, text, role } while open
+  // A request sent before this app load and still waiting for its file (an iOS reload, brief §9).
+  const [pendingAtStart, setPendingAtStart] = useState(() => !!loadPending());
   const [libOpen, setLibOpen]     = useState(null);      // a Library page to open: { kind, id, n }
   // An iOS Share Shortcut opens the app with ?name= and/or &link=: Grab opens prefilled.
   useEffect(() => {
@@ -321,7 +324,12 @@ export default function App() {
             </div>
           </div>
         )}
-        {tab==="home" && <HomeScreen db={db} dataDot={dataDot} onOpenData={() => setSheet("data")} onOpenSettings={() => setSheet("settings")} onOpenPlan={openPlan} />}
+        {tab==="home" && <HomeScreen db={db} dataDot={dataDot} onOpenData={() => setSheet("data")} onOpenSettings={() => setSheet("settings")} onOpenPlan={openPlan}
+          pending={pendingAtStart ? loadPending() : null}
+          onDismissPending={() => { clearPending(); setPendingAtStart(false); }}
+          onPendingLoaded={() => setPendingAtStart(false)}
+          onOpenPending={p => setGrab({ kind: "meal", name: p.job?.name || "", link: p.job?.link || "", text: p.job?.text || "", role: p.job?.role || "main" })}
+          persistDB={persistDB} />}
         {tab==="plan" && <PlanTab key={db.activePlan || "current"} db={db} persistDB={persistDB} headerIcons={headerIcons} onDone={() => setTab("home")} />}
         {tab==="library" && <LibraryTab db={db} persistDB={persistDB} view={libraryView} setView={setLibraryView} headerIcons={headerIcons} resetKey={tabTaps} openRequest={libOpen} onGrab={init => setGrab(init)} />}
         <TabBarSpacer />

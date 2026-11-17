@@ -19,8 +19,22 @@ import { exportVocab } from "./vocab.js";
 export const SEND_PROMPT = "Follow the request in the _meta node of the attached grocery planner file and send back the whole file.";
 
 const SENT_KEY = "grocery_sent" + KEY_SUFFIX;
+// The request waiting for its file (brief §9 "Grab's return trip"): { purpose, at, job } — what
+// was typed (recipe: name, link, text, role; enrich: meals). Kept apart from the sent copy so
+// Home can read it cheaply. Cleared when a file is loaded or the Home bar is dismissed.
+const PENDING_KEY = "grocery_pending" + KEY_SUFFIX;
 
-/** The last send from this device: { purpose, exportedAt, at, db } or null. */
+export function loadPending() {
+  try { const raw = localStorage.getItem(PENDING_KEY); return raw ? JSON.parse(raw) : null; } catch { return null; }
+}
+export function clearPending() {
+  try { localStorage.removeItem(PENDING_KEY); } catch { /* nothing to clear */ }
+}
+function savePending(record) {
+  try { localStorage.setItem(PENDING_KEY, JSON.stringify(record)); } catch { /* the bar is a safety net only */ }
+}
+
+/** The last send from this device: { purpose, exportedAt, at, db, job } or null. */
 export function loadSentCopy() {
   try { const raw = localStorage.getItem(SENT_KEY); return raw ? JSON.parse(raw) : null; } catch { return null; }
 }
@@ -40,7 +54,9 @@ export async function sendToAI(db, persistDB, job = null) {
   const extraMeta = { ...(request ? { request } : {}), vocab: exportVocab() };
   const payload = buildBackupPayload(db, extraMeta);
   const { text, exportedAt } = payload;
-  saveSentCopy({ purpose: request?.purpose || null, exportedAt, at: new Date().toISOString(), db });
+  const at = new Date().toISOString();
+  saveSentCopy({ purpose: request?.purpose || null, exportedAt, at, db, job: job ? withoutPurpose(job) : null });
+  if (job?.purpose === "recipe" || job?.purpose === "enrich") savePending({ purpose: job.purpose, at, job: withoutPurpose(job) });
   const file = new File([text], exportFileName(), { type: "application/json" });
   if (navigator.canShare?.({ files: [file] })) {
     try {

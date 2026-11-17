@@ -15,7 +15,7 @@ import { checkImport, mealPreview, savedLabel } from "../app/importDiff.js";
 import { formatSavedAt } from "../app/globals.js";
 import { DEFAULT_SETTINGS } from "../app/seed.js";
 import { migrateDB } from "../app/plans.js";
-import { loadSentCopy } from "../app/sendToAI.js";
+import { clearPending, loadSentCopy } from "../app/sendToAI.js";
 import { BlockButton, Group, Row, Section, Sheet } from "../ui/kit.jsx";
 
 const JOB = { calendar: "Calendar sync", recipe: "Recipe", enrich: "Fill in" };
@@ -110,7 +110,7 @@ export function ImportCheck({ device, prepared, onLoad, onCancel, fromClipboard 
 
   return (
     <Sheet title="Load this file?" sub={sub} onClose={onCancel} doneLabel="Cancel"
-      footer={<BlockButton onClick={onLoad}>{stale ? "Load anyway" : "Load"}</BlockButton>}>
+      footer={<BlockButton onClick={() => { clearPending(); onLoad(); }}>{stale ? "Load anyway" : "Load"}</BlockButton>}>
       {r?.purposeLine && <div className="ui-group"><RecordRow row={{ name: "Different job", line: r.purposeLine, problem: true }} /></div>}
       {stale && (
         <Section label="Changed here since you sent it">

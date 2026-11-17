@@ -13,6 +13,7 @@ import { buildFridgeReportHTML } from "../app/fridgeReport.js";
 import { planDays, todayLocalISO, weekLabel } from "../app/globals.js";
 import { draftPlanText } from "../app/shareText.js";
 import { ActionBar, Group, Icon, IconButton, PillButton, RowChevron, Section } from "../ui/kit.jsx";
+import { ReimportPill } from "../shell/ReimportPill.jsx";
 import "./home.css";
 
 const ABBR = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
@@ -118,7 +119,14 @@ function WeekRow({ week, state, today, onOpen, onContinue }) {
   );
 }
 
-export function HomeScreen({ db, dataDot, onOpenData, onOpenSettings, onOpenPlan }) {
+// "Recipe sent 5:41" / "2 meals sent 5:41" (brief §9: the bar after an iOS reload).
+const clock = iso => { const d = new Date(iso); return `${d.getHours() % 12 || 12}:${String(d.getMinutes()).padStart(2, "0")}`; };
+function pendingWords(p) {
+  if (p.purpose === "enrich") { const n = (p.job?.meals || []).length; return `${n} meal${n === 1 ? "" : "s"} sent ${clock(p.at)}`; }
+  return `Recipe sent ${clock(p.at)}`;
+}
+
+export function HomeScreen({ db, dataDot, onOpenData, onOpenSettings, onOpenPlan, pending, onDismissPending, onPendingLoaded, onOpenPending, persistDB }) {
   const today = todayLocalISO();
   const plans = db.plans || {};
   const shoppingDay = db.settings?.shoppingDay;
@@ -200,6 +208,15 @@ export function HomeScreen({ db, dataDot, onOpenData, onOpenSettings, onOpenPlan
       </header>
 
       <main className="home-main">
+        {pending && (
+          <div className="home-pending">
+            {pending.purpose === "recipe"
+              ? <button type="button" className="home-pending-text" onClick={() => onOpenPending(pending)}>{pendingWords(pending)}</button>
+              : <span className="home-pending-text">{pendingWords(pending)}</span>}
+            <ReimportPill db={db} persistDB={persistDB} onLoaded={onPendingLoaded} />
+            <button type="button" className="home-pending-x" aria-label="Dismiss" onClick={onDismissPending}><Icon name="close" size={16} /></button>
+          </div>
+        )}
         {db._isSeed && (
           <Group>
             <div className="home-firstrun">

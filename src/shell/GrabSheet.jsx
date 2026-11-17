@@ -2,15 +2,18 @@
 // the tab bar over any screen, by a Library search with no results, or by a link carrying
 // ?name= and &link= (an iOS Share Shortcut).
 //   Meal: Name · Link · Recipe (text, with Paste) · Main | Side.
-//     [Save] filled (needs a name) · [Send to AI] outlined (needs a link or recipe text;
-//     the AI names the meal, so no name is needed) · "Add details" text (saves, then opens
-//     the meal page). A saved meal is New with Wanted soon on.
+//     [Save] filled (needs a name) · [Send to AI] › [Re-import], the Calendar sync pair
+//     (Send needs a link or recipe text; the AI names the meal, so no name is needed) ·
+//     "Add details" text (saves, then opens the meal page). A saved meal is New with Wanted
+//     soon on. Grab stays open after Send to AI (the app survives the trip, 11/16); Re-import
+//     opens the file picker, then "Load this file?", and loading closes Grab.
 //   Item: Name · Where it lives · How often (Always · Weekly · Slow; none = For meals).
 //     [Add details] | [Save] side by side.
 import { useState } from "react";
 import { INVENTORY_LOCS, toSentenceCase } from "../app/globals.js";
 import { sendToAI } from "../app/sendToAI.js";
 import { BlockButton, Chip, Field, OutlineButton, Segmented, Sheet } from "../ui/kit.jsx";
+import { ReimportPill } from "./ReimportPill.jsx";
 
 const newId = p => p + Date.now() + Math.random().toString(36).slice(2, 6);
 
@@ -31,8 +34,9 @@ export function GrabSheet({ db, persistDB, init = {}, onClose, onOpenPage }) {
   const [kind, setKind] = useState(init.kind || "meal");
   const [name, setName] = useState(init.name || "");
   const [link, setLink] = useState(init.link || "");
-  const [text, setText] = useState("");
-  const [role, setRole] = useState("main");
+  const [text, setText] = useState(init.text || "");
+  const [role, setRole] = useState(init.role || "main");
+  const [sent, setSent] = useState(false);
   const [place, setPlace] = useState(null);
   const [often, setOften] = useState(null);   // always | weekly | slow | null (For meals)
   const clean = toSentenceCase(name.trim());
@@ -52,7 +56,7 @@ export function GrabSheet({ db, persistDB, init = {}, onClose, onOpenPage }) {
   };
   const send = async () => {
     const res = await sendToAI(db, persistDB, { purpose: "recipe", name: clean, link: link.trim(), text: text.trim(), role });
-    if (res !== "cancelled") onClose();
+    if (res !== "cancelled") setSent(true);
   };
 
   const nameTaken = kind === "meal" && clean && (db.meals || []).some(m => m.name.trim().toLowerCase() === clean.toLowerCase());
@@ -64,7 +68,12 @@ export function GrabSheet({ db, persistDB, init = {}, onClose, onOpenPage }) {
       footer={kind === "meal" ? (
         <div className="grab-footer">
           <BlockButton onClick={() => { if (canSave) { saveMeal(); onClose(); } }} disabled={!canSave}>Save</BlockButton>
-          <OutlineButton onClick={() => canSend && send()} disabled={!canSend}>Send to AI</OutlineButton>
+          <div className="grab-ai">
+            <button type="button" className="sync-pill" onClick={() => canSend && send()} disabled={!canSend}>Send to AI</button>
+            <span className="sync-chev" aria-hidden="true">›</span>
+            <ReimportPill db={db} persistDB={persistDB} onLoaded={onClose} />
+          </div>
+          {sent && <div className="ui-meta grab-sent">Prompt copied</div>}
           <button type="button" className="ui-link grab-details" disabled={!canSave} onClick={() => { const id = saveMeal(); onClose(); onOpenPage({ kind: "meal", id }); }}>Add details</button>
         </div>
       ) : (
