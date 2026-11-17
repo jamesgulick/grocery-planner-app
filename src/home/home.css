@@ -50,3 +50,4 @@
 .pickup-days button { display: flex; flex-direction: column; align-items: center; gap: var(--space-half); padding: var(--space-2) 0; }
 .pickup-date { font-size: var(--body-size); line-height: var(--body-line); font-weight: 700; }
 .pickup-start { min-height: var(--label-line); font-size: var(--tab-label-size); font-weight: 500; color: var(--text-muted); }
+.pickup-days button:disabled { opacity: 0.35; cursor: default; }
