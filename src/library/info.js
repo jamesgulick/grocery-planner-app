@@ -5,11 +5,10 @@
 // Each entry is a list of [label, text] lines; a null label is a plain line.
 
 export const INFO = {
-  // Type: wording from the walkthrough (Decisions 11/16: "Type keeps its existing ⓘ").
-  type: { title: "Type", lines: [
-    ["Batch", "made ahead to cover several meals."],
-    ["Takeout", "nothing to cook or buy."],
-    ["Remix", "built from another meal's leftovers."],
+  // Main or side (Ruling 18, 11/16). Wording drafted app-side; the design chat may refit it.
+  type: { title: "Main or side", lines: [
+    ["Main", "the night's dinner. The planner plans one each night."],
+    ["Side", "planned beside a main, or to give someone dinner when they won't eat it."],
   ] },
   whoEats: { title: "Who eats it", lines: [
     ["Won't eat", "the planner never counts this meal as their dinner. It finds them something else that night (a side that can be someone's dinner, or leftovers), or tells you when it can't."],
@@ -44,6 +43,12 @@ export const INFO = {
   ] },
   plateFeel: { title: "Plate and feel", lines: [
     [null, "Describes the dish. Plate traits decide which sides suit it: a side that avoids “Starchy” isn't suggested beside a starchy main. Feel is description only."],
+  ] },
+  plate: { title: "Plate", lines: [
+    [null, "Describes the dish. A side isn't suggested beside a plate that already has a trait it avoids."],
+  ] },
+  grillable: { title: "Grillable", lines: [
+    [null, "Only planned on dry, warm days while Grill season is on."],
   ] },
   avoid: { title: "Avoid on the plate", lines: [
     [null, "Not suggested beside a main with these traits. It can still be used to give someone dinner."],

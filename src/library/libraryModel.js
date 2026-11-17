@@ -19,10 +19,8 @@ export const dayShort = iso => { const d = dateOf(iso); return `${WD[d.getDay()]
 import { facetWord } from "../app/vocab.js";
 export { facetWord };
 
-export const TYPE_OPTIONS = [
-  { value: "dinner", label: "Dinner" }, { value: "side", label: "Side" }, { value: "batch", label: "Batch" },
-  { value: "takeout", label: "Takeout" }, { value: "remix", label: "Remix" },
-];
+// Main | Side (Ruling 18, 11/16). Main is stored as "dinner", as before.
+export const TYPE_OPTIONS = [{ value: "dinner", label: "Main" }, { value: "side", label: "Side" }];
 export const typeWord = t => (TYPE_OPTIONS.find(o => o.value === t) || TYPE_OPTIONS[0]).label;
 export const ROTATION_OPTIONS = [
   { value: "experimental", label: "New" }, { value: "in", label: "In rotation" }, { value: "manual", label: "Hand-picked" },
@@ -98,24 +96,22 @@ export function mealHistoryIndex(db, today) {
 }
 
 // ── To finish ─────────────────────────────────────────────────────────────────
-// Finish-the-entry gaps (Decisions 11/14–11/15): only for a meal in rotation or planned.
-// Style missing; a side with no Goes with; a planned meal with nothing to buy — except a
-// meal not cooked at home or a Remix (RULING 17.1).
-export const notHomeCooked = m => (m.service || []).some(s => s !== "home-cooked") || m.type === "takeout";
+// Finish-the-entry gaps (Decisions 11/14–11/16): only for a meal in rotation or planned.
+// A main with no Style; a planned meal with nothing to buy, except a meal not cooked at home
+// (RULING 17.1; Remix is gone, Ruling 18). An empty Goes with is never a gap (11/16).
+export const notHomeCooked = m => (m.service || []).some(s => s !== "home-cooked");
 export const styleMissing = m => !(m.form || []).length && !(m.service || []).length;
 export function mealGaps(m, hist) {
   const planned = hist.planned(m.name);
   if (m.rotation !== "in" && m.rotation !== undefined && !planned) return {};
   const g = {};
-  if (styleMissing(m)) g.style = true;
-  if (isSide(m) && !(m.pairsWith || []).length) g.goesWith = true;
-  if (planned && !(m.ingredients || []).length && !notHomeCooked(m) && m.type !== "remix") g.nothingToBuy = planned;
+  if (!isSide(m) && styleMissing(m)) g.style = true;
+  if (planned && !(m.ingredients || []).length && !notHomeCooked(m)) g.nothingToBuy = planned;
   return g;
 }
 export function gapLine(g) {
   if (g.nothingToBuy) return `Nothing to buy for ${dayShort(g.nothingToBuy)}`;
   if (g.style) return "Style not set";
-  if (g.goesWith) return "Goes with not set";
   return null;
 }
 export const itemToFinish = i => !placeOf(i);

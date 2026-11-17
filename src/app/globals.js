@@ -46,7 +46,7 @@ const EFFORTS = ["easy","medium","involved"];
 // nudges (comfort on cold days, light on hot). Separate from grillable (a hard
 // gate on bad-grill weather). See the meal-suggestion weighting.
 const TEMP_AFFINITY_OPTIONS = ["comfort","neutral","light"];
-const MEAL_TYPES       = ["dinner","side","remix","batch","takeout"];
+const MEAL_TYPES       = ["dinner","side"];   // Main | Side (Ruling 18, 11/16); "dinner" is the stored value for Main
 const FAMILY_NAMES     = ["Partner","Kid 1","Kid 2","Kid 3","Me"];
 // Preview builds share an origin — and so localStorage — with the live app:
 // VITE_PREVIEW=1 (the hotfix preview, /preview/) and VITE_PREVIEW=v2 (the polish

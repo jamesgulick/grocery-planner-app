@@ -108,7 +108,7 @@ const mapBothPlans = (db, fn) => ({
 const PLAN_MODEL_VER = 1;
 const PLAN_INPUTS_VER = 1;   // timeLevels + presence (see the plan-inputs block below)
 const PLAN_ORDER_VER = 1;    // checked = buying: removedIds folded away (polish Phase 1b)
-const SCHEMA_VER = 2;        // 1: phase 2 data groundwork · 2: How often stores "occasional" (see below)
+const SCHEMA_VER = 3;        // 1: phase 2 data groundwork · 2: How often stores "occasional" · 3: Main | Side
 
 // Every meal and item needs an id: the import check and the AI round trip match records by
 // id (RULING 16.2). A record without one gets one minted here, once; the next save keeps it.
@@ -288,6 +288,23 @@ const migrateDB = db => {
       ...out,
       meals: (out.meals || []).map(m => (m && m.rotation === "in" && !m.cadence ? { ...m, cadence: "occasional" } : m)),
       _schemaVer: 2,
+    };
+  }
+
+  // _schemaVer 3 (Ruling 18, 11/16): type narrows to Main | Side. Batch, Takeout and Remix carry
+  // no engine meaning (the engine reads type only as side or not) and become Main ("dinner").
+  // Every ex-Takeout meal keeps a non-home-cooked Service, which is what spacing and cost read:
+  // one without it gets "takeout" (replacing a lone "home-cooked").
+  if ((out._schemaVer || 0) < 3) {
+    out = {
+      ...out,
+      meals: (out.meals || []).map(m => {
+        if (!m || !["batch", "takeout", "remix"].includes(m.type)) return m;
+        const next = { ...m, type: "dinner" };
+        if (m.type === "takeout" && !(m.service || []).some(s => s !== "home-cooked")) next.service = ["takeout"];
+        return next;
+      }),
+      _schemaVer: 3,
     };
   }
 

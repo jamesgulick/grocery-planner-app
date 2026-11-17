@@ -26,7 +26,7 @@ import {
 import {
   EFFORT_OPTIONS, ROTATION_OPTIONS, TYPE_OPTIONS, cadenceWord, dayShort, facetWord, isSide,
   mealDeleteImpact, mealGaps, mealHistoryIndex, monthDay, pairIdsOf,
-  typeWord, weatherWords, withField, withPairs, withoutMeal,
+  weatherWords, withField, withPairs, withoutMeal,
 } from "./libraryModel.js";
 
 // The page's title bar and big title, shared with the item page.
@@ -176,21 +176,22 @@ export function MealPage({ db, persistDB, mealId, onBack, backLabel = "Library" 
   const setField = (k, v) => save(db.meals.map(m => (m.id === meal.id ? withField(m, k, v) : m)));
   const close = () => setSheet(null);
 
-  const sub = [typeWord(meal.type), planned ? `Planned ${dayShort(planned)}` : null].filter(Boolean).join(" · ");
+  // The subline drops the type: Main or side has its own card (11/16).
+  const sub = planned ? `Planned ${dayShort(planned)}` : "";
   const effort = EFFORT_OPTIONS.find(o => o.value === meal.effort);
   const cooked = hist.count(meal.name);
 
   let open = null;
   if (sheet === "who") open = <WhoEatsSheet meal={meal} family={family} onChange={p => setField("preferences", p.length ? p : [])} onClose={close} />;
   if (sheet === "often") open = <HowOftenSheet meal={meal} onField={setField} onClose={close} />;
-  if (sheet === "time") open = <TimeCostSheet meal={meal} onField={setField} onClose={close} />;
+  if (sheet === "time") open = <TimeCostSheet meal={meal} onField={setField} onClose={close} noCost={side} />;
   if (sheet === "style") open = <TagSheet title="Style" onClose={close} groups={[
     { label: "Form", info: "style", options: FACET_VOCAB.form, value: meal.form, onChange: v => setField("form", v) },
     { label: "Service", info: "style", options: FACET_VOCAB.service, value: meal.service, onChange: v => setField("service", v) },
   ]} />;
-  if (sheet === "plate") open = <TagSheet title="Plate and feel" onClose={close} groups={[
-    { label: "Feel", info: "plateFeel", options: FACET_VOCAB.experience, value: meal.experience, onChange: v => setField("experience", v) },
-    { label: "Plate", info: "plateFeel", options: FACET_VOCAB.plate, value: meal.plate, onChange: v => setField("plate", v) },
+  if (sheet === "plate") open = <TagSheet title={side ? "Plate" : "Plate and feel"} onClose={close} groups={[
+    ...(side ? [] : [{ label: "Feel", info: "plateFeel", options: FACET_VOCAB.experience, value: meal.experience, onChange: v => setField("experience", v) }]),
+    { label: "Plate", info: side ? "plate" : "plateFeel", options: FACET_VOCAB.plate, value: meal.plate, onChange: v => setField("plate", v) },
   ]} />;
   if (sheet === "avoid") open = <TagSheet title="Avoid on the plate" onClose={close} groups={[
     { label: "Plate", info: "avoid", options: FACET_VOCAB.plate, value: meal.avoidPlate, onChange: v => setField("avoidPlate", v) },
@@ -232,7 +233,7 @@ export function MealPage({ db, persistDB, mealId, onBack, backLabel = "Library" 
   const handPicked = meal.rotation === "manual";
   const howShort = handPicked ? "Not used" : meal.cadence ? cadenceWord(meal.cadence) : null;
   const cost = meal.cost && meal.cost !== "none" ? meal.cost[0].toUpperCase() + meal.cost.slice(1) : null;
-  const timeShort = effort ? <span className="lib-with-clocks"><Clocks n={effort.n} />{[effort.label, cost].filter(Boolean).join(" · ")}</span> : null;
+  const timeShort = effort ? <span className="lib-with-clocks"><Clocks n={effort.n} />{[effort.label, side ? null : cost].filter(Boolean).join(" · ")}</span> : null;
   // Tag rows (11/16): every value as plain text joined with " · ", stacked under the label.
   const tags = values => (values.length ? values.map(facetWord).join(" · ") : null);
   const names = list => (list.length ? list.join(" · ") : null);
@@ -248,13 +249,25 @@ export function MealPage({ db, persistDB, mealId, onBack, backLabel = "Library" 
         renameProblem={n => mealNameProblem(db.meals, meal.id, n)}
         onRename={n => { const base = renameMeal(db, meal.id, n); persistDB({ ...base, meals: base.meals.map(m => (m.id === meal.id ? { ...m, name: n } : m)) }); }} />
 
+      {/* Main or side (11/16, Ruling 18): one row, no heading; a small control, not a tab bar. */}
+      <section className="lib-group">
+        <GroupCard>
+          <div className="lib-row lib-row-switch">
+            <span className="lib-row-label">Main or side<Info label="Main or side" topic="type" onInfo={setInfo} /></span>
+            <div className="lib-type-seg">
+              <Segmented label="Main or side" value={side ? "side" : "dinner"} onChange={v => save(db.meals.map(m => (m.id === meal.id ? { ...m, type: v } : m)))} options={TYPE_OPTIONS} />
+            </div>
+          </div>
+        </GroupCard>
+      </section>
+
       <section className="lib-group">
         <h2 className="lib-group-head">Planning</h2>
         <GroupCard>
           <SwitchField label="Wanted soon" info="wantedSoon" onInfo={setInfo} checked={meal.soon} onChange={v => setField("soon", v || undefined)} />
           <FieldRow label="Who eats it" info="whoEats" onInfo={setInfo} value={whoShort} onClick={() => setSheet("who")} />
           <FieldRow label="How often" info="howOften" onInfo={setInfo} value={howShort} dim={handPicked} onClick={() => setSheet("often")} />
-          <FieldRow label="Time and cost" info="timeNeeded" onInfo={setInfo} value={timeShort} onClick={() => setSheet("time")} />
+          <FieldRow label={side ? "Time needed" : "Time and cost"} info="timeNeeded" onInfo={setInfo} value={timeShort} onClick={() => setSheet("time")} />
           <StackField label="Rotation" info="rotation" onInfo={setInfo}
             meta={cooked ? `Cooked ${cooked} time${cooked === 1 ? "" : "s"}${last ? ` · last ${monthDay(last)}` : ""}` : "Not cooked yet"}>
             <Segmented label="Rotation" value={meal.rotation || "in"} onChange={v => setField("rotation", v)} options={ROTATION_OPTIONS} />
@@ -264,14 +277,12 @@ export function MealPage({ db, persistDB, mealId, onBack, backLabel = "Library" 
 
       <section className="lib-group">
         <h2 className="lib-group-head">The plate</h2>
-        <GroupCard problem={gaps.style || gaps.goesWith}>
-          <StackField label="Type" info="type" onInfo={setInfo}>
-            <Segmented label="Type" value={meal.type || "dinner"} onChange={v => save(db.meals.map(m => (m.id === meal.id ? { ...m, type: v } : m)))} options={TYPE_OPTIONS} />
-          </StackField>
-          <FieldRow label="Style" info="style" onInfo={setInfo} problem={gaps.style} onClick={() => setSheet("style")} stacked
-            value={tags([...(meal.form || []), ...(meal.service || [])])} />
-          <FieldRow label="Plate and feel" info="plateFeel" onInfo={setInfo} onClick={() => setSheet("plate")} stacked
-            value={tags([...(meal.experience || []), ...(meal.plate || [])])} />
+        <GroupCard problem={gaps.style}>
+          {/* A side hides Style, Feel, Day feel and Cost (inert for sides, Ruling 18); their values are kept. */}
+          {!side && <FieldRow label="Style" info="style" onInfo={setInfo} problem={gaps.style} onClick={() => setSheet("style")} stacked
+            value={tags([...(meal.form || []), ...(meal.service || [])])} />}
+          <FieldRow label={side ? "Plate" : "Plate and feel"} info={side ? "plate" : "plateFeel"} onInfo={setInfo} onClick={() => setSheet("plate")} stacked
+            value={tags(side ? (meal.plate || []) : [...(meal.experience || []), ...(meal.plate || [])])} />
           {!side && <>
             <SwitchField label="No sides needed" info="noSides" onInfo={setInfo} checked={meal.noSidesUnlessNeeded} onChange={v => setField("noSidesUnlessNeeded", v || undefined)} />
             {!meal.noSidesUnlessNeeded && (
@@ -279,7 +290,7 @@ export function MealPage({ db, persistDB, mealId, onBack, backLabel = "Library" 
             )}
           </>}
           {side && <>
-            <FieldRow label="Goes with" info="goesWith" onInfo={setInfo} problem={gaps.goesWith} onClick={() => setSheet("pairs")} stacked value={names(pairNames)} />
+            <FieldRow label="Goes with" info="goesWith" onInfo={setInfo} onClick={() => setSheet("pairs")} stacked value={names(pairNames)} />
             <FieldRow label="Avoid on the plate" info="avoid" onInfo={setInfo} onClick={() => setSheet("avoid")} stacked value={tags(meal.avoidPlate || [])} />
             <SwitchField label="Can be someone's dinner" info="substantial" onInfo={setInfo} checked={meal.substantial} onChange={v => setField("substantial", v || undefined)} />
           </>}
@@ -290,7 +301,9 @@ export function MealPage({ db, persistDB, mealId, onBack, backLabel = "Library" 
         <h2 className="lib-group-head">Cooking</h2>
         <GroupCard>
           <FieldRow label="Leftovers" info="leftovers" onInfo={setInfo} onClick={() => setSheet("left")} value={leftShort} />
-          <FieldRow label="Weather" info="weather" onInfo={setInfo} onClick={() => setSheet("weather")} value={weatherWords(meal)} />
+          {side
+            ? <SwitchField label="Grillable" info="grillable" onInfo={setInfo} checked={meal.grillable} onChange={v => setField("grillable", v)} />
+            : <FieldRow label="Weather" info="weather" onInfo={setInfo} onClick={() => setSheet("weather")} value={weatherWords(meal)} />}
         </GroupCard>
       </section>
 

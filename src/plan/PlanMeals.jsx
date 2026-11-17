@@ -415,9 +415,6 @@ function PlanMeals({ inFlow, mealPlan, plates, setMealPlan, commitMealToPlan, ti
             <span>{m.name} <span style={{ fontSize:11, color:C.faint, marginLeft:4 }}>{recencyLabel(m)}</span></span>
             <span style={{ display:"flex", gap:4, alignItems:"center" }}>
               {m.type === "side"    && <span style={S.tag(C.accent,  C.primaryLight)}>side</span>}
-              {m.type === "remix"   && <span style={S.tag("#7C3AED", "#EDE9FE")}>remix</span>}
-              {m.type === "batch"   && <span style={S.tag(C.muted,   "#F3F4F6")}>batch</span>}
-              {m.type === "takeout" && <span style={S.tag(C.muted,   "#F3F4F6")}>takeout</span>}
             </span>
           </div>
         ))}

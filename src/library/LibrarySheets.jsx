@@ -115,17 +115,18 @@ export function WeatherSheet({ meal, onField, onClose }) {
 }
 
 
-export function TimeCostSheet({ meal, onField, onClose }) {
+// `noCost`: a side's page (Ruling 18: cost is inert for sides; its value is kept).
+export function TimeCostSheet({ meal, onField, onClose, noCost }) {
   const [label, info] = useInfo();
   return (
-    <Sheet title="Time needed and cost" onClose={onClose}>
+    <Sheet title={noCost ? "Time needed" : "Time needed and cost"} onClose={onClose}>
       <div className="ui-field">{label("Time needed", "timeNeeded")}
         <Segmented label="Time needed" value={meal.effort} onChange={v => onField("effort", v)}
           options={EFFORT_OPTIONS.map(o => ({ value: o.value, label: <span className="lib-with-clocks"><Clocks n={o.n} />{o.label}</span> }))} />
       </div>
-      <div className="ui-field">{label("Cost", "cost")}
+      {!noCost && <div className="ui-field">{label("Cost", "cost")}
         <Segmented label="Cost" value={meal.cost || "none"} onChange={v => onField("cost", v === "none" ? undefined : v)} options={COST_OPTIONS} />
-      </div>
+      </div>}
       {info}
     </Sheet>
   );
