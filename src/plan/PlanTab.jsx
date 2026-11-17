@@ -132,11 +132,12 @@ function PlanTab({ db, persistDB, headerIcons, onDone }) {
 
   // Navigate to any step. maxStep only ever grows, so once you've visited a step
   // it stays unlocked even after you jump backward.
-  const goToStep = s => {
+  // `extra`: fields saved in the same write (Confirm's order snapshot).
+  const goToStep = (s, extra = {}) => {
     const newMax = Math.max(maxStep, s);
     setStep(s);
     setMaxStep(newMax);
-    saveDraft({ step: s, maxStep: newMax }, { background: true }); // moving between steps isn't an edit (RULING 16.4)
+    saveDraft({ step: s, maxStep: newMax, ...extra }, { background: true }); // moving between steps isn't an edit (RULING 16.4)
   };
 
   // Wrapped setters: update local state AND persist the draft in one shot.
@@ -204,7 +205,8 @@ function PlanTab({ db, persistDB, headerIcons, onDone }) {
 
   // Finish plan (Order's Next): the plan is ordered (Home reads "Ordered · pickup …"; set once,
   // later edits don't clear it, decided 11/12), then back to Home.
-  const finishPlan = () => { if (!draft?.orderedAt) saveDraft({ orderedAt: new Date().toISOString() }); onDone?.(); };
+  // Confirm's order snapshot is saved in the same write.
+  const finishPlan = (snapshot = {}) => { saveDraft({ ...snapshot, ...(draft?.orderedAt ? {} : { orderedAt: new Date().toISOString() }) }); onDone?.(); };
 
   // Week sub-steps (Calendar › Who's home › Time), remembered on the plan in the background.
   const [weekSub, setWeekSub] = useState(Math.min(draft?.weekSub || 0, 2));
@@ -216,7 +218,7 @@ function PlanTab({ db, persistDB, headerIcons, onDone }) {
   };
   // Inventory walks the storage places; the footer drives it (the header tabs come in 4c).
   const [locIdx, setLocIdx] = useState(0);
-  // A step that must save before moving on (Confirm's order snapshot) registers it here.
+  // Confirm registers its order snapshot here; Next / Finish plan save it with the step change.
   const beforeNext = useRef(null);
 
   // ── The frame (spec §2): title, step bar, the step's own header control; the step;
@@ -247,8 +249,8 @@ function PlanTab({ db, persistDB, headerIcons, onDone }) {
       prev: locIdx > 0 ? { label: `‹ ${LOCS[locIdx - 1]}`, go: () => setLocIdx(locIdx - 1) } : { label: "‹ Meals", go: () => goToStep(1) },
       next: locIdx < LOCS.length - 1 ? { label: `Next: ${LOCS[locIdx + 1]} ›`, go: () => setLocIdx(locIdx + 1) } : { label: "Next: Confirm ›", go: () => goToStep(3) },
     };
-    if (step === 3) return { prev: { label: "‹ Inventory", go: () => { setLocIdx(LOCS.length - 1); goToStep(2); } }, next: { label: "Next: Order ›", go: () => { beforeNext.current?.(); goToStep(4); } } };
-    return { prev: { label: "‹ Confirm", go: () => goToStep(3) }, next: { label: "Finish plan", go: () => { beforeNext.current?.(); finishPlan(); } } };
+    if (step === 3) return { prev: { label: "‹ Inventory", go: () => { setLocIdx(LOCS.length - 1); goToStep(2); } }, next: { label: "Next: Order ›", go: () => goToStep(4, beforeNext.current?.() || {}) } };
+    return { prev: { label: "‹ Confirm", go: () => goToStep(3) }, next: { label: "Finish plan", go: () => finishPlan(beforeNext.current?.() || {}) } };
   })();
 
   return (

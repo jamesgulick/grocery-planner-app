@@ -203,16 +203,15 @@ function PlanConfirm({ inFlow, registerNext, mode = "confirm", onUpdateItem, kep
   const dropShared = item => { toggleDismissShared(item.id); setLastDropped(item); };
   const undoDrop   = () => { if (lastDropped) toggleDismissShared(lastDropped.id); setLastDropped(null); };
 
-  const savePlan = () => {
-    const listItems = allNeeded.map(i => ({ ingredientId:i.id, status:"ordering", quantity:(quantities[i.id] !== undefined ? quantities[i.id] : (i.defaultQuantity||"")) }));
-    const today     = new Date().toISOString().split("T")[0];
-    const updated   = activePlan
-      ? { ...activePlan, meals:mealPlan, items:listItems }
-      : { weekStartDate:today, notes:"", dismissedShared:[], meals:mealPlan, items:listItems };
-    persistDB(writeActivePlan(db, updated), { background: true }); // a snapshot of the list, not an edit
-  };
-  // In the Plan frame, its fixed Next saves the order snapshot first (as the old button did).
-  registerNext?.(savePlan);
+  // The order snapshot (the list as ordered). It goes to PlanTab with the step change and is
+  // saved in that same write: saved on its own, the step change right after it re-saved the
+  // plan from before the snapshot and dropped it.
+  const orderSnapshot = () => ({
+    meals: mealPlan,
+    items: allNeeded.map(i => ({ ingredientId:i.id, status:"ordering", quantity:(quantities[i.id] !== undefined ? quantities[i.id] : (i.defaultQuantity||"")) })),
+  });
+  // In the Plan frame, its fixed Next / Finish plan take the snapshot from here.
+  registerNext?.(orderSnapshot);
 
   const QtyChip = ({ ing }) => {
     const override = quantities[ing.id];
@@ -369,7 +368,7 @@ function PlanConfirm({ inFlow, registerNext, mode = "confirm", onUpdateItem, kep
         </div>
       </div>
 
-      {!inFlow && <button style={{ ...S.btn, ...S.btnP }} onClick={() => { savePlan(); onNext(); }}>Next: Order ›</button>}
+      {!inFlow && <button style={{ ...S.btn, ...S.btnP }} onClick={() => onNext(orderSnapshot())}>Next: Order ›</button>}
       </>}
 
       {mode === "sparky" && <>
@@ -433,7 +432,7 @@ function PlanConfirm({ inFlow, registerNext, mode = "confirm", onUpdateItem, kep
           <button style={{ ...S.btn, ...S.btnS, marginBottom:0 }} onClick={() => setManualBatch(null)}>Done</button>
         </div>
       )}
-      {!inFlow && <button style={{ ...S.btn, ...S.btnP }} onClick={() => { try { savePlan(); } finally { onFinish && onFinish(); } }}>Finish plan</button>}
+      {!inFlow && <button style={{ ...S.btn, ...S.btnP }} onClick={() => onFinish && onFinish(orderSnapshot())}>Finish plan</button>}
       </>}
     </div>
   );
