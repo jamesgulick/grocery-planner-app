@@ -14,7 +14,8 @@
 .ui-group { background: var(--surface); border-radius: var(--radius-group); display: flex; flex-direction: column; overflow: hidden; }
 .ui-row { position: relative; display: flex; align-items: center; gap: var(--space-3); min-height: var(--row-height); padding: 0 var(--space-4); font: inherit; font-size: var(--body-size); line-height: var(--body-line); color: var(--text); background: none; border: 0; text-align: left; width: 100%; box-sizing: border-box; }
 /* Dividers start at the row's text edge (the row's 16px padding), not the card edge. */
-.ui-row + .ui-row::before { content: ""; position: absolute; top: 0; left: var(--space-4); right: 0; height: 1px; background: var(--divider); pointer-events: none; }
+/* Row dividers (11/17): full card width everywhere, no inset. */
+.ui-row + .ui-row::before { content: ""; position: absolute; top: 0; left: 0; right: 0; height: 1px; background: var(--divider); pointer-events: none; }
 button.ui-row { cursor: pointer; }
 button.ui-row:active { background: var(--pressed); }
 .ui-row-main { flex: 1; min-width: 0; display: flex; flex-direction: column; padding: var(--space-3) 0; }
