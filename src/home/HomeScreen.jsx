@@ -1,21 +1,23 @@
 // Home (polish Phase 2, canvas "Home A · Tonight-first", decisions 11/12–11/13): today's date
-// as the screen title, Tonight, then "Coming up": a rolling 7 days from tomorrow that runs past
+// as the screen title, Tonight, then the coming days (no heading since 11/18): a rolling 7 days from tomorrow that runs past
 // the end of the week, and on to the end of a planned week it reaches (11/13: show all of next
 // week's meals). Each week in it starts with a pale-green week row (Not planned · Plan /
-// Up next: <step> · Continue + step bar / Ordered · pickup <day>), followed by its planned days
+// Up next: <step> · Continue + step bar / Ordered · pickup <day> <date>), followed by its planned days
 // (away info by name, plate concerns in amber, verbatim). Then Fridge report / Share with
 // family. No time icons, no app name, no instructional copy.
-// Pickup (brief §6, RULING 15): the cart sits under the day name on a plan's pickup day (even
-// when that day belongs to the previous plan), and right after "Tonight" when the pickup is
-// today; tapping it opens the Pickup sheet. No words with it.
+// Pickup (brief §6, RULING 15; 11/18): one cart, on the upcoming pickup day (src/app/pickup.js),
+// whichever plan's nights that day falls in, and even before the plan it shops for exists. It
+// sits under the day name, or right after "Tonight" when the pickup is today; tapping it opens
+// the Pickup sheet. No words with it. The week row says the pickup with its date.
 import { useMemo, useState } from "react";
 import { addDaysISO, checkWeek, dayKeyForDate, extraDaysOf, pickupDateOf, presentOn, weekDates } from "../engine/assembleInputs.js";
 import { evaluateWeek } from "../engine/composeWeek.js";
 import { copyToClipboard } from "../app/clipboard.js";
 import { buildFridgeReportHTML } from "../app/fridgeReport.js";
 import { planDays, todayLocalISO, weekLabel } from "../app/globals.js";
+import { upcomingPickup } from "../app/pickup.js";
 import { draftPlanText } from "../app/shareText.js";
-import { ActionBar, Group, Icon, IconButton, PillButton, RowChevron, Section } from "../ui/kit.jsx";
+import { ActionBar, Group, Icon, IconButton, PillButton, RowChevron } from "../ui/kit.jsx";
 import { PickupSheet } from "./PickupSheet.jsx";
 import "./home.css";
 
@@ -94,10 +96,16 @@ function weekState(w, today) {
   return { kind: "progress", next: reached };
 }
 
-function WeekRow({ week, state, today, onOpen, onContinue }) {
-  const status = state.kind === "unplanned" ? "Not planned"
+// The pickup in words, by the date (11/18): "pickup Tue 24", "pickup today", "picked up Tue 17".
+// Always with the date number: the list can show the same weekday twice.
+const pickupWords = (iso, today) => iso === today ? "pickup today"
+  : `${iso < today ? "picked up" : "pickup"} ${abbrOf(iso)} ${new Date(iso + "T00:00:00").getDate()}`;
+
+function WeekRow({ week, state, today, pickup, onOpen, onContinue }) {
+  const withPickup = s => pickup ? `${s} · ${pickupWords(pickup, today)}` : s;
+  const status = state.kind === "unplanned" ? withPickup("Not planned")
     : state.kind === "progress" ? `Up next: ${STEP_BAR[state.next]}`
-    : state.kind === "ordered" && week.start > today ? `Ordered · pickup ${abbrOf(pickupDateOf(week.plan))}`
+    : state.kind === "ordered" ? withPickup("Ordered")
     : null;
   return (
     <div className="home-week">
@@ -127,14 +135,13 @@ export function HomeScreen({ db, dataDot, onOpenData, onOpenSettings, onOpenPlan
   const plans = db.plans || {};
   const shoppingDay = db.settings?.shoppingDay;
 
-  // Pickup days: date → the plan whose groceries arrive then (the later plan wins a tie).
-  const pickups = {};
-  for (const k of ["current", "next"]) { const d = pickupDateOf(plans[k]); if (d) pickups[d] = k; }
-  const [pickupKey, setPickupKey] = useState(null);
-  const cart = iso => pickups[iso] ? (
+  // The one upcoming pickup, and its cart (src/app/pickup.js).
+  const upcoming = useMemo(() => upcomingPickup(db, today), [db, today]);
+  const [pickupOpen, setPickupOpen] = useState(false);
+  const cart = iso => iso === upcoming.date ? (
     <span role="button" tabIndex={0} className="home-cart" aria-label="Pickup"
-      onClick={e => { e.stopPropagation(); setPickupKey(pickups[iso]); }}
-      onKeyDown={e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); e.stopPropagation(); setPickupKey(pickups[iso]); } }}>
+      onClick={e => { e.stopPropagation(); setPickupOpen(true); }}
+      onKeyDown={e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); e.stopPropagation(); setPickupOpen(true); } }}>
       <Icon name="cart" size={18} />
     </span>
   ) : null;
@@ -241,7 +248,8 @@ export function HomeScreen({ db, dataDot, onOpenData, onOpenSettings, onOpenPlan
           )}
         </section>
 
-        <Section label="Coming up">
+        {/* No "Coming up" heading (11/18): the Tonight band and each green week row say what they are. */}
+        <section aria-label="Coming up">
           <Group>
             {groups.map(({ week, rows }) => {
               const state = weekState(week, today);
@@ -249,7 +257,9 @@ export function HomeScreen({ db, dataDot, onOpenData, onOpenSettings, onOpenPlan
               const away = showDays ? awayLines(rows, week.plan, db) : {};
               return (
                 <div key={week.start} className="home-week-group">
-                  <WeekRow week={week} state={state} today={today} onOpen={() => openWeek(week)} onContinue={() => continueWeek(week, state)} />
+                  <WeekRow week={week} state={state} today={today}
+                    pickup={week.plan ? pickupDateOf(week.plan) : !upcoming.key && week.start === upcoming.start ? upcoming.date : null}
+                    onOpen={() => openWeek(week)} onContinue={() => continueWeek(week, state)} />
                   {showDays && rows.map(({ key, iso }) => {
                     const d = dishesFor(week.plan, key);
                     const note = d ? "" : (week.plan.dayNotes?.[key] || "").trim();
@@ -270,17 +280,21 @@ export function HomeScreen({ db, dataDot, onOpenData, onOpenSettings, onOpenPlan
               );
             })}
           </Group>
-        </Section>
+        </section>
 
         <div className="home-share-spacer" aria-hidden="true" />
       </main>
 
-      {pickupKey && plans[pickupKey] && (
-        <PickupSheet plan={plans[pickupKey]} shoppingDay={shoppingDay} onClose={() => setPickupKey(null)}
+      {pickupOpen && (
+        <PickupSheet plan={upcoming.plan} shoppingDay={shoppingDay} onClose={() => setPickupOpen(false)}
           onPick={iso => {
-            const rest = { ...plans[pickupKey] }; delete rest.pickupDate;
+            if (!upcoming.key) {   // no plan for it yet: keep the day until there is one
+              persistDB({ ...db, pendingPickup: { start: upcoming.start, date: iso } });
+              return;
+            }
+            const rest = { ...plans[upcoming.key] }; delete rest.pickupDate;
             const plan = iso === rest.weekStartDate ? rest : { ...rest, pickupDate: iso };   // absent = the first day
-            persistDB({ ...db, plans: { ...plans, [pickupKey]: plan } });
+            persistDB({ ...db, plans: { ...plans, [upcoming.key]: plan } });
           }} />
       )}
 

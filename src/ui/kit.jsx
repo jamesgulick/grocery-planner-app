@@ -121,8 +121,8 @@ export const TabBar = ({ tabs, active, onSelect }) => (
   <nav className="ui-tabbar" aria-label="Main">
     <div className="ui-tabbar-inner">
       {tabs.map(t => (
-        <button key={t.id} type="button" className="ui-tab" aria-current={active === t.id ? "page" : undefined} onClick={() => onSelect(t.id)}>
-          <Icon name={t.icon} size={24} strong={active === t.id} />{t.label}
+        <button key={t.id} type="button" className="ui-tab" aria-label={t.label} aria-current={active === t.id ? "page" : undefined} onClick={() => onSelect(t.id)}>
+          <span className="ui-tab-pill"><Icon name={t.icon} size={24} strong={active === t.id} /></span>
         </button>
       ))}
     </div>

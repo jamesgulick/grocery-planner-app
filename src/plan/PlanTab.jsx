@@ -1,7 +1,7 @@
 // Split verbatim from grocery-app.jsx in polish Phase 1.5; see CLAUDE.md's file map.
 import { MAX_EXTRA_DAYS, extraDaysOf, reconcilePlates } from "../engine/assembleInputs.js";
 import { useState } from "react";
-import { DAYS_ALL, PLAN_STEPS, addDaysISO, nextDateForShoppingDay, planDays, seedTimeLevels, weekLabel } from "../app/globals.js";
+import { DAYS_ALL, PLAN_STEPS, addDaysISO, nextDateForShoppingDay, planDays, seedTimeLevels, todayLocalISO, weekLabel } from "../app/globals.js";
 import { getActivePlan, writeActivePlan } from "../app/plans.js";
 import { C, S } from "../app/styles.js";
 import { defaultNotes } from "../app/weather.js";
@@ -13,6 +13,7 @@ import { orderingPatch } from "./ordering.js";
 import { SyncRow } from "../shell/SyncRow.jsx";
 import { latestDB } from "../app/latestDB.js";
 import { showToast } from "../ui/toast.js";
+import { pickupForNewPlan } from "../app/pickup.js";
 
 // ── PLAN TAB ───────────────────────────────────────────────────────────────────
 
@@ -249,9 +250,11 @@ function PlanTab({ db, persistDB, onGoToImport, onGoToUnassigned }) {
       // never starts blank. notesTouched tracks manual edits so a later refresh
       // can tell "never edited" from "deliberately changed".
       step:1, maxStep:1, timeLevels:freshLevels, presence:{}, mealPlan:freshMeals, plates:{}, checkedIds:[], addedOff:[], addedItems:[], dayNotes:{ ...defaultNotes }, dayPills:{}, notesTouched:false, _stepsVer:4, stapleFlags:{}, quantities:{}, weather:"hot", startedAt:new Date().toISOString(),
+      ...pickupForNewPlan(db, seedDate, todayLocalISO()),   // the pickup Home showed for it (11/18)
     };
 
-    persistDB(writeActivePlan({ ...db, mealHistory }, freshPlan));
+    const { pendingPickup: _used, ...rest } = db;
+    persistDB(writeActivePlan({ ...rest, mealHistory }, freshPlan));
   };
 
   // Create plans.next as a fresh, empty plan — the everyday "begin a new week"
@@ -274,8 +277,10 @@ function PlanTab({ db, persistDB, onGoToImport, onGoToUnassigned }) {
       weekStartDate: nextStart, notes:"", meals:{}, items:[],
       dismissedShared:[],
       step:1, maxStep:1, timeLevels:seedTimeLevels(), presence:{}, mealPlan:freshMeals, plates:{}, checkedIds:[], addedOff:[], addedItems:[], dayNotes:{ ...defaultNotes }, dayPills:{}, notesTouched:false, _stepsVer:4, stapleFlags:{}, quantities:{}, weather:"hot", startedAt:new Date().toISOString(),
+      ...pickupForNewPlan(db, nextStart, todayLocalISO()),   // the pickup Home showed for it (11/18)
     };
-    persistDB({ ...db, plans: { ...db.plans, next: freshPlan }, activePlan: "next" });
+    const { pendingPickup: _used, ...rest } = db;
+    persistDB({ ...rest, plans: { ...db.plans, next: freshPlan }, activePlan: "next" });
   };
 
   // Exit the planning flow WITHOUT destroying anything. The draft IS the living
