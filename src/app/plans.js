@@ -2,6 +2,7 @@
 import { PLAN_TAIL_KEEP, endDateFor, extraDaysOf, seedTimeLevel } from "../engine/assembleInputs.js";
 import { DAYS_ALL, addDaysISO, todayLocalISO } from "./globals.js";
 import { foldRemovedIds } from "../plan/ordering.js";
+import { pickupForNewPlan } from "./pickup.js";
 
 // outbox shape (written by Tonight's "Queue for Shortcut", cut in polish Phase 1;
 // older DBs may still carry one, nothing reads it):
@@ -397,7 +398,10 @@ export function startPlan(db, weekStartDate) {
   const plans = db.plans && !Array.isArray(db.plans) ? db.plans : { current: null, next: null };
   const slot = !plans.current ? "current" : !plans.next ? "next" : null;
   if (!slot) return null;
-  return { ...db, plans: { ...plans, [slot]: newPlan(weekStartDate) }, activePlan: slot };
+  // The new plan takes the pickup Home showed for it: an early pick, else the usual shopping day (11/18).
+  const plan = { ...newPlan(weekStartDate), ...pickupForNewPlan(db, weekStartDate, todayLocalISO()) };
+  const { pendingPickup: _used, ...rest } = db;
+  return { ...rest, plans: { ...plans, [slot]: plan }, activePlan: slot };
 }
 /** Which plan the Plan tab opens (spec §3.1): next if started and not ordered, else current if
  *  not ordered, else the most recent; null when there are none. */

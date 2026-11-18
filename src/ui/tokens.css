@@ -91,6 +91,8 @@
   --grabber-w: 36px;
   --grabber-h: 5px;
   --tab-height: 48px;
+  --tab-pill: #D5E3D9;                    /* the current tab's pill (board "Tab highlight") */
+  --tab-pill-w: 64px; --tab-pill-h: 40px;
   --tab-label-size: 11px;                 /* the one size under 13px: tab labels under icons */
   --topbar-height: 52px;
   --textarea-height: 120px;

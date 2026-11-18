@@ -88,6 +88,9 @@ button.ui-row:active { background: var(--pressed); }
 .ui-link:disabled { color: var(--disabled); cursor: default; }
 .ui-tab { min-height: var(--tab-height); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: var(--space-half); font: inherit; font-size: var(--tab-label-size); font-weight: 600; color: var(--text-muted); background: none; border: 0; cursor: pointer; }
 .ui-tab[aria-current="page"] { color: var(--action); font-weight: 700; }
+/* Icons only (board "Tab highlight", option E, 11/18): the current tab's icon sits in a light green pill. */
+.ui-tab-pill { display: inline-flex; align-items: center; justify-content: center; width: var(--tab-pill-w); height: var(--tab-pill-h); border-radius: calc(var(--tab-pill-h) / 2); }
+.ui-tab[aria-current="page"] .ui-tab-pill { background: var(--tab-pill); }
 /* Sticky action bar: sits on top of the tab bar (same translucent bar background). */
 .ui-actionbar { position: fixed; left: 0; right: 0; z-index: 99; bottom: calc(var(--tab-height) + var(--space-1) + var(--bar-bottom) + 1px); display: flex; justify-content: center; background: var(--surface); border-top: 1px solid var(--bar-border); }
 @supports ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {

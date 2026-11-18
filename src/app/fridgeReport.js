@@ -1,5 +1,5 @@
 // Split verbatim from grocery-app.jsx in polish Phase 1.5; see CLAUDE.md's file map.
-import { isExtraDay } from "../engine/assembleInputs.js";
+import { extraDaysOf, isExtraDay, weekDates } from "../engine/assembleInputs.js";
 import { planDays } from "./globals.js";
 import { getActivePlan } from "./plans.js";
 
@@ -24,13 +24,23 @@ function fridgeReportFmtDate(iso) {
   return d.toLocaleDateString(undefined, { weekday:"long", month:"long", day:"numeric", year:"numeric" });
 }
 
+// "Nov 16" for a day heading; "11/16" for a leftovers row.
+function fridgeReportMonthDay(iso) {
+  const d = new Date(iso + "T00:00:00");
+  return isNaN(d) ? "" : d.toLocaleDateString(undefined, { month:"short", day:"numeric" });
+}
+function fridgeReportNumDate(iso) {
+  const d = new Date(iso + "T00:00:00");
+  return isNaN(d) ? "" : (d.getMonth() + 1) + "/" + d.getDate();
+}
+
 function fridgeReportMealIndex(meals) {
   const ix = {};
   (meals || []).forEach(m => { if (m && m.name) ix[m.name.trim().toLowerCase()] = m; });
   return ix;
 }
 
-function fridgeReportBuildDay(dow, names, dayNote, ix) {
+function fridgeReportBuildDay(dow, iso, names, dayNote, ix) {
   const defs = names.map(n => ix[String(n).trim().toLowerCase()]);
 
   const title = !names.length
@@ -38,10 +48,6 @@ function fridgeReportBuildDay(dow, names, dayNote, ix) {
     : names.map(fridgeReportEsc).join('<span class="sep">/</span>');
 
   let rows = "";
-  const madeExtra = defs.some(m => m && m.leftovers === "yes");
-  if (madeExtra) {
-    rows += '<div class="row extra"><span class="ic">&#9679;</span><span>Makes extra &mdash; good for leftovers</span></div>';
-  }
   defs.forEach(m => {
     if (!m) return;
     if (m.cascadesInto) {
@@ -54,14 +60,82 @@ function fridgeReportBuildDay(dow, names, dayNote, ix) {
     }
   });
 
+  const date = iso ? '<span class="dowdate"> &middot; ' + fridgeReportEsc(fridgeReportMonthDay(iso)) + '</span>' : '';
   const here = dayNote ? '<div class="here">' + fridgeReportEsc(dayNote) + '</div>' : '';
 
   return '' +
     '<section class="day">' +
-      '<div class="dayhead"><span class="dow">' + fridgeReportEsc(FRIDGE_REPORT_DOW_FULL[dow] || dow) + '</span>' + here + '</div>' +
+      '<div class="dayhead"><span class="dow">' + fridgeReportEsc(FRIDGE_REPORT_DOW_FULL[dow] || dow) + date + '</span>' + here + '</div>' +
       '<div class="meals">' + title + '</div>' +
       (rows ? '<div class="meta">' + rows + '</div>' : '') +
     '</section>';
+}
+
+// ── Leftovers lists ──────────────────────────────────────────────────────────
+// Two pen-and-paper lists at the end of the report: last week's and this week's
+// meals, one row per planned day (date order), each with a checkbox, the main in
+// bold, its sides, and two blank lines to write on. Nothing here is tracked: it's
+// checked off and crossed out by hand on the printout.
+
+// A plan's planned days in date order: [{ key, iso, names }]. Empty days are left out.
+function fridgeReportPlannedDays(plan) {
+  if (!plan?.weekStartDate) return [];
+  const mp = plan.mealPlan || plan.meals || {};
+  return Object.entries(weekDates(plan.weekStartDate, extraDaysOf(plan)))
+    .map(([key, iso]) => ({ key, iso, names: (mp[key] || []).map(s => String(s).trim()).filter(Boolean) }))
+    .filter(x => x.names.length)
+    .sort((a, b) => (a.iso < b.iso ? -1 : a.iso > b.iso ? 1 : 0));
+}
+
+// "Sides: rice, slaw" in a meal's notes. The list ends at a line break, ";" or ".".
+function fridgeReportNoteSides(meal) {
+  const m = /\bsides\s*:\s*([^\r\n;.]*)/i.exec(meal?.notes || "");
+  return m ? m[1].split(",").map(s => s.trim()).filter(Boolean) : [];
+}
+
+// The day's main (the plate's main if it has one, else the first dish that isn't a
+// side, else the first dish), then the other dishes and the sides named in the main's note.
+function fridgeReportMainAndSides(plan, key, names, ix) {
+  const dishes = plan?.plates?.[key]?.dishes || [];
+  let mainIdx = dishes.findIndex(d => d?.role === "main");
+  if (mainIdx < 0 || mainIdx >= names.length) mainIdx = names.findIndex(n => ix[n.toLowerCase()]?.type !== "side");
+  if (mainIdx < 0) mainIdx = 0;
+  const main = names[mainIdx];
+  const sides = [...names.filter((_, i) => i !== mainIdx), ...fridgeReportNoteSides(ix[main.toLowerCase()])];
+  return { main, sides };
+}
+
+// The week before the printed one: the latest plan (archived, current or next) that starts earlier.
+function fridgeReportPreviousWeek(db, printed) {
+  const start = printed?.weekStartDate;
+  if (!start) return null;
+  return [...(db.planTail || []), db.plans?.current, db.plans?.next]
+    .filter(w => w && w !== printed && w.weekStartDate && w.weekStartDate < start)
+    .sort((a, b) => (a.weekStartDate < b.weekStartDate ? -1 : a.weekStartDate > b.weekStartDate ? 1 : 0))
+    .pop() || null;
+}
+
+// A checkbox marks a dish as available in the fridge: this week's are ticked by hand
+// as they're cooked; last week's are all available already, so they print ticked.
+function fridgeReportLeftoverColumn(title, plan, ix, checked) {
+  const rows = fridgeReportPlannedDays(plan).map(({ key, iso, names }) => {
+    const { main, sides } = fridgeReportMainAndSides(plan, key, names, ix);
+    const dow = new Date(iso + "T00:00:00").toLocaleDateString(undefined, { weekday:"short" });
+    return '' +
+      '<div class="lo-day">' +
+        '<span class="box' + (checked ? ' checked' : '') + '"></span>' +
+        '<span class="lo-date"><span>' + fridgeReportEsc(dow) + '</span><span>' + fridgeReportEsc(fridgeReportNumDate(iso)) + '</span></span>' +
+        '<div class="lo-body"><span class="lo-main">' + fridgeReportEsc(main) + '</span>' +
+          (sides.length ? '<span class="lo-sides"> &ndash; ' + fridgeReportEsc(sides.join(", ")) + '</span>' : '') +
+        '</div>' +
+        '<div class="lo-line"></div>' +
+      '</div>';
+  }).join("");
+  return '' +
+    '<div class="lo-col">' +
+      '<div class="lo-title">' + fridgeReportEsc(title) + '</div>' +
+      (rows || '<div class="lo-none">Nothing planned</div>') +
+    '</div>';
 }
 
 // Prints whichever week the WeekSelector shows (SPEC-active-plan-app-wide.md)
@@ -74,10 +148,17 @@ function buildFridgeReportHTML(db) {
   const notes = printedPlan?.dayNotes || {};
   const { days: order, daysFull: orderFull } = planDays(printedPlan, db.settings?.shoppingDay);
 
+  const dates = printedPlan?.weekStartDate ? weekDates(printedPlan.weekStartDate, extraDaysOf(printedPlan)) : {};
   const daysHTML = order.map((d, i) => {
     const names = (mp[d] || []).map(s => String(s).trim()).filter(Boolean);
-    return fridgeReportBuildDay(isExtraDay(d) ? orderFull[i] : d, names, (notes[d] || "").trim(), ix);
+    return fridgeReportBuildDay(isExtraDay(d) ? orderFull[i] : d, dates[d], names, (notes[d] || "").trim(), ix);
   }).join("");
+
+  const leftoversHTML =
+    '<section class="leftovers">' +
+      fridgeReportLeftoverColumn("Last week's leftovers", fridgeReportPreviousWeek(db, printedPlan), ix, true) +
+      fridgeReportLeftoverColumn("This week's leftovers", printedPlan, ix) +
+    '</section>';
 
   const weekOf = printedPlan?.weekStartDate || "";
   const weekOfHTML = weekOf ? "Week of " + fridgeReportFmtDate(weekOf) : "";
@@ -139,6 +220,8 @@ function buildFridgeReportHTML(db) {
   .dow{font-family:"Avenir Next","Segoe UI",system-ui,sans-serif;
     font-size:12.5px;font-weight:800;letter-spacing:1.5px;text-transform:uppercase;
     color:var(--note);}
+  .dow{white-space:nowrap;flex:0 0 auto;}
+  .dowdate{letter-spacing:1px;}
   .here{font-family:"Avenir Next","Segoe UI",system-ui,sans-serif;
     font-size:12px;color:var(--soft);font-style:normal;font-weight:600;
     margin-left:auto;text-align:right;}
@@ -151,12 +234,34 @@ function buildFridgeReportHTML(db) {
     font-family:"Avenir Next","Segoe UI",system-ui,sans-serif;font-size:13.5px;
     font-weight:600;line-height:1.45;}
   .row .ic{flex:0 0 auto;font-size:12px;line-height:1.5;}
-  .extra{color:var(--thread-ink);}
-  .extra .ic{color:var(--thread);}
   .cascade{color:var(--thread-ink);font-weight:700;}
   .cascade .ic{color:var(--thread);}
   .pnote{color:var(--note);}
   .pnote .ic{color:var(--note);}
+
+  .leftovers{margin-top:28px;padding-top:20px;border-top:2px solid var(--ink);
+    display:grid;grid-template-columns:1fr 1fr;gap:0 24px;}
+  .lo-title{font-family:"Avenir Next","Segoe UI",system-ui,sans-serif;
+    font-size:12.5px;font-weight:800;letter-spacing:1.5px;text-transform:uppercase;
+    color:var(--note);margin-bottom:4px;}
+  .lo-day{display:grid;grid-template-columns:14px 40px 1fr;column-gap:8px;
+    align-items:start;padding-top:9px;break-inside:avoid;}
+  .box{align-self:start;margin-top:3px;width:14px;height:14px;border:1.5px solid var(--ink);
+    border-radius:2px;display:flex;align-items:center;justify-content:center;
+    font-family:"Segoe UI Symbol","Apple Symbols",system-ui,sans-serif;font-size:12px;
+    font-weight:800;line-height:1;color:var(--ink);}
+  .box.checked::after{content:"\\2713";}
+  .lo-date{display:flex;flex-direction:column;padding-top:2px;
+    font-family:"Avenir Next","Segoe UI",system-ui,sans-serif;white-space:nowrap;
+    font-size:11px;font-weight:800;letter-spacing:.8px;line-height:1.25;
+    text-transform:uppercase;color:var(--soft);}
+  .lo-date span + span{font-weight:600;letter-spacing:.3px;}
+  .lo-body{line-height:1.3;padding-left:6px;}
+  .lo-main{font-size:15.5px;font-weight:700;}
+  .lo-sides{font-family:"Avenir Next","Segoe UI",system-ui,sans-serif;
+    font-size:12.5px;font-weight:600;color:var(--soft);}
+  .lo-line{grid-column:2 / -1;height:16px;border-bottom:1px solid var(--rule);}
+  .lo-none{padding-top:10px;color:var(--faint);font-style:italic;font-size:15px;}
 
   .teaser{margin-top:28px;padding-top:20px;border-top:2px solid var(--ink);}
   .teaser-title{font-family:"Avenir Next","Segoe UI",system-ui,sans-serif;
@@ -193,6 +298,7 @@ function buildFridgeReportHTML(db) {
       <div class="weekof">${weekOfHTML}</div>
     </header>
     <main>${daysHTML}</main>
+    ${leftoversHTML}
     ${teaserHTML}
     <footer>
       <span>${stamp}</span>
