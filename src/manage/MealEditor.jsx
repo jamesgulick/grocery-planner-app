@@ -312,12 +312,9 @@ function MealEditor({ meal, allMeals, ingredients, onSave, onCancel, onDelete, o
   const renaming = meal && form.name.trim() !== meal.name;
   const save = () => {
     if (nameProblem) return;
-    // The legacy leftovers field still drives the card badge and the fridge report; keep
-    // it from contradicting carries (the engine's field): leftovers set → not "none".
-    const out = { ...form };
-    if (out.carries && (!out.leftovers || out.leftovers === "none")) out.leftovers = "yes";
-    if (!out.carries && meal?.carries && out.leftovers === "yes") out.leftovers = "none";   // carries just cleared
-    onSave(out, isMain ? mainSides : null);
+    // carries is the one leftovers field (the card badge reads it); the legacy leftovers
+    // field is no longer kept in step (retired 11/18, once the fridge report stopped reading it).
+    onSave({ ...form }, isMain ? mainSides : null);
   };
 
   const toggleIng = id => {
