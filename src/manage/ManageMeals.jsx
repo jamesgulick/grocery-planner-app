@@ -98,7 +98,7 @@ function ManageMeals({ db, persistDB }) {
                   {meal.tempAffinity==="light"   && <span style={S.badge("#0369A1","#E0F2FE")}>light</span>}
                   {meal.grillable && <span style={S.badge("#9A3412","#FFEDD5")}>grill</span>}
                   {meal.soon && <span style={S.badge("#6D28D9","#EDE9FE")} title="Wanted soon: put forward for the next plan until you turn it off">soon</span>}
-                  {meal.leftovers!=="none" && <span style={S.badge("#374151","#F3F4F6")}>leftovers</span>}
+                  {meal.carries && <span style={S.badge("#374151","#F3F4F6")}>leftovers</span>}
                   {meal.type!=="dinner"    && <span style={S.badge(C.primary,C.primaryLight)}>{meal.type}</span>}
                   {dislikes.length>0 && <span style={S.badge(C.danger,C.dangerLight)}>👎 {dislikes.join(", ")}</span>}
                   {likes.length>0    && <span style={S.badge(C.verified,"#E8F5EE")}>👍 {likes.join(", ")}</span>}
