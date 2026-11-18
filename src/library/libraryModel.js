@@ -227,11 +227,7 @@ export function withField(m, k, v) {
   const n = { ...m };
   if (v === undefined || v === null || v === false || v === "" || (Array.isArray(v) && !v.length)) delete n[k];
   else n[k] = v;
-  if (k === "carries") {   // the legacy leftovers field (card badge, fridge report) follows carries
-    if (n.carries && (!n.leftovers || n.leftovers === "none")) n.leftovers = "yes";
-    if (!n.carries && n.leftovers === "yes") n.leftovers = "none";
-  }
-  return n;
+  return n;   // the legacy leftovers field is no longer kept in step with carries (retired 11/18)
 }
 
 /** The pairing ids shown for a meal: a side's own pairsWith; for a main, the sides naming it. */
