@@ -117,14 +117,24 @@ export function Sheet({ title, sub, onClose, onBack, doneLabel = "Done", footer,
 }
 
 // ── Tab bar ──────────────────────────────────────────────────────────────────
-export const TabBar = ({ tabs, active, onSelect }) => (
+// Bottom nav (board "Tab highlight", option F3, 11/20): a floating white capsule with the
+// tabs (icon and label), the current one in a light green capsule; an `action` (the +) is
+// its own round button to the right of the capsule.
+export const TabBar = ({ tabs, active, onSelect, action }) => (
   <nav className="ui-tabbar" aria-label="Main">
     <div className="ui-tabbar-inner">
-      {tabs.map(t => (
-        <button key={t.id} type="button" className="ui-tab" aria-label={t.label} aria-current={active === t.id ? "page" : undefined} onClick={() => onSelect(t.id)}>
-          <span className="ui-tab-pill"><Icon name={t.icon} size={24} strong={active === t.id} /></span>
+      <div className="ui-tabbar-capsule">
+        {tabs.map(t => (
+          <button key={t.id} type="button" className="ui-tab" aria-current={active === t.id ? "page" : undefined} onClick={() => onSelect(t.id)}>
+            <Icon name={t.icon} size={24} strong={active === t.id} /><span>{t.label}</span>
+          </button>
+        ))}
+      </div>
+      {action && (
+        <button type="button" className="ui-tab-plus" aria-label={action.label} onClick={action.onClick}>
+          <Icon name="plus" size={26} strong />
         </button>
-      ))}
+      )}
     </div>
   </nav>
 );

@@ -69,24 +69,21 @@ button.ui-row:active { background: var(--pressed); }
 .ui-sheet-done { font: inherit; font-size: var(--body-size); font-weight: 700; color: var(--action); background: none; border: 0; min-height: var(--touch); padding: 0 var(--space-3); cursor: pointer; }
 .ui-sheet-body { overflow-y: auto; padding: var(--space-2) var(--space-4) var(--space-5); display: flex; flex-direction: column; gap: var(--space-5); -webkit-overflow-scrolling: touch; }
 
-/* ── Tab bar: translucent, light blur, content scrolls beneath ───────── */
-.ui-tabbar { position: fixed; left: 0; right: 0; bottom: 0; z-index: 100; display: flex; justify-content: center; background: var(--surface); border-top: 1px solid var(--bar-border); padding-bottom: var(--bar-bottom); }
-@supports ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
-  .ui-tabbar { background: var(--bar-bg); -webkit-backdrop-filter: var(--bar-blur); backdrop-filter: var(--bar-blur); }
-}
-.ui-tabbar-inner { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); width: 100%; max-width: var(--app-max); padding: var(--space-1) var(--space-2) 0; box-sizing: border-box; }
-.ui-tab { min-height: var(--tab-height); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: var(--space-half); font: inherit; font-size: var(--tab-label-size); font-weight: 600; color: var(--text-muted); background: none; border: 0; cursor: pointer; }
-.ui-tab[aria-current="page"] { color: var(--action); font-weight: 700; }
-/* Icons only (board "Tab highlight", option E, 11/18): the current tab's icon sits in a light green pill. */
-.ui-tab-pill { display: inline-flex; align-items: center; justify-content: center; width: var(--tab-pill-w); height: var(--tab-pill-h); border-radius: calc(var(--tab-pill-h) / 2); }
-.ui-tab[aria-current="page"] .ui-tab-pill { background: var(--tab-pill); }
-/* Sticky action bar: sits on top of the tab bar (same translucent bar background). */
-.ui-actionbar { position: fixed; left: 0; right: 0; z-index: 99; bottom: calc(var(--tab-height) + var(--space-1) + var(--bar-bottom) + 1px); display: flex; justify-content: center; background: var(--surface); border-top: 1px solid var(--bar-border); }
+/* ── Tab bar (option F3, 11/20): a floating capsule over the page, no full-width bar ── */
+.ui-tabbar { position: fixed; left: 0; right: 0; bottom: var(--tabbar-bottom); z-index: 100; display: flex; justify-content: center; pointer-events: none; }
+.ui-tabbar-inner { display: flex; align-items: center; gap: var(--tab-edge); width: 100%; max-width: var(--app-max); padding: 0 var(--tab-edge); box-sizing: border-box; }
+.ui-tabbar-capsule { flex: 1; min-width: 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--tab-capsule-pad); padding: var(--tab-capsule-pad); background: var(--surface); border: 1px solid var(--tab-capsule-border); border-radius: 999px; box-shadow: var(--tab-capsule-shadow); pointer-events: auto; }
+.ui-tab { min-height: var(--tab-height); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: var(--space-half); font: inherit; font-size: var(--tab-label-size); font-weight: 600; color: var(--text-muted); background: none; border: 0; border-radius: 999px; cursor: pointer; }
+.ui-tab[aria-current="page"] { color: var(--action); font-weight: 700; background: var(--tab-current); }
+.ui-tab-plus { flex: none; display: inline-flex; align-items: center; justify-content: center; width: var(--plus-size); height: var(--plus-size); border-radius: 50%; border: 0; background: var(--action); color: var(--on-action); box-shadow: var(--tab-capsule-shadow); cursor: pointer; pointer-events: auto; }
+.ui-tab-plus:focus-visible { outline: 2px solid var(--action); outline-offset: 2px; }
+/* Sticky action bar: sits just above the floating tab bar. */
+.ui-actionbar { position: fixed; left: 0; right: 0; z-index: 99; bottom: calc(var(--tabbar-bottom) + var(--tabbar-h) + var(--space-2)); display: flex; justify-content: center; background: var(--surface); border-top: 1px solid var(--bar-border); }
 @supports ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
   .ui-actionbar { background: var(--bar-bg); -webkit-backdrop-filter: var(--bar-blur); backdrop-filter: var(--bar-blur); }
 }
 .ui-actionbar-inner { width: 100%; max-width: var(--app-max); box-sizing: border-box; padding: var(--space-2) var(--gutter); }
-.ui-tabbar-spacer { height: calc(var(--tab-height) + var(--space-1) + var(--bar-bottom) + var(--space-4)); }
+.ui-tabbar-spacer { height: calc(var(--tabbar-bottom) + var(--tabbar-h) + var(--space-4)); }
 
 /* ── Top bar (tabs other than Home) ───────────────────────────────────── */
 .ui-topbar { position: sticky; top: var(--safe-top); z-index: 50; height: var(--topbar-height); box-sizing: border-box; display: flex; align-items: center; gap: var(--space-2); padding: 0 var(--space-2) 0 var(--gutter); background: var(--bg); }

@@ -91,8 +91,15 @@
   --grabber-w: 36px;
   --grabber-h: 5px;
   --tab-height: 48px;
-  --tab-pill: #D5E3D9;                    /* the current tab's pill (board "Tab highlight") */
-  --tab-pill-w: 64px; --tab-pill-h: 40px;
+  /* Bottom nav (board "Tab highlight", option F3, 11/20): a floating capsule. */
+  --tab-current: #E3ECE5;                 /* the current tab's capsule */
+  --tab-capsule-border: #E2E2DE;
+  --tab-capsule-shadow: 0 4px 16px rgba(0, 0, 0, 0.10);
+  --tab-capsule-pad: 4px;
+  --tab-edge: 12px;                       /* from the screen's edge; capsule to + */
+  --tabbar-h: calc(var(--tab-height) + 2 * var(--tab-capsule-pad) + 2px);
+  --tabbar-bottom: max(calc(var(--safe-bottom) + var(--space-1)), var(--tab-edge));
+  --plus-size: 60px;                      /* the + beside the capsule */
   --tab-label-size: 11px;                 /* the one size under 13px: tab labels under icons */
   --topbar-height: 52px;
   --textarea-height: 120px;
