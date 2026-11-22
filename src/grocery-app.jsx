@@ -16,7 +16,7 @@ import { HomeScreen } from "./home/HomeScreen.jsx";
 import { DataSheet } from "./shell/DataSheet.jsx";
 import { ImportCheck } from "./shell/ImportCheck.jsx";
 import { SettingsSheet } from "./shell/SettingsSheet.jsx";
-import { IconButton, PillButton, Segmented, TabBar, TabBarSpacer, TopBar } from "./ui/kit.jsx";
+import { HeaderButtons, IconButton, PillButton, Segmented, TabBar, TabBarSpacer, TopBar } from "./ui/kit.jsx";
 import { ToastHost } from "./ui/Toast.jsx";
 import { registerLatestDB } from "./app/latestDB.js";
 import "./ui/ui.css";
@@ -307,7 +307,7 @@ export default function App() {
           <PlanTab key={db.activePlan || "current"} db={db} persistDB={persistDB} onGoToImport={() => setSheet("data")} onGoToUnassigned={() => { setLibraryView("items"); setManageItemsLoc("Unassigned"); setTab("library"); }} />
         </>}
         {tab==="library" && <>
-          <TopBar title="Library">{headerIcons}</TopBar>
+          <TopBar title="Library"><HeaderButtons>{headerIcons}</HeaderButtons></TopBar>
           <div className="shell-library-switch">
             <Segmented label="Library" value={libraryView} onChange={v => { setManageItemsLoc(undefined); setLibraryView(v); }} options={[{ value:"meals", label:"Meals" }, { value:"items", label:"Items" }]} />
           </div>

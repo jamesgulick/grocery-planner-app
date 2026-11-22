@@ -17,7 +17,7 @@ import { buildFridgeReportHTML } from "../app/fridgeReport.js";
 import { planDays, todayLocalISO, weekLabel } from "../app/globals.js";
 import { upcomingPickup } from "../app/pickup.js";
 import { draftPlanText } from "../app/shareText.js";
-import { ActionBar, Group, Icon, IconButton, PillButton, RowChevron } from "../ui/kit.jsx";
+import { ActionBar, Group, HeaderButtons, Icon, IconButton, PillButton, RowChevron } from "../ui/kit.jsx";
 import { PickupSheet } from "./PickupSheet.jsx";
 import "./home.css";
 
@@ -216,10 +216,10 @@ export function HomeScreen({ db, dataDot, onOpenData, onOpenSettings, onOpenPlan
         <div className="home-titles">
           <h1 className="ui-screen-title">{dateTitle}</h1>
         </div>
-        <div className="ui-icons">
+        <HeaderButtons>
           <IconButton icon="data" label={dataDot ? "Import and export: backup overdue" : "Import and export"} dot={dataDot} onClick={onOpenData} />
           <IconButton icon="gear" label="Settings" onClick={onOpenSettings} />
-        </div>
+        </HeaderButtons>
       </header>
 
       <main className="home-main">
@@ -300,8 +300,8 @@ export function HomeScreen({ db, dataDot, onOpenData, onOpenSettings, onOpenPlan
 
       <ActionBar>
         <div className="home-share">
-          <button type="button" className="ui-tile-button" onClick={openFridgeReport}><Icon name="print" size={18} />Fridge report</button>
-          <button type="button" className="ui-tile-button" onClick={shareWithFamily} disabled={!sharePlan}><Icon name="share" size={18} />{shared ? "Copied" : "Share with family"}</button>
+          <button type="button" className="ui-tile-button ui-float-pill" onClick={openFridgeReport}><Icon name="print" size={18} />Fridge report</button>
+          <button type="button" className="ui-tile-button ui-float-pill" onClick={shareWithFamily} disabled={!sharePlan}><Icon name="share" size={18} />{shared ? "Copied" : "Share with family"}</button>
         </div>
       </ActionBar>
     </div>

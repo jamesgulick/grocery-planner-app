@@ -38,8 +38,8 @@ button.ui-row:active { background: var(--pressed); }
   border-radius: calc(var(--pill-height) / 2) / calc(var(--touch) / 2); }
 .ui-pill:active { opacity: 0.8; }
 .ui-pill:disabled { opacity: 0.45; cursor: default; }
-.ui-block-button { font: inherit; font-size: var(--body-size); font-weight: 700; width: 100%; min-height: var(--block-button); border-radius: var(--radius-control); border: 0; cursor: pointer; background: var(--action); color: var(--on-action); }
-.ui-tile-button { font: inherit; font-size: var(--body-size); font-weight: 600; min-height: var(--touch); border-radius: var(--radius-control); border: 0; cursor: pointer; background: var(--surface); color: var(--action); display: flex; align-items: center; justify-content: center; gap: var(--space-2); }
+.ui-block-button { font: inherit; font-size: var(--body-size); font-weight: 700; width: 100%; min-height: var(--block-button); border-radius: var(--radius-pill); border: 0; cursor: pointer; background: var(--action); color: var(--on-action); }
+.ui-tile-button { font: inherit; font-size: var(--body-size); font-weight: 600; min-height: var(--touch); border-radius: var(--radius-pill); border: 0; cursor: pointer; background: var(--surface); color: var(--action); display: flex; align-items: center; justify-content: center; gap: var(--space-2); }
 .ui-icon-button { width: var(--touch); height: var(--touch); flex: none; display: inline-flex; align-items: center; justify-content: center; border: 0; background: none; color: var(--text); cursor: pointer; position: relative; padding: 0; }
 .ui-icon-button:active { opacity: 0.6; }
 .ui-dot { position: absolute; top: var(--dot-inset); right: var(--dot-inset); width: var(--dot); height: var(--dot); border-radius: 50%; background: var(--problem); box-shadow: 0 0 0 2px var(--bg); }
@@ -69,21 +69,41 @@ button.ui-row:active { background: var(--pressed); }
 .ui-sheet-done { font: inherit; font-size: var(--body-size); font-weight: 700; color: var(--action); background: none; border: 0; min-height: var(--touch); padding: 0 var(--space-3); cursor: pointer; }
 .ui-sheet-body { overflow-y: auto; padding: var(--space-2) var(--space-4) var(--space-5); display: flex; flex-direction: column; gap: var(--space-5); -webkit-overflow-scrolling: touch; }
 
-/* ── Tab bar (option F3, 11/20): a floating capsule over the page, no full-width bar ── */
+/* ── Tab bar (option F3, 11/20; grey capsule and motion 11/22): a frosted capsule floating
+   over the page, no full-width bar. A soft fade in the page colour sits behind it. ── */
 .ui-tabbar { position: fixed; left: 0; right: 0; bottom: var(--tabbar-bottom); z-index: 100; display: flex; justify-content: center; pointer-events: none; }
+.ui-tabbar::before { content: ""; position: absolute; left: 0; right: 0; bottom: calc(-1 * var(--tabbar-bottom)); height: calc(var(--tabbar-clear) + var(--fade-h)); background: var(--fade); z-index: -1; }
 .ui-tabbar-inner { display: flex; align-items: center; gap: var(--tab-edge); width: 100%; max-width: var(--app-max); padding: 0 var(--tab-edge); box-sizing: border-box; }
-.ui-tabbar-capsule { flex: 1; min-width: 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--tab-capsule-pad); padding: var(--tab-capsule-pad); background: var(--surface); border: 1px solid var(--tab-capsule-border); border-radius: 999px; box-shadow: var(--tab-capsule-shadow); pointer-events: auto; }
-.ui-tab { min-height: var(--tab-height); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: var(--space-half); font: inherit; font-size: var(--tab-label-size); font-weight: 600; color: var(--text-muted); background: none; border: 0; border-radius: 999px; cursor: pointer; }
-.ui-tab[aria-current="page"] { color: var(--action); font-weight: 700; background: var(--tab-current); }
-.ui-tab-plus { flex: none; display: inline-flex; align-items: center; justify-content: center; width: var(--plus-size); height: var(--plus-size); border-radius: 50%; border: 0; background: var(--action); color: var(--on-action); box-shadow: var(--tab-capsule-shadow); cursor: pointer; pointer-events: auto; }
-.ui-tab-plus:focus-visible { outline: 2px solid var(--action); outline-offset: 2px; }
-/* Sticky action bar: sits just above the floating tab bar. */
-.ui-actionbar { position: fixed; left: 0; right: 0; z-index: 99; bottom: calc(var(--tabbar-bottom) + var(--tabbar-h) + var(--space-2)); display: flex; justify-content: center; background: var(--surface); border-top: 1px solid var(--bar-border); }
+.ui-tabbar-capsule { position: relative; flex: 1; min-width: 0; display: grid; grid-template-columns: repeat(var(--tab-count), minmax(0, 1fr)); gap: var(--tab-capsule-pad); padding: var(--tab-capsule-pad); background: var(--surface); border: 1px solid var(--tab-capsule-border); border-radius: var(--radius-pill); box-shadow: var(--float-shadow); pointer-events: auto; }
 @supports ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
-  .ui-actionbar { background: var(--bar-bg); -webkit-backdrop-filter: var(--bar-blur); backdrop-filter: var(--bar-blur); }
+  .ui-tabbar-capsule { background: var(--bar-bg); -webkit-backdrop-filter: var(--bar-blur); backdrop-filter: var(--bar-blur); }
 }
-.ui-actionbar-inner { width: 100%; max-width: var(--app-max); box-sizing: border-box; padding: var(--space-2) var(--gutter); }
-.ui-tabbar-spacer { height: calc(var(--tabbar-bottom) + var(--tabbar-h) + var(--space-4)); }
+/* The current tab's capsule: one shape that slides to the tab with a slight spring. */
+.ui-tab-glide { position: absolute; top: var(--tab-capsule-pad); bottom: var(--tab-capsule-pad); left: var(--tab-capsule-pad);
+  width: calc((100% - 2 * var(--tab-capsule-pad) - (var(--tab-count) - 1) * var(--tab-capsule-pad)) / var(--tab-count));
+  transform: translateX(calc(var(--tab-index) * (100% + var(--tab-capsule-pad)))); border-radius: var(--radius-pill); background: var(--tab-current);
+  transition: transform var(--glide-time) var(--spring); }
+.ui-tab { position: relative; min-height: var(--tab-height); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: var(--space-half); font: inherit; font-size: var(--tab-label-size); font-weight: 600; color: var(--text-muted); background: none; border: 0; border-radius: var(--radius-pill); cursor: pointer; transition: transform var(--press-time) var(--spring); }
+.ui-tab[aria-current="page"] { color: var(--action); font-weight: 700; }
+.ui-tab-plus { flex: none; display: inline-flex; align-items: center; justify-content: center; width: var(--plus-size); height: var(--plus-size); border-radius: 50%; border: 0; background: var(--action); color: var(--on-action); box-shadow: var(--float-shadow); cursor: pointer; pointer-events: auto; transition: transform var(--press-time) var(--spring); }
+.ui-tab-plus:focus-visible { outline: 2px solid var(--action); outline-offset: 2px; }
+.ui-tab:active, .ui-tab-plus:active { transform: scale(var(--press-scale)); }
+@media (prefers-reduced-motion: reduce) {
+  .ui-tab-glide, .ui-tab, .ui-tab-plus { transition: none; }
+  .ui-tab:active, .ui-tab-plus:active { transform: none; }
+}
+/* Pinned actions (board "Bottom actions", P1, 11/22): pills floating 8px above the tab bar,
+   over the same soft fade, with no tray or top border. */
+.ui-actionbar { position: fixed; left: 0; right: 0; bottom: 0; z-index: 99; display: flex; justify-content: center; pointer-events: none;
+  padding: var(--fade-h) 0 calc(var(--tabbar-clear) + var(--space-2)); background: var(--fade); }
+.ui-actionbar-inner { width: 100%; max-width: var(--app-max); box-sizing: border-box; padding: 0 var(--gutter); pointer-events: auto; }
+.ui-tabbar-spacer { height: calc(var(--tabbar-clear) + var(--space-4)); }
+/* A floating secondary button: a white pill with a soft shadow, not outlined (11/22). */
+.ui-float-pill { background: var(--surface); color: var(--action); box-shadow: var(--float-shadow); }
+
+/* Header buttons (board "Header buttons", T3, 11/22): data and settings in one white capsule. */
+.ui-header-capsule { display: flex; align-items: center; height: var(--header-capsule-h); padding: 0 var(--space-half); margin-bottom: var(--space-2); box-sizing: border-box; background: var(--surface); border: 1px solid var(--tab-capsule-border); border-radius: var(--radius-pill); box-shadow: var(--float-shadow); }
+.ui-header-capsule .ui-icon-button { height: calc(var(--header-capsule-h) - 2px); }
 
 /* ── Top bar (tabs other than Home) ───────────────────────────────────── */
 .ui-topbar { position: sticky; top: var(--safe-top); z-index: 50; height: var(--topbar-height); box-sizing: border-box; display: flex; align-items: center; gap: var(--space-2); padding: 0 var(--space-2) 0 var(--gutter); background: var(--bg); }
