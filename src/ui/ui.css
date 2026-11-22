@@ -102,9 +102,10 @@ button.ui-row:active { background: var(--pressed); }
   .ui-tab:active, .ui-tab-plus:active { transform: none; }
 }
 /* Pinned actions (board "Bottom actions", P1, 11/22): pills floating 8px above the tab bar,
-   over the same soft fade, with no tray or top border. */
-.ui-actionbar { position: fixed; left: 0; right: 0; bottom: 0; z-index: 99; display: flex; justify-content: center; pointer-events: none;
-  padding: var(--fade-h) 0 calc(var(--tabbar-clear) + var(--space-2)); background: var(--fade); }
+   over the same soft fade, with no tray or top border. They sit above the tab bar so its
+   fade never washes over them; their own fade stops above the bar (11/22). */
+.ui-actionbar { position: fixed; left: 0; right: 0; bottom: 0; z-index: 101; display: flex; justify-content: center; pointer-events: none;
+  padding: var(--fade-h) 0 calc(var(--tabbar-clear) + var(--space-2)); background: var(--fade) top / 100% calc(100% - var(--tabbar-clear)) no-repeat; }
 .ui-actionbar-inner { width: 100%; max-width: var(--app-max); box-sizing: border-box; padding: 0 var(--gutter); pointer-events: auto; }
 .ui-tabbar-spacer { height: calc(var(--tabbar-clear) + var(--space-4)); }
 /* A floating secondary button: a white pill with a soft shadow, not outlined (11/22). */
