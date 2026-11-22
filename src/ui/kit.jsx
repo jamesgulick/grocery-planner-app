@@ -1,7 +1,7 @@
 // Primitives (polish Phase 2, SPEC §4): each built when the first screen needs it. Styled
 // only by class names in ui.css, which reads tokens.css; the lint rule bans raw colours
 // and sizes here. Real <button>s wherever something can be acted on.
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useLayoutEffect, useRef, useState } from "react";
 
 // ── Icons: inline stroke SVG, currentColor ────────────────────────────────────
 const PATHS = {
@@ -217,23 +217,45 @@ export function Sheet({ title, sub, onClose, onBack, backLabel, onCancel, onDone
 }
 
 // ── Tab bar ──────────────────────────────────────────────────────────────────
-// `action`: the + in the last slot (a filled circle; opens Grab over any screen, 11/13).
-export const TabBar = ({ tabs, active, onSelect, action }) => (
-  <nav className="ui-tabbar" aria-label="Main">
-    <div className={action ? "ui-tabbar-inner ui-tabbar-4" : "ui-tabbar-inner"}>
-      {tabs.map(t => (
-        <button key={t.id} type="button" className="ui-tab" aria-label={t.label} aria-current={active === t.id ? "page" : undefined} onClick={() => onSelect(t.id)}>
-          <span className="ui-tab-pill"><Icon name={t.icon} size={24} strong={active === t.id} /></span>
-        </button>
-      ))}
-      {action && (
-        <button type="button" className="ui-tab ui-tab-action" aria-label={action.label} onClick={action.onClick}>
-          <span className="ui-tab-plus"><Icon name="plus" size={26} strong /></span>
-        </button>
-      )}
-    </div>
-  </nav>
-);
+// Bottom nav (board "Tab highlight", option F3, 11/20; capsule grey 11/22): a floating white
+// capsule with the tabs (icon and label); the current one sits in a grey capsule that slides
+// between tabs. An `action` (the +) is its own round button to the right of the capsule.
+// The bar's real distance from the screen's bottom (safe area included) is published as
+// --tabbar-clear, so pinned pills and the page padding sit above it on any phone.
+export function TabBar({ tabs, active, onSelect, action }) {
+  const ref = useRef(null);
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el) return undefined;
+    const root = document.documentElement;
+    const measure = () => root.style.setProperty("--tabbar-clear", `${Math.max(0, window.innerHeight - el.getBoundingClientRect().top)}px`);
+    measure();
+    const ro = typeof ResizeObserver === "function" ? new ResizeObserver(measure) : null;
+    ro?.observe(el);
+    window.addEventListener("resize", measure);
+    return () => { ro?.disconnect(); window.removeEventListener("resize", measure); };
+  }, []);
+  const index = Math.max(0, tabs.findIndex(t => t.id === active));
+  return (
+    <nav className="ui-tabbar" aria-label="Main" ref={ref}>
+      <div className="ui-tabbar-inner">
+        <div className="ui-tabbar-capsule" style={{ "--tab-count": tabs.length, "--tab-index": index }}>
+          <span className="ui-tab-glide" aria-hidden="true" />
+          {tabs.map(t => (
+            <button key={t.id} type="button" className="ui-tab" aria-current={active === t.id ? "page" : undefined} onClick={() => onSelect(t.id)}>
+              <Icon name={t.icon} size={24} strong={active === t.id} /><span>{t.label}</span>
+            </button>
+          ))}
+        </div>
+        {action && (
+          <button type="button" className="ui-tab-plus" aria-label={action.label} onClick={action.onClick}>
+            <Icon name="plus" size={26} strong />
+          </button>
+        )}
+      </div>
+    </nav>
+  );
+}
 export const TabBarSpacer = () => <div className="ui-tabbar-spacer" aria-hidden="true" />;
 
 // ── Sticky action bar: pinned just above the tab bar, translucent like it (decided 11/11).
@@ -243,6 +265,8 @@ export const ActionBar = ({ children }) => (
 );
 
 // ── Top bar for tabs other than Home ─────────────────────────────────────────
+// Header buttons (board "Header buttons", T3, 11/22): data and settings share one white capsule.
+export const HeaderButtons = ({ children }) => <div className="ui-header-capsule">{children}</div>;
 export const TopBar = ({ title, children }) => (
   <header className="ui-topbar"><h1 className="ui-heading">{title}</h1><div className="ui-icons">{children}</div></header>
 );

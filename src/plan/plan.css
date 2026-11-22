@@ -18,7 +18,7 @@
 .plan-empty { padding: var(--space-6) 0; }
 .plan-nav { display: flex; gap: var(--space-2); }
 .plan-nav .ui-block-button { flex: 1; }
-.plan-prev { flex: none; min-height: var(--block-button); padding: 0 var(--space-4); border: 0; border-radius: var(--radius-control); background: var(--surface); color: var(--action); font: inherit; font-size: var(--body-size); font-weight: 600; cursor: pointer; }
+.plan-prev { flex: none; min-height: var(--block-button); padding: 0 var(--space-4); border: 0; border-radius: var(--radius-pill); background: var(--surface); color: var(--action); box-shadow: var(--float-shadow); font: inherit; font-size: var(--body-size); font-weight: 600; cursor: pointer; }
 .plan-nav-spacer { height: calc(var(--block-button) + var(--space-5)); }
 
 /* ── Week step ── */

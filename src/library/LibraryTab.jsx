@@ -8,7 +8,7 @@
 // A search with no results offers Add "<text>", which opens Grab with the name filled in.
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { todayLocalISO, toSentenceCase } from "../app/globals.js";
-import { Chip, Group, Row, SearchField, Segmented, SortMenu, TopBar } from "../ui/kit.jsx";
+import { Chip, Group, HeaderButtons, Row, SearchField, Segmented, SortMenu, TopBar } from "../ui/kit.jsx";
 import { sendToAI } from "../app/sendToAI.js";
 import { ItemPage } from "./ItemPage.jsx";
 import { MealPage } from "./MealPage.jsx";
@@ -73,7 +73,7 @@ export function LibraryTab({ db, persistDB, view, setView, headerIcons, resetKey
   return (
     <div className="lib">
       <div className="lib-head" ref={headRef}>
-        <TopBar title="Library">{headerIcons}</TopBar>
+        <TopBar title="Library"><HeaderButtons>{headerIcons}</HeaderButtons></TopBar>
         <Segmented label="Meals or items" value={view} onChange={setView} options={[
           { value: "meals", label: "Meals", dot: mealsToFinish(meals, hist) },
           { value: "items", label: "Items", dot: itemsToFinish(items) },

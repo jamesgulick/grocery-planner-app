@@ -91,8 +91,23 @@
   --grabber-w: 36px;
   --grabber-h: 5px;
   --tab-height: 48px;
-  --tab-pill: #D5E3D9;                    /* the current tab's pill (board "Tab highlight") */
-  --tab-pill-w: 64px; --tab-pill-h: 40px;
+  /* Bottom nav (board "Tab highlight", option F3, 11/20): a floating capsule. */
+  --tab-current: rgba(118, 118, 128, 0.14);   /* the current tab's capsule: iOS grey (11/22) */
+  --tab-capsule-border: #E2E2DE;
+  --float-shadow: 0 4px 16px rgba(0, 0, 0, 0.10);   /* anything floating: tab bar, +, pinned pills, header capsule */
+  --tabbar-clear: calc(var(--tabbar-bottom) + var(--tabbar-h));   /* replaced by the bar's measured height */
+  --fade: linear-gradient(to bottom, rgba(244, 244, 241, 0), rgba(244, 244, 241, 0.92) var(--fade-h));   /* --bg, faded */
+  --fade-h: 24px;
+  --header-capsule-h: 42px;
+  --glide-time: 0.28s;
+  --press-time: 0.15s;
+  --spring: cubic-bezier(0.34, 1.36, 0.64, 1);   /* a slight overshoot */
+  --press-scale: 0.96;
+  --tab-capsule-pad: 4px;
+  --tab-edge: 12px;                       /* from the screen's edge; capsule to + */
+  --tabbar-h: calc(var(--tab-height) + 2 * var(--tab-capsule-pad) + 2px);
+  --tabbar-bottom: max(calc(var(--safe-bottom) + var(--space-1)), var(--tab-edge));
+  --plus-size: 60px;                      /* the + beside the capsule */
   --tab-label-size: 11px;                 /* the one size under 13px: tab labels under icons */
   --topbar-height: 52px;
   --textarea-height: 120px;
@@ -104,7 +119,6 @@
   --disabled: #A1A1A6;                    /* a disabled text button (Done) */
   --chip-height: 40px;
   --problem-outline: 1.5px;
-  --plus-size: 48px;                      /* the + in the tab bar (Grab) */
   --grab-recipe-h: 96px;               /* a detail page's field with a problem */
   --label-pill-h: 28px;                   /* day labels on the Week step */
   --chip-pad-tight: 10px;                 /* filter chips on one line beside the sort button */

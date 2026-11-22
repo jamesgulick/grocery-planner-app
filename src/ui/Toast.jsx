@@ -16,7 +16,8 @@ function bottomOffset() {
     top = footer ? footer.getBoundingClientRect().top
       : sheet.getBoundingClientRect().bottom - parseFloat(getComputedStyle(sheet).paddingBottom || "0");   // above the safe area
   } else {
-    for (const el of document.querySelectorAll(".ui-tabbar, .ui-actionbar")) top = Math.min(top, el.getBoundingClientRect().top);
+    // The floating things themselves, not the fade behind them (11/22).
+    for (const el of document.querySelectorAll(".ui-tabbar-capsule, .ui-tab-plus, .ui-actionbar-inner")) top = Math.min(top, el.getBoundingClientRect().top);
   }
   return Math.max(0, h - top);
 }

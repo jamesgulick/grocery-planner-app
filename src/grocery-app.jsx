@@ -19,7 +19,7 @@ import { ImportCheck } from "./shell/ImportCheck.jsx";
 import { SettingsSheet } from "./shell/SettingsSheet.jsx";
 import { GrabSheet } from "./shell/GrabSheet.jsx";
 import { clearPending, loadPending } from "./app/sendToAI.js";
-import { IconButton, PillButton, Segmented, TabBar, TabBarSpacer, TopBar } from "./ui/kit.jsx";
+import { HeaderButtons, IconButton, PillButton, Segmented, TabBar, TabBarSpacer, TopBar } from "./ui/kit.jsx";
 import { ToastHost } from "./ui/Toast.jsx";
 import { registerLatestDB } from "./app/latestDB.js";
 import "./ui/ui.css";
