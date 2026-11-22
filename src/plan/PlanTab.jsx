@@ -3,7 +3,7 @@ import { MAX_EXTRA_DAYS, endDateFor, extraDaysOf, reconcilePlates, weekDates } f
 import { useRef, useState } from "react";
 import { INVENTORY_LOCS, PLAN_STEPS, nextDateForShoppingDay, planDays, seedTimeLevels, weekLabel } from "../app/globals.js";
 import { PLAN_STEPS_VER, getActivePlan, startPlan, writeActivePlan } from "../app/plans.js";
-import { ActionBar, BlockButton, Segmented } from "../ui/kit.jsx";
+import { ActionBar, BlockButton, HeaderButtons, Segmented } from "../ui/kit.jsx";
 import { PlanConfirm } from "./PlanConfirm.jsx";
 import { PlanInventory } from "./PlanInventory.jsx";
 import { PlanMeals } from "./PlanMeals.jsx";
@@ -237,7 +237,7 @@ function PlanTab({ db, persistDB, headerIcons, onDone }) {
     return (
       <div className="plan">
         <header className="plan-head">
-          <div className="plan-title-row"><h1 className="ui-screen-title">{weekLabel(start)}</h1><div className="ui-icons">{headerIcons}</div></div>
+          <div className="plan-title-row"><h1 className="ui-screen-title">{weekLabel(start)}</h1><HeaderButtons>{headerIcons}</HeaderButtons></div>
           <StepBar step={-1} maxStep={-1} />
         </header>
         <div className="plan-empty"><BlockButton onClick={() => { const next = startPlan(db, start); if (next) persistDB(next); }}>Plan this week</BlockButton></div>
@@ -265,7 +265,7 @@ function PlanTab({ db, persistDB, headerIcons, onDone }) {
   return (
     <div className="plan">
       <header className="plan-head">
-        <div className="plan-title-row"><h1 className="ui-screen-title">{weekLabel(draft.weekStartDate)}</h1><div className="ui-icons">{headerIcons}</div></div>
+        <div className="plan-title-row"><h1 className="ui-screen-title">{weekLabel(draft.weekStartDate)}</h1><HeaderButtons>{headerIcons}</HeaderButtons></div>
         <StepBar step={step} maxStep={maxStep} onGo={i => (i === 0 ? goSub(weekSub) : goToStep(i))} />
         {step === 0 && (
           <Segmented label="Week setup" value={weekSub} onChange={goSub}
