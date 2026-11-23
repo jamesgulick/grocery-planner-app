@@ -95,7 +95,7 @@
   --tab-current: rgba(118, 118, 128, 0.14);   /* the current tab's capsule: iOS grey (11/22) */
   --tab-capsule-border: #E2E2DE;
   --float-shadow: 0 4px 16px rgba(0, 0, 0, 0.10);   /* anything floating: tab bar, +, pinned pills, header capsule */
-  --tabbar-clear: calc(var(--tabbar-bottom) + var(--tabbar-h));   /* replaced by the bar's measured height */
+  --tabbar-clear: calc(var(--tabbar-bottom) + var(--tabbar-h));   /* the bar's distance from the bottom (not measured; 11/23) */
   --fade: linear-gradient(to bottom, rgba(244, 244, 241, 0), rgba(244, 244, 241, 0.92) var(--fade-h));   /* --bg, faded */
   --fade-h: 24px;
   --header-capsule-h: 42px;

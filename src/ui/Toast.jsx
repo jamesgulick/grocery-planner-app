@@ -6,9 +6,12 @@ import { bindToast } from "./toast.js";
 
 const PLAIN_MS = 2000, UNDO_MS = 5000;
 
-// How far up the bar sits: above the highest fixed bar at the bottom of the screen.
+// How far up the bar sits: above the highest fixed bar at the bottom of the screen. The screen's
+// bottom is read from the live region (fixed, bottom 0) in the same coordinates as the bars, not
+// window.innerHeight, which an iPhone Home Screen app reports stale after a resume (11/23).
 function bottomOffset() {
-  const h = window.innerHeight;
+  const live = document.querySelector(".ui-toast-live");
+  const h = live ? live.getBoundingClientRect().bottom : window.innerHeight;
   const sheet = document.querySelector(".ui-sheet");
   let top = h;
   if (sheet) {

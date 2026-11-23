@@ -1,7 +1,7 @@
 // Primitives (polish Phase 2, SPEC §4): each built when the first screen needs it. Styled
 // only by class names in ui.css, which reads tokens.css; the lint rule bans raw colours
 // and sizes here. Real <button>s wherever something can be acted on.
-import React, { useEffect, useLayoutEffect, useRef, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 
 // ── Icons: inline stroke SVG, currentColor ────────────────────────────────────
 const PATHS = {
@@ -120,24 +120,14 @@ export function Sheet({ title, sub, onClose, onBack, doneLabel = "Done", footer,
 // Bottom nav (board "Tab highlight", option F3, 11/20; capsule grey 11/22): a floating white
 // capsule with the tabs (icon and label); the current one sits in a grey capsule that slides
 // between tabs. An `action` (the +) is its own round button to the right of the capsule.
-// The bar's real distance from the screen's bottom (safe area included) is published as
-// --tabbar-clear, so pinned pills and the page padding sit above it on any phone.
+// The bar's distance from the screen's bottom (--tabbar-clear) is pure CSS, safe area
+// included, so pinned pills and the page padding sit above it in the same frame. It is not
+// measured: an iPhone Home Screen app resumed from the background reports a stale
+// window.innerHeight, which left the pills over the bar or too high (11/23).
 export function TabBar({ tabs, active, onSelect, action }) {
-  const ref = useRef(null);
-  useLayoutEffect(() => {
-    const el = ref.current;
-    if (!el) return undefined;
-    const root = document.documentElement;
-    const measure = () => root.style.setProperty("--tabbar-clear", `${Math.max(0, window.innerHeight - el.getBoundingClientRect().top)}px`);
-    measure();
-    const ro = typeof ResizeObserver === "function" ? new ResizeObserver(measure) : null;
-    ro?.observe(el);
-    window.addEventListener("resize", measure);
-    return () => { ro?.disconnect(); window.removeEventListener("resize", measure); };
-  }, []);
   const index = Math.max(0, tabs.findIndex(t => t.id === active));
   return (
-    <nav className="ui-tabbar" aria-label="Main" ref={ref}>
+    <nav className="ui-tabbar" aria-label="Main">
       <div className="ui-tabbar-inner">
         <div className="ui-tabbar-capsule" style={{ "--tab-count": tabs.length, "--tab-index": index }}>
           <span className="ui-tab-glide" aria-hidden="true" />

@@ -74,7 +74,7 @@ button.ui-row:active { background: var(--pressed); }
 .ui-tabbar { position: fixed; left: 0; right: 0; bottom: var(--tabbar-bottom); z-index: 100; display: flex; justify-content: center; pointer-events: none; }
 .ui-tabbar::before { content: ""; position: absolute; left: 0; right: 0; bottom: calc(-1 * var(--tabbar-bottom)); height: calc(var(--tabbar-clear) + var(--fade-h)); background: var(--fade); z-index: -1; }
 .ui-tabbar-inner { display: flex; align-items: center; gap: var(--tab-edge); width: 100%; max-width: var(--app-max); padding: 0 var(--tab-edge); box-sizing: border-box; }
-.ui-tabbar-capsule { position: relative; flex: 1; min-width: 0; display: grid; grid-template-columns: repeat(var(--tab-count), minmax(0, 1fr)); gap: var(--tab-capsule-pad); padding: var(--tab-capsule-pad); background: var(--surface); border: 1px solid var(--tab-capsule-border); border-radius: var(--radius-pill); box-shadow: var(--float-shadow); pointer-events: auto; }
+.ui-tabbar-capsule { position: relative; flex: 1; min-width: 0; height: var(--tabbar-h); box-sizing: border-box; display: grid; grid-template-columns: repeat(var(--tab-count), minmax(0, 1fr)); gap: var(--tab-capsule-pad); padding: var(--tab-capsule-pad); background: var(--surface); border: 1px solid var(--tab-capsule-border); border-radius: var(--radius-pill); box-shadow: var(--float-shadow); pointer-events: auto; }
 @supports ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
   .ui-tabbar-capsule { background: var(--bar-bg); -webkit-backdrop-filter: var(--bar-blur); backdrop-filter: var(--bar-blur); }
 }
