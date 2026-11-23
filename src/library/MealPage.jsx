@@ -17,8 +17,10 @@ import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { todayLocalISO } from "../app/globals.js";
 import { mealNameProblem, renameMeal } from "../mealRename.js";
 import { FACET_VOCAB } from "../app/vocab.js";
-import { Clocks, DeleteButton, FieldLabel, Icon, OutlineButton, Segmented, Switch } from "../ui/kit.jsx";
+import { Clocks, DeleteButton, FieldLabel, Icon, Segmented, Switch } from "../ui/kit.jsx";
 import { sendToAI } from "../app/sendToAI.js";
+import { StepChevron, StepPill, sentLabel, stepStates, useTrip } from "../shell/AiSteps.jsx";
+import { ReimportPill } from "../shell/ReimportPill.jsx";
 import {
   DeleteSheet, HowOftenSheet, InfoSheet, IngredientsSheet, LeftoversSheet, PairsSheet,
   TagSheet, TextSheet, TimeCostSheet, WeatherSheet, WhoEatsSheet,
@@ -320,13 +322,30 @@ export function MealPage({ db, persistDB, mealId, onBack, backLabel = "Library" 
       <section className="lib-group">
         <h2 className="lib-group-head">Notes</h2>
         <GroupCard><FieldRow onClick={() => setSheet("notes")} value={notes ? <span className="lib-row-note">{notes}</span> : null} /></GroupCard>
-        {/* Fill in this one meal with AI (board "Fill in existing meals with AI", 11/15). */}
-        <OutlineButton onClick={() => sendToAI(db, persistDB, { purpose: "enrich", meals: [meal.id] })}>Send to AI</OutlineButton>
+        {/* Fill in this one meal with AI (board "Fill in existing meals with AI", 11/15), as the
+            two AI steps (11/23). */}
+        <FillWithAI db={db} persistDB={persistDB} mealId={meal.id} />
         <DeleteButton onClick={() => setSheet("delete")}>Delete meal</DeleteButton>
       </section>
 
       {open}
       {info && <InfoSheet topic={info} onClose={() => setInfo(null)} />}
+    </div>
+  );
+}
+
+// "Fill in with AI" above Delete: ① Send to AI (this meal) › ② Re-import (the file picker).
+function FillWithAI({ db, persistDB, mealId }) {
+  const sentAt = useTrip(`enrich:${mealId}`);
+  const [s1, s2] = stepStates(sentAt);
+  return (
+    <div className="trip trip-card">
+      <div className="trip-head"><span className="trip-title">Fill in with AI</span>{sentAt && <span className="trip-status">{sentLabel(sentAt)}</span>}</div>
+      <div className="trip-steps">
+        <StepPill n={1} state={s1} onClick={() => sendToAI(db, persistDB, { purpose: "enrich", meals: [mealId] })}>Send to AI</StepPill>
+        <StepChevron />
+        <ReimportPill db={db} persistDB={persistDB} step={s2} />
+      </div>
     </div>
   );
 }

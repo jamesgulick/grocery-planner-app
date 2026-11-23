@@ -14,6 +14,7 @@ import { INVENTORY_LOCS, toSentenceCase } from "../app/globals.js";
 import { sendToAI } from "../app/sendToAI.js";
 import { BlockButton, Chip, Field, OutlineButton, Segmented, Sheet } from "../ui/kit.jsx";
 import { ReimportPill } from "./ReimportPill.jsx";
+import { StepChevron, StepPill, sentLabel, stepStates, useTrip } from "./AiSteps.jsx";
 import { showToast } from "../ui/toast.js";
 
 const newId = p => p + Date.now() + Math.random().toString(36).slice(2, 6);
@@ -63,6 +64,8 @@ export function GrabSheet({ db, persistDB, init = {}, onClose, onOpenPage }) {
   const nameTaken = kind === "meal" && clean && (db.meals || []).some(m => m.name.trim().toLowerCase() === clean.toLowerCase());
   const canSave = !!clean && !nameTaken;
   const canSend = !!(link.trim() || text.trim());
+  const sentAt = useTrip("recipe");
+  const [s1, s2] = stepStates(sentAt);
 
   return (
     <Sheet title={kind === "meal" ? "Grab a meal" : "Grab an item"} onClose={onClose} doneLabel="Cancel"
@@ -70,10 +73,11 @@ export function GrabSheet({ db, persistDB, init = {}, onClose, onOpenPage }) {
         <div className="grab-footer">
           <BlockButton onClick={() => { if (canSave) { saveMeal(); onClose(); } }} disabled={!canSave}>Save</BlockButton>
           <div className="grab-ai">
-            <button type="button" className="sync-pill" onClick={() => canSend && send()} disabled={!canSend}>Send to AI</button>
-            <span className="sync-chev" aria-hidden="true">›</span>
-            <ReimportPill db={db} persistDB={persistDB} onLoaded={onClose} />
+            <StepPill n={1} state={s1} onClick={() => canSend && send()} disabled={!canSend}>Send to AI</StepPill>
+            <StepChevron />
+            <ReimportPill db={db} persistDB={persistDB} onLoaded={onClose} step={s2} />
           </div>
+          {sentAt && <div className="trip-sent">{sentLabel(sentAt)}</div>}
           <button type="button" className="ui-link grab-details" disabled={!canSave} onClick={() => { const id = saveMeal(); onClose(); onOpenPage({ kind: "meal", id }); }}>Add details</button>
         </div>
       ) : (

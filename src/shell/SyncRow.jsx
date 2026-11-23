@@ -12,17 +12,22 @@
 //   [Choose file] (on iOS the picker needs its own tap) until a load or a cancel. A file
 //   picked there is on the phone already, so loading it counts as the backup.
 // "Last" is the last sync loaded (db.lastSyncAt, app-only).
+// 11/23 (standing rules "AI round trips", board "Data sheet"): the title on the left, the status
+// on the right ("Last Nov 14", or "Sent 10:31am" once sent), and the two numbered steps under
+// it. The sent state is kept on the device, so step 2 is still lit after a restart. `inCard`:
+// the row sits inside a card of rows (the Data sheet) instead of being its own card.
 import { useEffect, useRef, useState } from "react";
 import { prepareImport, readFileText } from "../app/dataIO.js";
 import { downloadBackup } from "../app/exportData.js";
 import { sendToAI } from "../app/sendToAI.js";
 import { ImportCheck } from "./ImportCheck.jsx";
+import { StepChevron, StepPill, sentLabel, stepStates, useTrip } from "./AiSteps.jsx";
 
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 const shortDate = iso => { const d = new Date(iso); return `${MONTHS[d.getMonth()]} ${d.getDate()}`; };
 
 // The clipboard's text, or "" when there is none or the read is refused.
-async function clipboardText() {
+export async function clipboardText() {
   try {
     if (navigator.clipboard?.read) {
       for (const item of await navigator.clipboard.read()) {
@@ -37,13 +42,13 @@ async function clipboardText() {
 
 // A planner file from text: { prepared } (prepared is null when the preview guard was
 // declined), or null when the text isn't one.
-function planFile(text) {
+export function planFile(text) {
   try { return { prepared: prepareImport(JSON.parse(text)) }; }
   catch { return null; }
 }
 
-export function SyncRow({ db, persistDB }) {
-  const [sent, setSent]       = useState(false);
+export function SyncRow({ db, persistDB, inCard = false }) {
+  const sentAt = useTrip("calendar");
   const [noFile, setNoFile]   = useState(false);
   const [pending, setPending] = useState(null); // { prepared, fromClipboard }
   const [error, setError]     = useState("");
@@ -59,7 +64,7 @@ export function SyncRow({ db, persistDB }) {
 
   const send = async () => {
     setNoFile(false); setError("");
-    setSent((await sendToAI(db, persistDB, { purpose: "calendar" })) !== "cancelled");
+    await sendToAI(db, persistDB, { purpose: "calendar" });
   };
 
   const fromClipboard = async () => {
@@ -84,20 +89,23 @@ export function SyncRow({ db, persistDB }) {
     const next = { ...pending.prepared.db, lastSyncAt: now };
     if (pending.fromClipboard) downloadBackup(next, persistDB);            // saves the copy, stamps lastExportedAt
     else persistDB({ ...next, lastExportedAt: now }, { background: true }); // the picked file is the copy
-    setPending(null); setSent(false); setNoFile(false);
+    setPending(null); setNoFile(false);
   };
 
-  const status = noFile ? "No file copied" : sent ? "Prompt copied" : db.lastSyncAt ? `Last ${shortDate(db.lastSyncAt)}` : "Not synced yet";
+  const [s1, s2] = stepStates(sentAt);
+  const status = noFile ? "No file copied" : sentAt ? sentLabel(sentAt) : db.lastSyncAt ? `Last ${shortDate(db.lastSyncAt)}` : "Not synced yet";
 
   return (
     <div className="sync-wrap">
-      <div className="sync">
-        <span className="sync-main"><span className="sync-title">Calendar sync</span><span className="sync-status">{status}</span></span>
-        <button type="button" className="sync-pill" onClick={send}>Send to AI</button>
-        <span className="sync-chev" aria-hidden="true">›</span>
-        {noFile
-          ? <button type="button" className="sync-pill" onClick={() => fileRef.current?.click()}>Choose file</button>
-          : <button type="button" className="sync-pill" onClick={fromClipboard}>Re-import</button>}
+      <div className={inCard ? "trip" : "trip trip-card"}>
+        <div className="trip-head"><span className="trip-title">Calendar sync</span><span className="trip-status">{status}</span></div>
+        <div className="trip-steps">
+          <StepPill n={1} state={s1} onClick={send}>Send to AI</StepPill>
+          <StepChevron />
+          {noFile
+            ? <StepPill n={2} state={s2} onClick={() => fileRef.current?.click()}>Choose file</StepPill>
+            : <StepPill n={2} state={s2} onClick={fromClipboard}>Re-import</StepPill>}
+        </div>
         <input ref={fileRef} type="file" accept=".json,.txt,application/json,text/plain,text/*" hidden
           onChange={e => { const f = e.target.files?.[0]; e.target.value = ""; if (f) fromFile(f); else setNoFile(false); }} />
       </div>

@@ -20,6 +20,8 @@ const PATHS = {
   search:   <><circle cx="11" cy="11" r="6" /><path d="M20 20l-4.5-4.5" /></>,
   close:    <><path d="M6 6l12 12" /><path d="M18 6L6 18" /></>,
   plus:     <><path d="M12 5v14" /><path d="M5 12h14" /></>,
+  down:     <><path d="M12 4v14" /><path d="M6 12l6 6 6-6" /></>,   /* Import (Data sheet) */
+  up:       <><path d="M12 20V6" /><path d="M6 12l6-6 6 6" /></>,   /* Back up (Data sheet) */
   trash:    <><path d="M4 7h16" /><path d="M10 11v6M14 11v6" /><path d="M6 7l1 13a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1l1-13" /><path d="M9 7V4h6v3" /></>,
   cart:     <><circle cx="9" cy="20" r="1.4" /><circle cx="18" cy="20" r="1.4" /><path d="M2 3h3l2.6 12.2a1 1 0 0 0 1 .8h9.6a1 1 0 0 0 1-.8L21 7H6.1" /></>,   /* pickup: groceries arrive this day */
 };

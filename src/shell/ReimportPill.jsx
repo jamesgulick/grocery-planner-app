@@ -5,8 +5,10 @@
 import { useRef, useState } from "react";
 import { prepareImport, readFileText } from "../app/dataIO.js";
 import { ImportCheck } from "./ImportCheck.jsx";
+import { StepPill } from "./AiSteps.jsx";
 
-export function ReimportPill({ db, persistDB, onLoaded, className = "sync-pill" }) {
+// `step`: the state of step ② ("lit" | "idle") when it sits in the two AI steps (11/23).
+export function ReimportPill({ db, persistDB, onLoaded, className = "sync-pill", step }) {
   const [pending, setPending] = useState(null);
   const [error, setError] = useState("");
   const fileRef = useRef(null);
@@ -26,7 +28,9 @@ export function ReimportPill({ db, persistDB, onLoaded, className = "sync-pill" 
 
   return (
     <>
-      <button type="button" className={className} onClick={() => fileRef.current?.click()}>Re-import</button>
+      {step
+        ? <StepPill n={2} state={step} onClick={() => fileRef.current?.click()}>Re-import</StepPill>
+        : <button type="button" className={className} onClick={() => fileRef.current?.click()}>Re-import</button>}
       <input ref={fileRef} type="file" accept=".json,.txt,application/json,text/plain,text/*" hidden
         onChange={e => { const f = e.target.files?.[0]; e.target.value = ""; if (f) fromFile(f); }} />
       {error && <div className="ui-problem reimport-error">{error}</div>}

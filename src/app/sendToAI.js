@@ -35,6 +35,29 @@ function savePending(record) {
   try { localStorage.setItem(PENDING_KEY, JSON.stringify(record)); } catch { /* the bar is a safety net only */ }
 }
 
+// AI round trips (standing rules, 11/23): each trip shows ① Send to AI › ② Re-import, and
+// step 2 stays lit after a restart. The device keeps when each trip was sent, by key:
+// "calendar", "recipe", "enrich:<meal id>". Any file loaded settles them all (as it settles
+// the pending request). Surfaces listen for TRIPS_EVENT to stay in step with each other.
+const TRIPS_KEY = "grocery_trips" + KEY_SUFFIX;
+export const TRIPS_EVENT = "grocery-trips";
+function loadTrips() {
+  try { const raw = localStorage.getItem(TRIPS_KEY); return raw ? JSON.parse(raw) || {} : {}; } catch { return {}; }
+}
+function saveTrips(trips) {
+  try { if (Object.keys(trips).length) localStorage.setItem(TRIPS_KEY, JSON.stringify(trips)); else localStorage.removeItem(TRIPS_KEY); } catch { /* the steps fall back to unsent */ }
+  try { window.dispatchEvent(new Event(TRIPS_EVENT)); } catch { /* no window */ }
+}
+/** When the trip with this key was sent (ISO), or null. */
+export function tripSentAt(key) { return loadTrips()[key] || null; }
+/** A file was loaded: every trip is back to step 1. */
+export function settleTrips() { if (Object.keys(loadTrips()).length) saveTrips({}); }
+const tripKeys = job => !job ? [] : job.purpose === "enrich" ? (job.meals || []).map(id => `enrich:${id}`) : [job.purpose];
+function markTrips(job, at) {
+  const keys = tripKeys(job);
+  if (keys.length) saveTrips({ ...loadTrips(), ...Object.fromEntries(keys.map(k => [k, at])) });
+}
+
 /** The last send from this device: { purpose, exportedAt, at, db, job } or null. */
 export function loadSentCopy() {
   try { const raw = localStorage.getItem(SENT_KEY); return raw ? JSON.parse(raw) : null; } catch { return null; }
@@ -63,12 +86,14 @@ export async function sendToAI(db, persistDB, job = null) {
   if (navigator.canShare?.({ files: [file] })) {
     try {
       await navigator.share({ files: [file], text: SEND_PROMPT });
+      markTrips(job, at);
       return "shared";
     } catch (e) {
       if (e?.name === "AbortError") return "cancelled";
     }
   }
   downloadPayload(payload, db, persistDB);
+  markTrips(job, at);
   return "downloaded";
 }
 const withoutPurpose = ({ purpose, ...rest }) => rest;

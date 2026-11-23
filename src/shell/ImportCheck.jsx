@@ -15,7 +15,7 @@ import { checkImport, mealPreview, savedLabel } from "../app/importDiff.js";
 import { formatSavedAt } from "../app/globals.js";
 import { DEFAULT_SETTINGS } from "../app/seed.js";
 import { migrateDB } from "../app/plans.js";
-import { clearPending, loadSentCopy } from "../app/sendToAI.js";
+import { clearPending, loadSentCopy, settleTrips } from "../app/sendToAI.js";
 import { BlockButton, Group, Row, Section, Sheet } from "../ui/kit.jsx";
 
 const JOB = { calendar: "Calendar sync", recipe: "Recipe", enrich: "Fill in" };
@@ -60,7 +60,7 @@ function PeekSheet({ row, onClose }) {
 
 // fromClipboard (calendar sync, board "Round 14"): the subline names the source, and the
 // footnote says Load also saves a copy.
-export function ImportCheck({ device, prepared, onLoad, onCancel, fromClipboard = false }) {
+export function ImportCheck({ device, prepared, onLoad, onCancel, fromClipboard = false, source = null }) {
   const [open, setOpen] = useState(null);   // a row whose preview or peek is showing
   // Defaults filled on the device side too, as prepareImport fills them on the file's.
   const here = device && { ...device, settings: { ...DEFAULT_SETTINGS, ...(device.settings || {}) } };
@@ -77,7 +77,7 @@ export function ImportCheck({ device, prepared, onLoad, onCancel, fromClipboard 
   // Subline: "Recipe · saved Nov 15, 10:31pm" (the job when this device sent it).
   const savedIso = meta?.exportedAt || legacy.savedAt;
   const job = r?.purpose === "enrich" ? `Fill in ${r.mealsFilled} meal${r.mealsFilled === 1 ? "" : "s"}` : JOB[r?.purpose];
-  const sub = [fromClipboard ? "From clipboard" : null, job ? `${job} · saved ${savedLabel(savedIso)}` : savedIso ? `Saved ${formatSavedAt(savedIso)}` : "Saved: unknown"].filter(Boolean).join(" · ");
+  const sub = [source || (fromClipboard ? "From clipboard" : null), job ? `${job} · saved ${savedLabel(savedIso)}` : savedIso ? `Saved ${formatSavedAt(savedIso)}` : "Saved: unknown"].filter(Boolean).join(" · ");
 
   // Counts: records files say "1 new" / "2 filled in" beside any drop.
   const counts = legacy.counts.map(c => {
@@ -110,7 +110,7 @@ export function ImportCheck({ device, prepared, onLoad, onCancel, fromClipboard 
 
   return (
     <Sheet title="Load this file?" sub={sub} onClose={onCancel} doneLabel="Cancel"
-      footer={<BlockButton onClick={() => { clearPending(); onLoad(); }}>{stale ? "Load anyway" : "Load"}</BlockButton>}>
+      footer={<BlockButton onClick={() => { clearPending(); settleTrips(); onLoad(); }}>{stale ? "Load anyway" : "Load"}</BlockButton>}>
       {r?.purposeLine && <div className="ui-group"><RecordRow row={{ name: "Different job", line: r.purposeLine, problem: true }} /></div>}
       {stale && (
         <Section label="Changed here since you sent it">
