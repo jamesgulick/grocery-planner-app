@@ -49,9 +49,14 @@
    and a filled number; the other is grey with a grey disc; a sent step 1 shows ✓. */
 .trip { font-family: var(--font); display: flex; flex-direction: column; gap: var(--space-2); padding: var(--space-3) var(--space-4); }
 .trip-card { background: var(--surface); border-radius: var(--radius-group); }
-.trip-head { display: flex; align-items: baseline; justify-content: space-between; gap: var(--space-3); }
+.trip-head { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); }
 /* Card titles (11/24): 16px semibold, any status on the same line at the right, 13px muted. */
 .trip-title { font-size: var(--card-title-size); line-height: var(--card-title-line); font-weight: var(--card-title-weight); color: var(--text); }
+.trip-name { display: inline-flex; align-items: center; gap: var(--space-1); min-width: 0; }
+.grab-ai-title { font-size: var(--body-size); line-height: var(--body-line); font-weight: 600; color: var(--text); }
+.grab-footer > .trip-name { align-self: flex-start; margin-top: var(--space-2); }
+.trip-info p { margin: 0; font-size: var(--body-size); line-height: var(--body-line); color: var(--text); }
+.trip-info-label { margin: var(--space-4) 0 var(--space-1); font-size: var(--label-size); line-height: var(--label-line); font-weight: 600; color: var(--text-muted); }
 .trip-status { flex: none; font-size: var(--label-size); line-height: var(--label-line); font-weight: 400; color: var(--text-muted); white-space: nowrap; }
 .trip-steps { display: flex; align-items: center; gap: var(--space-2); }
 .step-pill { flex: 1 1 0; min-width: 0; display: inline-flex; align-items: center; justify-content: center; gap: var(--space-2); font: inherit; font-size: var(--body-size); font-weight: 600; color: var(--text-muted); background: var(--surface); cursor: pointer; white-space: nowrap;

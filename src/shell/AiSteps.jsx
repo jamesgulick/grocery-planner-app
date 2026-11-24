@@ -6,6 +6,7 @@
 // Plan › Week), Grab's meal tab and the meal page's Fill in with AI.
 import { useEffect, useState } from "react";
 import { TRIPS_EVENT, tripSentAt } from "../app/sendToAI.js";
+import { InfoButton, Sheet } from "../ui/kit.jsx";
 
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
@@ -42,3 +43,32 @@ export const StepChevron = () => <span className="step-chev" aria-hidden="true">
 
 /** The states of the two steps for a trip sent at `sentAt` (or not). */
 export const stepStates = sentAt => sentAt ? ["done", "lit"] : ["lit", "idle"];
+
+// Every AI trip has a title with an ⓘ (11/24; brief, standing rules, "AI round trips").
+// The ⓘ opens a fit sheet: what this trip does, then "How it works", the same for all three.
+const TRIP_INFO = {
+  "Calendar sync": "Fills each day's note from your calendar. Nothing else in the file changes.",
+  "Fill in with AI": "Fills in this meal's empty details (style, plate, time, ingredients) from its recipe link, or from its name if there's no link. Details you've already set stay as they are.",
+  "Add with AI": "Turns the link or recipe text into a new meal with its details and ingredients, matched to items you already have.",
+};
+const HOW_IT_WORKS = "① Send to AI saves your data file and opens the share sheet. Pick your AI chat and send the file; a short prompt is already copied, and your Instructions for AI (Settings) tell it which skill to use. ② When it sends the file back, open it and tap Re-import. You see every change before anything loads, and nothing in the app changes until you load it.";
+
+/** A trip's title with its ⓘ. `className`: the title's style (the card title, or Grab's small one). */
+export function TripTitle({ title, className = "trip-title" }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <span className="trip-name">
+      <span className={className}>{title}</span>
+      <InfoButton label={title} onClick={() => setOpen(true)} />
+      {open && (
+        <Sheet title={title} onClose={() => setOpen(false)}>
+          <div className="trip-info">
+            <p>{TRIP_INFO[title]}</p>
+            <div className="trip-info-label">How it works</div>
+            <p>{HOW_IT_WORKS}</p>
+          </div>
+        </Sheet>
+      )}
+    </span>
+  );
+}

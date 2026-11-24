@@ -21,7 +21,7 @@ import { prepareImport, readFileText } from "../app/dataIO.js";
 import { downloadBackup } from "../app/exportData.js";
 import { sendToAI } from "../app/sendToAI.js";
 import { ImportCheck } from "./ImportCheck.jsx";
-import { StepChevron, StepPill, sentLabel, stepStates, useTrip } from "./AiSteps.jsx";
+import { StepChevron, StepPill, TripTitle, sentLabel, stepStates, useTrip } from "./AiSteps.jsx";
 
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 const shortDate = iso => { const d = new Date(iso); return `${MONTHS[d.getMonth()]} ${d.getDate()}`; };
@@ -98,7 +98,7 @@ export function SyncRow({ db, persistDB, inCard = false }) {
   return (
     <div className="sync-wrap">
       <div className={inCard ? "trip" : "trip trip-card"}>
-        <div className="trip-head"><span className="trip-title">Calendar sync</span><span className="trip-status">{status}</span></div>
+        <div className="trip-head"><TripTitle title="Calendar sync" /><span className="trip-status">{status}</span></div>
         <div className="trip-steps">
           <StepPill n={1} state={s1} onClick={send}>Send to AI</StepPill>
           <StepChevron />

@@ -19,7 +19,7 @@ import { mealNameProblem, renameMeal } from "../mealRename.js";
 import { FACET_VOCAB } from "../app/vocab.js";
 import { Clocks, DeleteButton, FieldLabel, Icon, Segmented, Switch } from "../ui/kit.jsx";
 import { sendToAI } from "../app/sendToAI.js";
-import { StepChevron, StepPill, sentLabel, stepStates, useTrip } from "../shell/AiSteps.jsx";
+import { StepChevron, StepPill, TripTitle, sentLabel, stepStates, useTrip } from "../shell/AiSteps.jsx";
 import { ReimportPill } from "../shell/ReimportPill.jsx";
 import {
   DeleteSheet, HowOftenSheet, InfoSheet, IngredientsSheet, LeftoversSheet, PairsSheet,
@@ -340,7 +340,7 @@ function FillWithAI({ db, persistDB, mealId }) {
   const [s1, s2] = stepStates(sentAt);
   return (
     <div className="trip trip-card">
-      <div className="trip-head"><span className="trip-title">Fill in with AI</span>{sentAt && <span className="trip-status">{sentLabel(sentAt)}</span>}</div>
+      <div className="trip-head"><TripTitle title="Fill in with AI" />{sentAt && <span className="trip-status">{sentLabel(sentAt)}</span>}</div>
       <div className="trip-steps">
         <StepPill n={1} state={s1} onClick={() => sendToAI(db, persistDB, { purpose: "enrich", meals: [mealId] })}>Send to AI</StepPill>
         <StepChevron />

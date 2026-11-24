@@ -14,7 +14,7 @@ import { INVENTORY_LOCS, toSentenceCase } from "../app/globals.js";
 import { sendToAI } from "../app/sendToAI.js";
 import { BlockButton, Chip, Field, OutlineButton, Segmented, Sheet } from "../ui/kit.jsx";
 import { ReimportPill } from "./ReimportPill.jsx";
-import { StepChevron, StepPill, sentLabel, stepStates, useTrip } from "./AiSteps.jsx";
+import { StepChevron, StepPill, TripTitle, sentLabel, stepStates, useTrip } from "./AiSteps.jsx";
 import { showToast } from "../ui/toast.js";
 
 const newId = p => p + Date.now() + Math.random().toString(36).slice(2, 6);
@@ -72,6 +72,7 @@ export function GrabSheet({ db, persistDB, init = {}, onClose, onOpenPage }) {
       footer={kind === "meal" ? (
         <div className="grab-footer">
           <BlockButton onClick={() => { if (canSave) { saveMeal(); onClose(); } }} disabled={!canSave}>Save</BlockButton>
+          <TripTitle title="Add with AI" className="grab-ai-title" />
           <div className="grab-ai">
             <StepPill n={1} state={s1} onClick={() => canSend && send()} disabled={!canSend}>Send to AI</StepPill>
             <StepChevron />
