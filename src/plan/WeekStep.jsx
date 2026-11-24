@@ -18,7 +18,9 @@ import { Clocks, Group, Row, Segmented, Switch } from "../ui/kit.jsx";
 
 const WD = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 export const dayTitle = iso => { const d = new Date(iso + "T12:00:00"); return `${WD[d.getDay()]} ${d.getDate()}`; };
-export const forecastWords = fc => (!fc ? null : fc.pop >= 50 ? `rain ${fc.pop}%` : fc.pop >= 30 ? `${fc.hi}° · rain ${fc.pop}%` : `${fc.hi}°`);
+// The day's high, plus the chance of precipitation by type when it's above zero (11/24):
+// "58°", "52° · 20% rain", "33° · 60% snow". No forecast, nothing.
+export const forecastWords = fc => (!fc ? null : fc.pop > 0 ? `${fc.hi}° · ${fc.pop}% ${fc.kind || "rain"}` : `${fc.hi}°`);
 export const TIME_OPTIONS = [
   { value: "none", label: "Little", n: 1 }, { value: "some", label: "Some", n: 2 }, { value: "much", label: "Lots", n: 3 },
 ];

@@ -20,13 +20,21 @@ const FORECAST_CACHE_TTL_MS = 6 * 60 * 60 * 1000; // 6 hours
 const FORECAST_AHEAD_DAYS = 15;
 const FORECAST_BACK_DAYS  = 7;
 
-const iconForPop = pop => pop >= 50 ? "⛈️" : pop >= 20 ? "🌤️" : "☀️";
+// What falls, from the day's WMO weather code (11/24): freezing rain or drizzle → ice, snow →
+// snow, thunderstorm → storms, and anything else with a chance of precipitation → rain.
+const kindForCode = code => {
+  if ([56, 57, 66, 67].includes(code)) return "ice";
+  if ((code >= 71 && code <= 77) || code === 85 || code === 86) return "snow";
+  if (code >= 95 && code <= 99) return "storms";
+  return "rain";
+};
 
 // Cache: { "start|end": { fetchedAt, forecast } }, expired ranges pruned on write.
 function readForecastCache(range) {
   try {
     const hit = JSON.parse(localStorage.getItem(FORECAST_CACHE_KEY) || "{}")[range];
     if (!hit || Date.now() - hit.fetchedAt > FORECAST_CACHE_TTL_MS) return null;
+    if (Object.values(hit.forecast || {}).some(f => !f.kind)) return null;   // cached before weather codes (11/24)
     return hit.forecast;
   } catch { return null; }
 }
@@ -41,7 +49,7 @@ function writeForecastCache(range, forecast) {
   } catch {}
 }
 
-// Fetches the live forecast for the given ISO dates. Returns { iso: { hi, pop, icon } }
+// Fetches the live forecast for the given ISO dates. Returns { iso: { hi, pop, kind } }
 // for the dates the API covers, or {} on any failure (offline, blocked, API hiccup) —
 // callers treat missing dates as neutral, so {} is safe, not an error.
 async function fetchLiveForecast(dates) {
@@ -55,7 +63,7 @@ async function fetchLiveForecast(dates) {
   try {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 5000);
-    const url = `https://api.open-meteo.com/v1/forecast?latitude=${FORECAST_LAT}&longitude=${FORECAST_LON}&daily=temperature_2m_max,precipitation_probability_max&temperature_unit=fahrenheit&timezone=America%2FNew_York&start_date=${start}&end_date=${end}`;
+    const url = `https://api.open-meteo.com/v1/forecast?latitude=${FORECAST_LAT}&longitude=${FORECAST_LON}&daily=temperature_2m_max,precipitation_probability_max,weather_code&temperature_unit=fahrenheit&timezone=America%2FNew_York&start_date=${start}&end_date=${end}`;
     const res = await fetch(url, { signal: controller.signal });
     clearTimeout(timeout);
     if (!res.ok) return {};
@@ -63,11 +71,12 @@ async function fetchLiveForecast(dates) {
     const days = data?.daily?.time || [];
     const highs = data?.daily?.temperature_2m_max || [];
     const pops  = data?.daily?.precipitation_probability_max || [];
+    const codes = data?.daily?.weather_code || [];
     const forecast = {};
     days.forEach((iso, i) => {
       if (!want.includes(iso) || highs[i] == null) return;
       const pop = Math.round(pops[i] ?? 0);
-      forecast[iso] = { hi: Math.round(highs[i]), pop, icon: iconForPop(pop) };
+      forecast[iso] = { hi: Math.round(highs[i]), pop, kind: kindForCode(codes[i]) };
     });
     writeForecastCache(range, forecast);
     return forecast;

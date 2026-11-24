@@ -394,8 +394,8 @@ function PlanMeals({ mealPlan, plates, setMealPlan, restoreMeals, commitMealToPl
               <div className="wv-date-line">
                 <span className="wv-dow">{iso ? dayTitle(iso) : daysFull[days.indexOf(day)]}</span>
                 <Clocks n={LEVEL_N[level] || 2} />
-                {outLines[day]?.length > 0 && <span className="wv-out">{outLines[day].join(" · ")}</span>}
                 {!compact && wx && <span>{wx}</span>}
+                {outLines[day]?.length > 0 && <span className="wv-out">{outLines[day].join(" · ")}</span>}
                 {(compact ? pills.slice(0, 1) : pills).map(p => <span key={p.label} className="wv-label">{p.label}{compact && pills.length > 1 ? ` +${pills.length - 1}` : ""}</span>)}
                 {compact && note && <span className="wv-note-inline">{note}</span>}
               </div>
