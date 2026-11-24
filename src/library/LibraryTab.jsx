@@ -41,6 +41,9 @@ export function LibraryTab({ db, persistDB, view, setView, headerIcons, resetKey
     ro.observe(el);
     return () => ro.disconnect();
   }, [page]);
+  // Meals / Items starts at the top (Scroll position, 11/24). Declared before the restore below,
+  // which runs after it on a first visit.
+  useEffect(() => { if (!page) window.scrollTo(0, 0); }, [view]);
   // Each screen shows at its own scroll position: a new page at the top, a screen you come
   // back to where you left it. Runs after the page's own scroll-to-top.
   useEffect(() => { window.scrollTo(0, restoreTo.current); }, [stack.length, page?.id]);

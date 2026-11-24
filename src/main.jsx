@@ -9,6 +9,10 @@ import "./index.css";
 // for a few weeks after the new one goes live. This banner says which app is open.
 const IS_LEGACY = !!import.meta.env.VITE_LEGACY;
 
+// Opening the app starts at the top (Home, so Tonight is first): the browser doesn't restore an
+// old scroll position on a reload (Scroll position, 11/24).
+if ("scrollRestoration" in history) history.scrollRestoration = "manual";
+
 createRoot(document.getElementById("root")).render(
   <React.StrictMode>
     {IS_LEGACY && (

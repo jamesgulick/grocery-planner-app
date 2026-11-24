@@ -1,6 +1,6 @@
 // Split verbatim from grocery-app.jsx in polish Phase 1.5; see CLAUDE.md's file map.
 import { MAX_EXTRA_DAYS, endDateFor, extraDaysOf, reconcilePlates, weekDates } from "../engine/assembleInputs.js";
-import { useRef, useState } from "react";
+import { useLayoutEffect, useRef, useState } from "react";
 import { INVENTORY_LOCS, PLAN_STEPS, nextDateForShoppingDay, planDays, seedTimeLevels, weekLabel } from "../app/globals.js";
 import { PLAN_STEPS_VER, getActivePlan, startPlan, writeActivePlan } from "../app/plans.js";
 import { ActionBar, BlockButton, HeaderButtons, Segmented } from "../ui/kit.jsx";
@@ -227,6 +227,10 @@ function PlanTab({ db, persistDB, headerIcons, onDone, onOpenMeal }) {
   };
   // Inventory walks the storage places; the footer drives it (the header tabs come in 4c).
   const [locIdx, setLocIdx] = useState(0);
+  // Scroll position (11/24): anything that changes what's shown starts at the top: opening Plan,
+  // switching week (this component remounts), Calendar / Who's home / Time, steps, Inventory's
+  // places. Edits on the same screen never move it.
+  useLayoutEffect(() => { window.scrollTo(0, 0); }, [step, weekSub, locIdx]);
   // Confirm registers its order snapshot here; Next / Finish plan save it with the step change.
   const beforeNext = useRef(null);
   // The week view puts its controls (Week check, Suggest all, Compact) in the sticky header.
