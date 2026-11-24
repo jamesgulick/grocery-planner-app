@@ -64,5 +64,8 @@ button.home-pending-text { cursor: pointer; }
 .pickup-chip { flex: none; width: var(--pickup-chip-w); display: flex; flex-direction: column; align-items: center; gap: var(--space-half); padding: var(--space-2) 0; font: inherit; font-size: var(--meta-size); font-weight: 600; color: var(--text); background: var(--surface); border: 0; border-radius: var(--radius-control); cursor: pointer; }
 .pickup-chip[aria-pressed="true"] { background: var(--action); color: var(--on-action); }
 .pickup-chip[aria-pressed="true"] .pickup-mark { color: var(--on-action); }
-.pickup-date { font-size: var(--body-size); line-height: var(--body-line); font-weight: 700; }
+/* The date is 20px bold; the 1st reads "Dec 1" at 16px on the same line height, so the widest
+   ("May 1", about 44px) fits the 56px chip (Month changeover, 11/24). */
+.pickup-date { font-size: var(--heading-size); line-height: var(--heading-line); font-weight: 700; white-space: nowrap; }
+.pickup-date.is-first { font-size: var(--pickup-first-size); }
 .pickup-mark { min-height: var(--label-line); font-size: var(--tab-label-size); font-weight: 500; color: var(--text-muted); }

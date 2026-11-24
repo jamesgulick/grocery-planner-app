@@ -1,7 +1,7 @@
 // The Pickup sheet (brief §6, RULING 15; boards "Round 15" and "Pickup dates", 11/17): the
 // day the groceries arrive. A sideways-scrolling strip of fixed chips runs from 3 days before the
 // plan's first day (never before today) through its last day, with "Start" / "End" under those
-// two (on the 1st, the month takes that slot; 11/24); never past the end, since that pickup would belong to the next plan. It opens with the
+// two (the 1st reads "Dec 1"; 11/24); never past the end, since that pickup would belong to the next plan. It opens with the
 // picked day centred and keeps its scroll after a tap. Changing the pickup never changes which
 // days the plan covers, so it stays editable after the plan has started. The usual shopping day
 // is shown for reference; it is changed only in Settings › Shopping.
@@ -45,16 +45,15 @@ export function PickupSheet({ plan, shoppingDay, onPick, onClose }) {
       <div className="pickup-strip" ref={stripRef} role="group" aria-label="Pickup day">
         {days.map(iso => {
           const d = new Date(iso + "T00:00:00");
-          // Month changeover (11/24): the weekday always stays on top. On the 1st the month
-          // ("Dec") takes the grey slot under the date; if the 1st is also Start or End, that
-          // keeps the slot and the date reads "Dec 1".
+          // Month changeover (11/24): the weekday always stays on top. On the 1st the date line
+          // reads "Dec 1" (16px, so "May 1" fits), and the slot under it stays for Start / End.
           const mark = iso === start ? "Start" : iso === end ? "End" : "";
           const first = d.getDate() === 1;
           return (
             <button key={iso} type="button" className="pickup-chip" aria-pressed={iso === picked} onClick={() => pick(iso)}>
               <span>{ABBR[d.getDay()]}</span>
-              <span className="pickup-date">{first && mark ? `${MONTH[d.getMonth()]} 1` : d.getDate()}</span>
-              <span className="pickup-mark">{mark || (first ? MONTH[d.getMonth()] : "")}</span>
+              <span className={first ? "pickup-date is-first" : "pickup-date"}>{first ? `${MONTH[d.getMonth()]} 1` : d.getDate()}</span>
+              <span className="pickup-mark">{mark}</span>
             </button>
           );
         })}
