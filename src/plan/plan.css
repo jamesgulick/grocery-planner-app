@@ -37,9 +37,11 @@
 .wk-label button { border: 0; background: none; padding: 0 var(--space-1); font: inherit; color: var(--text-muted); cursor: pointer; }
 .wk-label-add { min-height: var(--label-pill-h); padding: 0 var(--space-2); border: 1px dashed var(--control-border); border-radius: var(--radius-pill); background: none; color: var(--text-muted); font: inherit; font-size: var(--caption-size); font-weight: 600; cursor: pointer; }
 .wk-label-input { min-height: var(--label-pill-h); padding: 0 var(--space-2); border: 1px solid var(--control-border); border-radius: var(--radius-pill); font: inherit; font-size: var(--label-size); }
-.wk-chips { display: flex; flex-wrap: wrap; gap: var(--space-2); }
+/* One row of equal columns per night (board "Who's home columns", 11/24): five people fit on a
+   line and each person keeps the same column down the week; larger households wrap. */
+.wk-chips { display: grid; grid-template-columns: repeat(auto-fit, minmax(var(--who-chip-min), 1fr)); gap: var(--who-chip-gap); }
 /* Who's home, option D (11/16): the dash always means "this comes from Away dates". */
-.wk-chip { min-height: var(--chip-height); padding: 0 var(--space-3); border-radius: var(--radius-pill); border: var(--pill-outline) solid transparent; font: inherit; font-size: var(--body-size); font-weight: 600; cursor: pointer; }
+.wk-chip { min-width: 0; height: var(--who-chip-h); box-sizing: border-box; padding: 0 var(--space-half); border-radius: var(--radius-pill); border: var(--pill-outline) solid transparent; font: inherit; font-size: var(--meta-size); font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: pointer; }
 .wk-chip.is-home { background: var(--tint); border-color: var(--tint); color: var(--action); }
 .wk-chip.is-home.is-despite { border: var(--pill-outline) dashed var(--action); }
 .wk-chip.is-out { background: var(--surface); border-color: var(--control-border); color: var(--text-muted); text-decoration: line-through; }

@@ -128,6 +128,9 @@
   --destructive: #B42318;                 /* deleting a whole record, and nothing else */
   --disabled: #A1A1A6;                    /* a disabled text button (Done) */
   --chip-height: 40px;
+  --who-chip-h: 34px;                     /* Who's home chips (board "Who's home columns", 11/24) */
+  --who-chip-min: 56px;
+  --who-chip-gap: 5px;
   --problem-outline: 1.5px;
   --grab-recipe-h: 96px;               /* a detail page's field with a problem */
   --label-pill-h: 28px;                   /* day labels on the Week step */
