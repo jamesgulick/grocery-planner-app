@@ -24,7 +24,7 @@ const AI_JOBS = [
 function InstructionEditor({ job, value, onCancel, onDone }) {
   const [text, setText] = useState(value);
   return (
-    <Sheet title={job.label} onClose={onCancel} onCancel={onCancel} onDone={() => onDone(text.trim() ? text : "")}>
+    <Sheet tall title={job.label} onClose={onCancel} onCancel={onCancel} onDone={() => onDone(text.trim() ? text : "")}>
       <textarea className="ui-textarea" aria-label={job.label} value={text} onChange={e => setText(e.target.value)} />
     </Sheet>
   );
