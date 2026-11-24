@@ -520,7 +520,7 @@ function PlateSheet({ iso, past, dishes, level, note, concerns, learnMode, setLe
           {!past && (
             <div className="wv-adds">
               <button type="button" className="wv-link" onClick={() => onAdd("main")}>+ Add main</button>
-              {hasMain && <button type="button" className="wv-link" onClick={() => onAdd("side")}>+ Add side</button>}
+              <button type="button" className="wv-link" onClick={() => onAdd("side")}>+ Add side</button>
             </div>
           )}
         </Group>
