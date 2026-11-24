@@ -17,7 +17,7 @@ import { showToast } from "../ui/toast.js";
 
 // Phase 2 (SPEC-plan-flow-v2, stage 4a): Week · Meals · Inventory · Confirm · Order under one
 // frame. Welcome and "save & exit" are gone; Home's week rows and the empty state start plans.
-function PlanTab({ db, persistDB, headerIcons, onDone }) {
+function PlanTab({ db, persistDB, headerIcons, onDone, onOpenMeal }) {
   // The plan the owner is currently EDITING — follows db.activePlan (current or
   // next), unlike Tonight's cards, which are pinned to today. This plan object
   // doubles as both the live-editing draft and the committed record (they were
@@ -229,6 +229,8 @@ function PlanTab({ db, persistDB, headerIcons, onDone }) {
   const [locIdx, setLocIdx] = useState(0);
   // Confirm registers its order snapshot here; Next / Finish plan save it with the step change.
   const beforeNext = useRef(null);
+  // The week view puts its controls (Week check, Suggest all, Compact) in the sticky header.
+  const [headSlot, setHeadSlot] = useState(null);
 
   // ── The frame (spec §2): title, step bar, the step's own header control; the step;
   // a Prev / Next bar fixed above the tab bar. ──────────────────────────────────────
@@ -271,13 +273,17 @@ function PlanTab({ db, persistDB, headerIcons, onDone }) {
           <Segmented label="Week setup" value={weekSub} onChange={goSub}
             options={SUBS.map((l, i) => ({ value: i, label: <span className="plan-sub">{i <= weekSubMax && i !== weekSub && <span className="plan-sub-done" aria-label="done">✓</span>}{l}</span> }))} />
         )}
+        {step === 1 && <div ref={setHeadSlot} />}
       </header>
       <div className="plan-body">
         {step === 0 && <WeekStep sub={weekSub} db={db} persistDB={persistDB} days={days} dates={dates} dayNotes={dayNotes} setDayNotes={setDayNotesP}
           dayPills={dayPills} setDayPills={setDayPillsP} presence={presence} setPresence={setPresenceP} timeLevels={timeLevels} setTimeLevels={setTimeLevelsP}
           adventurous={!!draft.adventurousWeek} setAdventurous={v => saveDraft({ adventurousWeek: v })} />}
-        <div className={step > 0 ? "shell-legacy-flow" : undefined}>
-          {step === 1 && <PlanMeals inFlow mealPlan={mealPlan} plates={plates} setMealPlan={setMealPlanP} restoreMeals={restoreMeals} commitMealToPlan={commitMealToPlan} timeLevels={timeLevels} setTimeLevels={setTimeLevelsP} presence={presence} setPresence={setPresenceP} weekStartDate={draft.weekStartDate} adventurousWeek={!!draft.adventurousWeek} setAdventurousWeek={v => saveDraft({ adventurousWeek: v })} meals={meals} onNext={() => goToStep(2)} days={days} daysFull={daysFull} dayNotes={dayNotes} setDayNotes={setDayNotesP} dayPills={dayPills} setDayPills={setDayPillsP} db={db} persistDB={persistDB} extraDays={extraDays} canExtend={canExtend} setExtraDays={setExtraDays} />}
+        {step === 1 && <PlanMeals mealPlan={mealPlan} plates={plates} setMealPlan={setMealPlanP} restoreMeals={restoreMeals} commitMealToPlan={commitMealToPlan} timeLevels={timeLevels} presence={presence}
+          weekStartDate={draft.weekStartDate} adventurousWeek={!!draft.adventurousWeek} meals={meals} days={days} daysFull={daysFull} dayNotes={dayNotes} dayPills={dayPills}
+          db={db} persistDB={persistDB} extraDays={extraDays} canExtend={canExtend} setExtraDays={setExtraDays} headSlot={headSlot}
+          onOpenMeal={onOpenMeal} onEditDay={() => goSub(0)} orderedMeals={draft.orderedAt ? draft.meals : null} />}
+        <div className={step > 1 ? "shell-legacy-flow" : undefined}>
           {step === 2 && <PlanInventory inFlow locIdx={locIdx} setLocIdx={setLocIdx} checkedIds={checkedIds} setCheckedIds={setCheckedIdsP} stapleFlags={stapleFlags} setOrdering={setOrdering} quantities={quantities} setQuantities={setQuantitiesP} mealPlan={mealPlan} meals={meals} ingredients={ingredients} onNext={() => goToStep(3)} days={days} onUpdateItem={updateItem} keptIds={keptIds} />}
           {step === 3 && <PlanConfirm inFlow registerNext={fn => { beforeNext.current = fn; }} mode="confirm" onUpdateItem={updateItem} keptIds={keptIds} checkedIds={checkedIds} setOrdering={setOrdering} addedOff={addedOff} setAddedOff={setAddedOffP} addedItems={addedItems} setAddedItems={setAddedItemsP} stapleFlags={stapleFlags} quantities={quantities} setQuantities={setQuantitiesP} mealPlan={mealPlan} meals={meals} ingredients={ingredients} onNext={() => goToStep(4)} db={db} persistDB={persistDB} days={days} daysFull={daysFull} />}
           {step === 4 && <PlanConfirm inFlow registerNext={fn => { beforeNext.current = fn; }} mode="sparky" onUpdateItem={updateItem} keptIds={keptIds} checkedIds={checkedIds} setOrdering={setOrdering} addedOff={addedOff} setAddedOff={setAddedOffP} addedItems={addedItems} setAddedItems={setAddedItemsP} stapleFlags={stapleFlags} quantities={quantities} setQuantities={setQuantitiesP} mealPlan={mealPlan} meals={meals} ingredients={ingredients} onFinish={finishPlan} db={db} persistDB={persistDB} days={days} daysFull={daysFull} />}

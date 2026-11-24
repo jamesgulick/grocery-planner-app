@@ -1,21 +1,39 @@
-// Split verbatim from grocery-app.jsx in polish Phase 1.5; see CLAUDE.md's file map.
-import { MAX_EXTRA_DAYS, TIME_LEVELS, abbrOfISO, assembleComposeInputs, checkWeek, isExtraDay, mealRecency, platesFromCompose, presentOn, reasonsOf, runComposeWeek, seedTimeLevel } from "../engine/assembleInputs.js";
+// The Meals step: the week view (phase 2 stage 4b, SPEC-plan-flow-v2 §4; boards "Week view ·
+// DETAILED", "Week view · COMPACT", "Plate sheet", "Replace sheet", "Move sheet", "Rationale B";
+// Decisions 11/12–11/14).
+//   Header (in the frame's sticky header, through `headSlot`): the Week check pill, Suggest all,
+//     the share icon and the Compact switch.
+//   Days: a date header ABOVE the plate (day, clocks, who's out, forecast and grill ok, labels,
+//     the note), then a white tile (mains bold, "+ sides", leftovers, plate concerns in amber)
+//     or a dashed open tile (Open → pick, Suggest → the engine's pick). Compact: one-line
+//     headers and a drag handle; a drag swaps whole nights.
+//   Sheets: the plate sheet (one night: dishes with ↻ / ×, + Add main / side, Move, Clear),
+//     Replace (Suggested · 3 from the engine's ranking, then Browse), Move (pick dishes, then
+//     Swap or Add on another day) and Week check (concerns with fixes, nothing-to-buy lines,
+//     notes).
+// Engine calls are the ones the Meals step always made (compose one day, fill empty days,
+// suggest sides, the ranked shortlist, reconcilePlates, checkWeek); only the screens are new.
+// Engine text is shown verbatim (11/15). `seenThisSession` stays component-local by design.
+import { MAX_EXTRA_DAYS, abbrOfISO, assembleComposeInputs, checkWeek, isExtraDay, mealRecency, platesFromCompose, presentOn, reasonsOf, runComposeWeek, seedTimeLevel } from "../engine/assembleInputs.js";
 import { composeWeek, evaluateWeek } from "../engine/composeWeek.js";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { copyToClipboard } from "../app/clipboard.js";
 import { draftPlanText } from "../app/shareText.js";
-import { DAYS_FULL, addDaysISO, todayLocalISO } from "../app/globals.js";
-import { BUILTIN_PILLS, PILL_STYLE, engineGrillOk } from "../app/pills.js";
+import { addDaysISO, todayLocalISO } from "../app/globals.js";
+import { engineGrillOk } from "../app/pills.js";
 import { SEED_MEALS } from "../app/seed.js";
-import { C, S } from "../app/styles.js";
-import { defaultNotes, fetchLiveForecast } from "../app/weather.js";
-import { AutoGrowTextarea, Toggle } from "../components/common.jsx";
+import { fetchLiveForecast } from "../app/weather.js";
+import { absenceLines } from "../app/absence.js";
 import { mealMatches } from "../manage/MealEditor.jsx";
+import { notHomeCooked } from "../library/libraryModel.js";
+import { CheckRow, Clocks, Group, Icon, PillButton, RowChevron, SearchField, Sheet, Switch } from "../ui/kit.jsx";
 import { showToast } from "../ui/toast.js";
+import { dayTitle, forecastWords } from "./WeekStep.jsx";
+import "./weekview.css";
 
 // Carried-leftover notes arrive one per person ("Partner is covered by Chili carried from
-// 2026-09-26"). Display-only: group the people held by the same dish on the same night
-// into one line. Anything not in that exact form is shown as the engine wrote it.
+// 2026-09-26"). Display-only: the people held by the same dish on the same night share one line.
 function groupLeftoverNotes(texts) {
   const groups = new Map(), loose = [];
   for (const t of texts || []) {
@@ -26,137 +44,51 @@ function groupLeftoverNotes(texts) {
     groups.get(key).people.push(m[1]);
   }
   const names = xs => (xs.length < 3 ? xs.join(" and ") : `${xs.slice(0, -1).join(", ")} and ${xs[xs.length - 1]}`);
-  return [...[...groups.values()].map(g => prettyDates(`${names(g.people)}: ${g.dish} leftovers (from ${g.from})`)), ...loose.map(prettyDates)];
+  return [...[...groups.values()].map(g => `${names(g.people)}: ${g.dish} leftovers (from ${abbrOfISO(g.from)})`), ...loose];
 }
 
-// Engine text names dates as ISO ("carried from 2026-09-26"); show them as "Sat 9/26".
-const prettyDates = text => String(text || "").replace(/\b(\d{4})-(\d{2})-(\d{2})\b/g,
-  (iso, y, m, d) => `${abbrOfISO(iso)} ${Number(m)}/${Number(d)}`);
+const LEVEL_N = { none: 1, some: 2, much: 3 };
+const LONG_WD = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+const longTitle = iso => { const d = new Date(iso + "T12:00:00"); return `${LONG_WD[d.getDay()]} ${d.getDate()}`; };
+const SHORTLIST_SIZE = 3;
 
-// WEEK CHECK panel (REFACTOR C2). The engine rates each observation; this maps severity
-// to presentation, quiet by default: concerns always shown, "ok" as a short check line,
-// info folded away behind a count. Learn mode ("Show reasoning") turns on the full
-// per-dish rationale on the day cards.
-function WeekCheckPanel({ check, total, showInfo, setShowInfo, learnMode, setLearnMode, onFix, fixLabel }) {
-  const obs      = check?.observations || [];
-  const concerns = obs.filter(o => o.severity === "concern");
-  const oks      = obs.filter(o => o.severity === "ok");
-  const infos    = obs.filter(o => o.severity === "info");
-  const line = (bg, color) => ({ fontSize:12, lineHeight:1.45, padding:"6px 8px", marginTop:4, borderRadius:6, background:bg, color });
-  return (
-    <div style={S.card}>
-      <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", gap:8, flexWrap:"wrap" }}>
-        <div style={{ ...S.sectionLabel, marginBottom:0 }}>Week check · {check?.planned || 0} of {total} days planned</div>
-        <button style={{ ...S.btnSm, padding:"2px 10px", fontSize:11, background:learnMode?C.primaryLight:"#FFF", color:learnMode?C.primary:C.muted, border:`1px solid ${learnMode?C.primary:C.border}`, fontWeight:learnMode?700:500 }}
-          onClick={() => setLearnMode(!learnMode)} title="Show why each meal and side is where it is">{learnMode ? "✓ Show reasoning" : "Show reasoning"}</button>
-      </div>
-      {concerns.map((o, k) => (
-        <div key={"c"+k} style={{ ...line(C.warningLight, C.warning), display:"flex", alignItems:"center", justifyContent:"space-between", gap:8 }}>
-          <span>⚠ {prettyDates(o.text)}</span>
-          {o.day && onFix && (
-            <button style={{ ...S.btnSm, flex:"0 0 auto", fontSize:11, padding:"3px 8px", background:"#FFF", color:C.warning, border:`1px solid ${C.warning}` }} onClick={() => onFix(o.day)}>{fixLabel(o.day)}</button>
-          )}
-        </div>
-      ))}
-      {oks.map((o, k) => <div key={"o"+k} style={line("#F0FAF4", C.primary)}>✓ {prettyDates(o.text)}</div>)}
-      {infos.length > 0 && (
-        <button style={{ background:"none", border:"none", color:C.muted, fontSize:12, cursor:"pointer", padding:"6px 0 0", textAlign:"left" }} onClick={() => setShowInfo(!showInfo)}>
-          {showInfo ? "▾" : "▸"} {infos.length} more {infos.length === 1 ? "note" : "notes"} about this week
-        </button>
-      )}
-      {showInfo && infos.map((o, k) => <div key={"i"+k} style={line("#F9FAFB", C.muted)}>ℹ {prettyDates(o.text)}</div>)}
-    </div>
-  );
-}
-
-// A side's job on the plate, labelled distinctly (REFACTOR C1): a FLOOR-FILL side is
-// there because someone present won't eat the main; an ACCOMPANIMENT goes with the
-// main. A side placed by hand just says "side". The engine's own sentence for why it
-// is there is shown under the name.
-function sideBadge(dish) {
-  if (!dish || dish.role !== "side") return null;
-  if (dish.source === "floor-fill")    return <span style={S.tag(C.warning, C.warningLight)} title="Covers someone who won't eat the main">covers</span>;
-  if (dish.source === "accompaniment") return <span style={S.tag(C.primary, C.primaryLight)} title="Goes with the main">goes with</span>;
-  return <span style={S.tag(C.muted, "#F3F4F6")}>side</span>;
-}
-
-// Time per day, as shown (canvas 11/12: "Time", Little / Some / Lots). Display only: the
-// stored value and the engine's timeLevel stay none / some / much.
-const TIME_LABEL = { none:"Little", some:"Some", much:"Lots" };
-
-function PlanMeals({ inFlow, mealPlan, plates, setMealPlan, restoreMeals, commitMealToPlan, timeLevels, setTimeLevels, presence, setPresence, weekStartDate, adventurousWeek, setAdventurousWeek, meals, onNext, days, daysFull, dayNotes, setDayNotes, dayPills, setDayPills, db, persistDB, extraDays = 0, canExtend = false, setExtraDays }) {
-  const [editing, setEditing] = useState(null);
-  const [moving,  setMoving]  = useState(null);
-  const [search,  setSearch]  = useState("");
-  const [loading, setLoading] = useState(false);
-  const allMeals   = meals.length > 0 ? meals : SEED_MEALS;
-
-  // Presence (REFACTOR B2): everyone on the roster, every day. A day's date is
-  // its offset from weekStartDate (days[] is ordered from that weekday), which
-  // is what away periods are matched against.
-  const roster     = (db.settings?.familyContacts || []).map(f => f.name);
+function PlanMeals({ mealPlan, plates, setMealPlan, restoreMeals, commitMealToPlan, timeLevels, presence, weekStartDate, adventurousWeek, meals, days, daysFull, dayNotes, dayPills, db, persistDB, extraDays = 0, canExtend = false, setExtraDays, headSlot, onOpenMeal, onEditDay, orderedMeals }) {
+  const allMeals = meals.length > 0 ? meals : SEED_MEALS;
+  const today = todayLocalISO();
+  const roster = (db.settings?.familyContacts || []).map(f => f.name);
   const awayRanges = db.settings?.awayRanges || [];
-  const dateOfDay  = Object.fromEntries(days.map((d, i) => [d, weekStartDate ? addDaysISO(weekStartDate, i) : null]));
-  const isPresentOn = (name, day) => presentOn(presence, awayRanges, name, day, dateOfDay[day]);
-  const togglePresence = (day, name) => {
-    const here = isPresentOn(name, day);
-    setPresence(prev => ({ ...prev, [day]: { ...((prev || {})[day] || {}), [name]: !here } }));
-  };
+  const dateOfDay = Object.fromEntries(days.map((d, i) => [d, weekStartDate ? addDaysISO(weekStartDate, i) : null]));
+  const locked = day => !!dateOfDay[day] && dateOfDay[day] < today;   // past days are read-only
+  const isOut = (name, day, iso) => !presentOn(presence, awayRanges, name, day, iso);
+  const outLines = absenceLines(days.map(d => ({ key: d, iso: dateOfDay[d] })), roster, isOut, awayRanges);
+  const dayShort = day => (dateOfDay[day] ? abbrOfISO(dateOfDay[day]) : day);
+  const mealRec = name => (db.meals || []).find(m => m.name.trim() === String(name).trim());
 
-  // Manual pick list (Week 5): recency is the axis memory works on, so every row says
-  // when the meal was last on the table (or that it's already planned) and the list sorts
-  // by it. Sides sit at the bottom (mains first, each group by recency) unless the pick is
-  // replacing a side, the one case where a side is clearly what's wanted; adding a side is
-  // usually More sides' job. Built from what was served or planned only (mealRecency).
-  const recency = useMemo(() => mealRecency({ planTail: db.planTail || [], mealHistory: db.mealHistory || [], plans: db.plans || {}, today: todayLocalISO() }), [db.planTail, db.mealHistory, db.plans]);
-  const [pickSort, setPickSort] = useState("oldest");   // oldest | newest
+  // Manual picks sort by when a meal was last on the table (Week 5): "last had 3 weeks ago".
+  const recency = useMemo(() => mealRecency({ planTail: db.planTail || [], mealHistory: db.mealHistory || [], plans: db.plans || {}, today }), [db.planTail, db.mealHistory, db.plans, today]);
   const recKey = m => (m.name || "").trim().toLowerCase();
-  // Sortable value: "" = never had (the oldest); a planned date sorts after any past one.
   const recencyValue = m => recency.planned[recKey(m)] ? "~" + recency.planned[recKey(m)] : (recency.last[recKey(m)] || "");
   const recencyLabel = m => {
     const p = recency.planned[recKey(m)];
-    if (p) return `planned ${abbrOfISO(p)} ${Number(p.slice(5, 7))}/${Number(p.slice(8))}`;
+    if (p) return `planned ${abbrOfISO(p)} ${Number(p.slice(8))}`;
     const l = recency.last[recKey(m)];
     if (!l) return "never had";
-    const d = Math.round((Date.parse(todayLocalISO()) - Date.parse(l)) / 86400000);
-    if (d <= 0) return "today";
-    if (d === 1) return "yesterday";
-    if (d < 7) return `${d} days ago`;
-    const w = Math.round(d / 7);
-    return w === 1 ? "1 week ago" : `${w} weeks ago`;
+    const d = Math.round((Date.parse(today) - Date.parse(l)) / 86400000);
+    if (d <= 0) return "last had today";
+    if (d === 1) return "last had yesterday";
+    if (d < 14) return `last had ${d} days ago`;
+    return `last had ${Math.round(d / 7)} weeks ago`;
   };
-  const isSideName = n => allMeals.find(x => x.name === n)?.type === "side";
-  const pickList = (day, mealIdx) => {
-    const cur = mealPlan[day] || [];
-    const wantSide = mealIdx !== undefined && isSideName(cur[mealIdx]);
-    const base = search.trim() ? allMeals.filter(m => mealMatches(m, search)) : allMeals;
-    return [...base].sort((a, b) => {
-      const ga = (a.type === "side") === wantSide ? 0 : 1, gb = (b.type === "side") === wantSide ? 0 : 1;
-      if (ga !== gb) return ga - gb;
-      const va = recencyValue(a), vb = recencyValue(b);
-      if (va !== vb) return (va < vb ? -1 : 1) * (pickSort === "oldest" ? 1 : -1);
-      return a.name.localeCompare(b.name);
-    });
-  };
-  const totalMeals = Object.values(mealPlan).flat().length;
 
-  // The engine's session state (REFACTOR S1). Only seenThisSession is carried: the
-  // caller rebuilds alreadyPlaced from the plan on every call. Session-local BY DESIGN
-  // — the model resets session-seen per planning sitting, so this is the one piece of
-  // Meals-step state that deliberately is NOT lifted into the persisted plan.
+  // The engine's session state: only seenThisSession is carried (session-local by design).
   const [seenThisSession, setSeenThisSession] = useState([]);
-  // Problems from the last FILL itself (bad inputs, an engine error). Everything else
-  // the engine says about the week comes from the live week check below (REFACTOR C2).
   const [fillNotes, setFillNotes] = useState([]);
-  const [showWeekInfo, setShowWeekInfo] = useState(false);
-  const learnMode = !!db.settings?.learnMode;
-  const setLearnMode = v => persistDB({ ...db, settings: { ...db.settings, learnMode: v } });
-  // Live weather for THIS plan's dates (cached 6h), keyed by ISO date. Refetched when
-  // the plan's dates change. Falls back to {} when blocked or offline, which every
-  // consumer treats as neutral. See fetchLiveForecast.
-  // NOTE: declared BEFORE regenerate and the day cards, which read them — const has
-  // no hoisting, so using them earlier throws a temporal-dead-zone ReferenceError.
-  // dateOfDay (above) must stay declared before this.
+  const learnMode = !!db.settings?.learnMode;   // the plate sheet's Reasons switch (11/12)
+  const setLearnMode = v => persistDB({ ...db, settings: { ...db.settings, learnMode: v } }, { background: true });
+  const compact = !!db.settings?.weekCompact;
+  const setCompact = v => persistDB({ ...db, settings: { ...db.settings, weekCompact: v } }, { background: true });
+
+  // Live weather for THIS plan's dates (declared before anything that reads it: no hoisting).
   const [forecastByDate, setForecastByDate] = useState({});
   const planDatesKey = days.map(d => dateOfDay[d] || "").join(",");
   useEffect(() => {
@@ -165,89 +97,53 @@ function PlanMeals({ inFlow, mealPlan, plates, setMealPlan, restoreMeals, commit
     fetchLiveForecast(Object.values(dateOfDay)).then(f => { if (!cancelled) setForecastByDate(f); });
     return () => { cancelled = true; };
   }, [planDatesKey]);
-  // (The blank-notes safety net is gone: the app never writes day notes on its own,
-  // spec SPEC-plan-flow-v2 §3.2, decided 11/16.)
-  const [pillEditDay, setPillEditDay] = useState(null);
-  const [newPillLabel, setNewPillLabel] = useState("");
-  const togglePill = (day, label) => setDayPills(prev => {
-    const cur = prev?.[day] || [];
-    const has = cur.some(p => p.label === label);
-    return { ...prev, [day]: has ? cur.filter(p => p.label !== label) : [...cur, { label, source:"manual" }] };
-  });
-  const removePill = (day, label) => setDayPills(prev => ({ ...prev, [day]: (prev?.[day]||[]).filter(p => p.label !== label) }));
-  const addCustomPill = day => {
-    const l = newPillLabel.trim();
-    if (!l) return;
-    setDayPills(prev => ({ ...prev, [day]: [...(prev?.[day]||[]), { label:l, source:"manual" }] }));
-    setNewPillLabel("");
-  };
-
   const grillOpen = db.settings?.grillOpen !== false;
 
-  // WEEK CHECK (REFACTOR C2): observations for the plan as it stands — hand-placed and
-  // recommended together — recomputed whenever anything it reads changes. Declared
-  // after forecastByDate/dateOfDay, which it reads (TDZ).
+  // The week check: the engine's observations for the plan as it stands.
   const forecastKey = JSON.stringify(forecastByDate);
   const weekCheck = useMemo(() => {
     const planKey = db.activePlan || "current";
     const plan = { ...(db.plans?.[planKey] || {}), weekStartDate, mealPlan, plates, timeLevels, presence, adventurousWeek };
     if (!weekStartDate) return { planned: 0, observations: [], leftovers: {} };
-    return checkWeek(evaluateWeek, { db, planKey, plan, forecastByDate, today: todayLocalISO(), days });
+    return checkWeek(evaluateWeek, { db, planKey, plan, forecastByDate, today, days });
   }, [mealPlan, plates, timeLevels, presence, adventurousWeek, forecastKey, db.meals, db.settings, db.planTail, db.mealHistory, weekStartDate, days.join(",")]);
 
-  // Fill every EMPTY day with a composed plate (REFACTOR S1 — composeWeek replaces the
-  // old weighted-random getMealSuggestions). Days that already have anything on them are
-  // never touched: they go to the engine as fixed context (alreadyPlaced), so spacing,
-  // leftovers and the floor are worked out around them.
-  // Confirmation bar (brief standing rules, 11/17): the days as they were before an action, for
-  // its Undo, and a day's short name ("Thu", or "Fri" for an extra day).
+  const dishesOf = day => (mealPlan[day] || []).map((n, i) => {
+    const p = plates?.[day]?.dishes?.[i];
+    const d = p && p.name === n ? p : null;
+    return { name: n, idx: i, entry: d, mealId: d?.mealId || mealRec(n)?.id, role: d?.role || (mealRec(n)?.type === "side" ? "side" : "main"), source: d?.source || "manual" };
+  });
+
+  // ── Engine calls (unchanged from the old Meals step) ─────────────────────────────
   const undoTo = () => { const snap = { mealPlan, plates }; return () => restoreMeals?.(snap); };
-  const dayShort = day => isExtraDay(day) ? daysFull[days.indexOf(day)].replace("Extra ", "").slice(0, 3) : day;
-  const regenerate = async () => {
+  const engineErrs = out => out.observations.filter(o => o.severity === "concern" && (o.property === "engine" || o.property === "input" || o.property === "pool"));
+  const suggestAll = () => {
+    const open = days.filter(d => !locked(d) && !(mealPlan[d] || []).length);
+    if (!open.length) { showToast("No open days"); return; }
     const undo = undoTo();
-    setLoading(true);
-    await new Promise(r => setTimeout(r, 30));   // let "Thinking..." paint
     const planKey = db.activePlan || "current";
     const plan = { ...(db.plans?.[planKey] || {}), weekStartDate, mealPlan, plates, timeLevels, presence };
     let out;
     try {
-      const { args, notes } = assembleComposeInputs({ db, planKey, plan, forecastByDate, seenThisSession, today: todayLocalISO(), days });
+      const { args, notes } = assembleComposeInputs({ db, planKey, plan, forecastByDate, seenThisSession, today, days });
       out = runComposeWeek(composeWeek, args, notes);
     } catch (e) {
-      out = { week: {}, sessionState: { seenThisSession }, rationale: [],
-        observations: [{ property: "input", severity: "concern", text: `Couldn't prepare the planner's inputs: ${e.message}` }] };
+      out = { week: {}, sessionState: { seenThisSession }, rationale: [], observations: [{ property: "input", severity: "concern", text: `Couldn't prepare the planner's inputs: ${e.message}` }] };
     }
-    // Only empty days take the engine's plate; each placed dish carries its reason and
-    // a leftovers snapshot (platesFromCompose → reconcilePlates, REFACTOR C1).
-    const emptyDates = Object.fromEntries(days.filter(d => !(mealPlan[d] || []).length).map(d => [d, dateOfDay[d]]));
-    const annotations = platesFromCompose(out, emptyDates, db.meals || []);
+    const annotations = platesFromCompose(out, Object.fromEntries(open.map(d => [d, dateOfDay[d]])), db.meals || []);
     setMealPlan(prev => {
       const next = { ...prev };
       Object.entries(annotations).forEach(([d, a]) => { if (!(prev[d] || []).length) next[d] = a.dishes.map(x => x.name); });
       return next;
     }, annotations);
-    const filled = Object.entries(annotations).filter(([d, a]) => !(mealPlan[d] || []).length && a.dishes.length).length;
+    const filled = Object.values(annotations).filter(a => a.dishes.length).length;
     if (filled) showToast(`Filled ${filled} day${filled === 1 ? "" : "s"}`, undo);
     setSeenThisSession(out.sessionState?.seenThisSession || seenThisSession);
-    setFillNotes(out.observations.filter(o => o.severity === "concern" && (o.property === "engine" || o.property === "input" || o.property === "pool")));
-    setLoading(false);
+    setFillNotes(engineErrs(out));
   };
 
-  // ── Plate-granular reroll (REFACTOR C3) ──────────────────────────────────────
-  // The global fill above touches only empty days; anything already on a day is edited
-  // here, one part at a time, so a fill can never clobber a plate James has tuned.
-  //
-  // Each action composes ONE target day: the day is scheduled with whatever it keeps,
-  // every other PLANNED day is fixed context (spacing, leftovers, the floor), and empty
-  // days are left out so the engine doesn't fill them first and use up candidates.
-  // composeWeek only suggests sides for a day that has none, so actions that want the
-  // engine's sides pass the day with its main alone.
-  const mealRec   = name => (db.meals || []).find(m => m.name.trim() === String(name).trim());
-  const dishesOf  = day => (mealPlan[day] || []).map((n, i) => {
-    const p = plates?.[day]?.dishes?.[i];
-    const d = p && p.name === n ? p : null;
-    return { name: n, mealId: d?.mealId || mealRec(n)?.id, role: d?.role || (mealRec(n)?.type === "side" ? "side" : "main"), source: d?.source || "manual" };
-  });
+  // One target day: the day with what it keeps, other PLANNED days as fixed context, empty days
+  // left out (so the engine doesn't fill them first).
   const composeOneDay = (day, keep, extraSeen = []) => {
     const planKey = db.activePlan || "current";
     const mp = { ...mealPlan, [day]: keep };
@@ -256,424 +152,538 @@ function PlanMeals({ inFlow, mealPlan, plates, setMealPlan, restoreMeals, commit
     const seen = [...new Set([...seenThisSession, ...extraSeen.filter(Boolean)])];
     let out;
     try {
-      const { args, notes } = assembleComposeInputs({ db, planKey, plan, forecastByDate, seenThisSession: seen, today: todayLocalISO(), days, onlyDays });
+      const { args, notes } = assembleComposeInputs({ db, planKey, plan, forecastByDate, seenThisSession: seen, today, days, onlyDays });
       out = runComposeWeek(composeWeek, args, notes);
     } catch (e) {
       out = { week: {}, sessionState: { seenThisSession: seen }, rationale: [], observations: [{ property: "input", severity: "concern", text: `Couldn't prepare the planner's inputs: ${e.message}` }] };
     }
     setSeenThisSession(out.sessionState?.seenThisSession || seen);
-    const errs = out.observations.filter(o => o.severity === "concern" && (o.property === "engine" || o.property === "input" || o.property === "pool"));
     const ann = platesFromCompose(out, { [day]: dateOfDay[day] }, db.meals || [])[day] || { dishes: [], leftovers: [] };
-    return { ann, errs };
+    return { ann, errs: engineErrs(out) };
   };
-  // A per-day action that finds nothing to add says so ON that day's card, where the tap
-  // was, not in the notes box at the top of the step (usually off-screen). It lasts until
-  // the plan changes, so the button it replaces comes back once there's something new.
-  const [dayMsg, setDayMsg] = useState(null);   // { day, text }
-  useEffect(() => { setDayMsg(null); }, [mealPlan]);
-  const dayNote = (day, text) => { setFillNotes([]); setDayMsg({ day, text }); };
-  // Apply new names for a day, carrying annotations only for the dishes the engine just
-  // placed; kept dishes keep their existing plate entries (reconcilePlates).
   const applyDay = (day, names, newDishes, leftovers) => {
-    setFillNotes([]); setDayMsg(null);
-    setMealPlan(prev => ({ ...prev, [day]: names }),
-      { [day]: { dishes: newDishes, leftovers: leftovers || [] } });
+    setFillNotes([]);
+    setMealPlan(prev => ({ ...prev, [day]: names }), { [day]: { dishes: newDishes, leftovers: leftovers || [] } });
   };
 
-  // Empty day → compose a fresh plate for it alone.
+  // Suggest on an open day: the engine's plate for it alone.
   const fillDay = day => {
     const { ann, errs } = composeOneDay(day, []);
-    if (!ann.dishes.length) { setFillNotes(errs.length ? errs : []); if (!errs.length) dayNote(day, "Nothing eligible could be placed on this day."); return; }
+    if (!ann.dishes.length) { setFillNotes(errs); showToast("Nothing fits this day"); return; }
     const undo = undoTo();
     applyDay(day, ann.dishes.map(d => d.name), ann.dishes, ann.leftovers);
     showToast(`${dayShort(day)}: ${(ann.dishes.find(d => d.role === "main") || ann.dishes[0]).name}`, undo);
   };
 
-  // ⟳ main → a SHORTLIST (Week 5): the next few mains in the engine's own ranking for the
-  // day, best first, each with the sides it brings. Built the way reroll always worked,
-  // by asking again with each pick marked seen, so showing the options marks them seen
-  // and "More" moves on down the same ranking. Seen-scope is the session's, unchanged.
-  // When the engine starts handing back meals already seen, the pool is exhausted and the
-  // list says so. Sides placed by hand stay with whichever main is taken.
-  const SHORTLIST_SIZE = 3;
-  const [shortlist, setShortlist] = useState(null);   // { day, options, exhausted, errs }
-  // Options are for the plate they were built against: any change to the plan closes them.
-  useEffect(() => { setShortlist(null); }, [mealPlan]);
-  const nextOptions = (day, shown) => {
+  // The fix a floor concern offers (Ruling 12): the engine's sides for the day's main, only ones
+  // not already on the plate; a day with no main gets a main, keeping its sides.
+  const suggestSides = day => {
+    const cur = dishesOf(day);
+    const main = cur.find(d => d.role === "main");
+    if (!main) {
+      const { ann, errs } = composeOneDay(day, cur.map(d => d.name));
+      const newMain = ann.dishes.find(d => d.role === "main");
+      if (!newMain) { setFillNotes(errs); showToast("No main fits this day"); return; }
+      const undo = undoTo();
+      applyDay(day, [newMain.name, ...cur.map(d => d.name)], [newMain], ann.leftovers);
+      showToast(`${dayShort(day)}: ${newMain.name}`, undo);
+      return;
+    }
+    const { ann } = composeOneDay(day, [main.name], cur.filter(d => d.role === "side").map(d => d.mealId));
+    const onPlate = new Set(cur.map(d => d.name.trim()));
+    const sides = ann.dishes.filter(d => d.role === "side" && !onPlate.has(d.name.trim()));
+    if (!sides.length) { showToast(`No more sides for ${main.name.trim()}`); return; }
+    const undo = undoTo();
+    applyDay(day, [...cur.map(d => d.name), ...sides.map(d => d.name)], sides, ann.leftovers);
+    showToast(sides.length === 1 ? `Added ${sides[0].name}` : `Added ${sides.map(s => s.name).join(", ")}`, undo);
+  };
+
+  // The ranked shortlist (Week 5): the next mains in the engine's ranking for the day, best
+  // first, each with its sides; built by asking again with each pick marked seen, so showing
+  // them marks them seen. Sides placed by hand stay with whichever main is taken.
+  const nextMainOptions = (day, shown) => {
     const cur = dishesOf(day);
     const main = cur.find(d => d.role === "main");
     const keptSides = cur.filter(d => d.role === "side" && d.source === "manual");
     const extra = [main?.mealId, ...shown].filter(Boolean);
     const already = new Set([...seenThisSession, ...extra]);
     const options = [];
-    let exhausted = false, errs = [];
+    let exhausted = false, note = null;
     for (let i = 0; i < SHORTLIST_SIZE; i++) {
       const r = composeOneDay(day, keptSides.map(d => d.name), extra);
       const m = r.ann.dishes.find(d => d.role === "main");
-      if (!m || !m.mealId || already.has(m.mealId)) { exhausted = true; if (!options.length) errs = r.errs; break; }
+      const poolLine = m && reasonsOf(m).find(x => x.factor === "pool-exhausted");
+      if (!m || !m.mealId || already.has(m.mealId)) { exhausted = true; note = poolLine?.text || null; break; }
       already.add(m.mealId); extra.push(m.mealId);
-      options.push({ main: m, sides: r.ann.dishes.filter(d => d.role === "side" && !keptSides.some(k => k.name === d.name)), leftovers: r.ann.leftovers, kept: keptSides.map(d => d.name) });
+      options.push({ main: m, sides: r.ann.dishes.filter(d => d.role === "side" && !keptSides.some(k => k.name === d.name)), leftovers: r.ann.leftovers });
+      if (poolLine) { exhausted = true; note = poolLine.text; break; }
     }
-    return { options, exhausted, errs };
+    return { options, exhausted, note };
   };
-  const openShortlist = day => {
-    const { options, exhausted, errs } = nextOptions(day, []);
-    setFillNotes(errs);
-    setShortlist({ day, options, exhausted });
-  };
-  const moreOptions = () => {
-    if (!shortlist) return;
-    const { options, exhausted } = nextOptions(shortlist.day, shortlist.options.map(o => o.main.mealId));
-    setShortlist({ ...shortlist, options: [...shortlist.options, ...options], exhausted });
-  };
-  const takeOption = o => {
-    applyDay(shortlist.day, [o.main.name, ...o.kept, ...o.sides.map(d => d.name)], [o.main, ...o.sides], o.leftovers);
-    setShortlist(null);
-  };
-
-  // ⟳ side → swap just that side for another the engine would put with this main.
-  const rerollSide = (day, idx) => {
+  // Sides the engine would put with this day's main, next ones first (each round marks the
+  // last ones seen).
+  const nextSideOptions = (day, shown) => {
     const cur = dishesOf(day);
     const main = cur.find(d => d.role === "main");
-    const side = cur[idx];
-    if (!main || !side) return;
-    const { ann } = composeOneDay(day, [main.name], [side.mealId]);
+    if (!main) return { options: [], exhausted: true, note: null };
     const onPlate = new Set(cur.map(d => d.name.trim()));
-    const pick = ann.dishes.find(d => d.role === "side" && !onPlate.has(d.name.trim()));
-    if (!pick) { dayNote(day, `No other side fits with ${main.name.trim()}.`); return; }
-    const names = cur.map(d => d.name); names[idx] = pick.name;
-    applyDay(day, names, [pick], null);
-  };
-
-  // Suggest sides: the engine's sides for this day's main, adding only ones not already
-  // on the plate. The fix a floor concern offers (RULING 12), so it also works on a day
-  // that already has sides (e.g. only a non-substantial one). A day with sides but no
-  // main gets a main instead, keeping its sides. REPEATABLE (the model's "ask for more"):
-  // the sides already on the plate go in as seen, so each tap brings the next best ones
-  // rather than the same ones again.
-  const suggestSides = day => {
-    const cur = dishesOf(day);
-    const main = cur.find(d => d.role === "main");
-    if (!main) { suggestMain(day); return; }
-    const { ann } = composeOneDay(day, [main.name], cur.filter(d => d.role === "side").map(d => d.mealId));
-    const onPlate = new Set(cur.map(d => d.name.trim()));
-    const sides = ann.dishes.filter(d => d.role === "side" && !onPlate.has(d.name.trim()));
-    if (!sides.length) {
-      dayNote(day, cur.length > 1
-        ? `No more sides go with ${main.name.trim()}. Use + Add meal to pick one yourself.`
-        : `${main.name.trim()} needs no sides: it covers everyone present and nothing is linked to go with it.`);
-      return;
+    const seen = [...cur.filter(d => d.role === "side").map(d => d.mealId), ...shown];
+    const options = [];
+    for (let round = 0; round < SHORTLIST_SIZE && options.length < SHORTLIST_SIZE; round++) {
+      const { ann } = composeOneDay(day, [main.name], seen);
+      const fresh = ann.dishes.filter(d => d.role === "side" && d.mealId && !onPlate.has(d.name.trim()) && !seen.includes(d.mealId));
+      if (!fresh.length) return { options, exhausted: true, note: null };
+      for (const s of fresh) { if (options.length < SHORTLIST_SIZE) options.push({ side: s }); seen.push(s.mealId); }
     }
-    applyDay(day, [...cur.map(d => d.name), ...sides.map(d => d.name)], sides, ann.leftovers);
-  };
-  const suggestMain = day => {
-    const cur = dishesOf(day);
-    const { ann, errs } = composeOneDay(day, cur.map(d => d.name));
-    const newMain = ann.dishes.find(d => d.role === "main");
-    if (!newMain) { if (errs.length) setFillNotes(errs); else dayNote(day, "No main fits this day."); return; }
-    applyDay(day, [newMain.name, ...cur.map(d => d.name)], [newMain], ann.leftovers);
+    return { options, exhausted: false, note: null };
   };
 
-  const [draftSms, setDraftSms] = useState(null);
-  const [draftCopied, setDraftCopied] = useState(false);
-  const textDraftPlan = () => {
-    const msg = draftPlanText(days, daysFull, mealPlan);
-    // sms: is blocked in this webview — copy the message for pasting instead.
-    const copied = copyToClipboard(msg);
-    setDraftCopied(true);
-    setTimeout(() => setDraftCopied(false), 2500);
-    setDraftSms(msg);
-  };
-
-  // Add a meal to a day. For an existing meal, pass isNew=false; for a freshly
-  // typed name, isNew=true so a stub record gets created in the same write.
-  const addMeal = (day, name, isNew=false) => {
-    const next = { ...mealPlan, [day]:[...(mealPlan[day]||[]), name] };
-    commitMealToPlan(next, isNew ? name : null);
-    setEditing(null); setSearch("");
+  // ── Edits ──────────────────────────────────────────────────────────────────────
+  const addMeal = (day, name, isNew = false) => {
+    commitMealToPlan({ ...mealPlan, [day]: [...(mealPlan[day] || []), name] }, isNew ? name : null);
     showToast(mealRec(name)?.type === "side" ? `Added ${name}` : `${dayShort(day)}: ${name}`);
   };
-  const replaceMeal = (day, mealIdx, name, isNew=false) => {
-    const u = [...(mealPlan[day]||[])]; u[mealIdx] = name;
-    commitMealToPlan({ ...mealPlan, [day]:u }, isNew ? name : null);
-    setEditing(null); setSearch("");
+  const replaceMeal = (day, idx, name, isNew = false) => {
+    const u = [...(mealPlan[day] || [])]; u[idx] = name;
+    commitMealToPlan({ ...mealPlan, [day]: u }, isNew ? name : null);
+  };
+  // A ranked main for slot idx: the first main brings its sides (dropping the engine's old
+  // ones); a second main just swaps its name. An open day takes the whole plate.
+  const takeMainOption = (day, idx, o) => {
+    const cur = dishesOf(day);
+    const firstMainIdx = cur.findIndex(d => d.role === "main");
+    if (idx == null || !cur.length) { applyDay(day, [o.main.name, ...cur.map(d => d.name), ...o.sides.map(d => d.name)], [o.main, ...o.sides], o.leftovers); return; }
+    if (idx !== firstMainIdx) { applyDay(day, cur.map((d, i) => (i === idx ? o.main.name : d.name)), [o.main], null); return; }
+    const kept = cur.filter((d, i) => i === idx || !(d.role === "side" && d.source !== "manual"));
+    const names = kept.map(d => (d.idx === idx ? o.main.name : d.name));
+    o.sides.forEach(s => { if (!names.includes(s.name)) names.push(s.name); });
+    applyDay(day, names, [o.main, ...o.sides], o.leftovers);
+  };
+  const takeSideOption = (day, idx, s) => {
+    const cur = dishesOf(day);
+    applyDay(day, idx == null ? [...cur.map(d => d.name), s.name] : cur.map((d, i) => (i === idx ? s.name : d.name)), [s], null);
+    if (idx == null) showToast(`Added ${s.name}`);
   };
   const removeMeal = (day, idx) => {
     const name = (mealPlan[day] || [])[idx], undo = undoTo();
-    setMealPlan(prev => ({ ...prev, [day]:(prev[day]||[]).filter((_,i)=>i!==idx) }));
+    setMealPlan(prev => ({ ...prev, [day]: (prev[day] || []).filter((_, i) => i !== idx) }));
     if (name) showToast(`Removed ${name}`, undo);
   };
-  const moveMeal = (fromDay, mIdx, toDay) => {
-    const name = (mealPlan[fromDay] || [])[mIdx], undo = undoTo();
-    if (name) showToast(`${name} → ${dayShort(toDay)}`, undo);
-    setMealPlan(prev => {
-      const meal = (prev[fromDay]||[])[mIdx];
-      return { ...prev, [fromDay]:(prev[fromDay]||[]).filter((_,i)=>i!==mIdx), [toDay]:[...(prev[toDay]||[]),meal] };
-    });
-    setMoving(null);
+  const clearDay = day => {
+    const undo = undoTo();
+    setMealPlan(prev => ({ ...prev, [day]: [] }));
+    showToast(`Cleared ${dayShort(day)}`, undo);
+  };
+  // Plate entries travel with their dishes on a move (reasons, source), so nothing is relabelled.
+  const entriesFor = (day, idxs) => idxs.map(i => dishesOf(day)[i]?.entry).filter(Boolean);
+  const swapNights = (a, b) => {
+    if (a === b) return;
+    const undo = undoTo();
+    const ea = entriesFor(a, (mealPlan[a] || []).map((_, i) => i)), eb = entriesFor(b, (mealPlan[b] || []).map((_, i) => i));
+    setMealPlan(prev => ({ ...prev, [a]: prev[b] || [], [b]: prev[a] || [] }), { [a]: { dishes: eb, leftovers: [] }, [b]: { dishes: ea, leftovers: [] } });
+    const [x, y] = dateOfDay[a] < dateOfDay[b] ? [a, b] : [b, a];
+    showToast(`Swapped ${dayShort(x)} and ${dayShort(y)}`, undo);
+  };
+  // Move (11/14): unchecked dishes always stay; Swap sends the checked ones there and brings
+  // everything from that day here; Add sends them and brings nothing back.
+  const moveDishes = (from, idxs, to, swap) => {
+    const undo = undoTo();
+    const src = mealPlan[from] || [], dst = mealPlan[to] || [];
+    const moving = idxs.map(i => src[i]), staying = src.filter((_, i) => !idxs.includes(i));
+    const nextFrom = swap ? [...staying, ...dst] : staying;
+    const nextTo = swap ? moving : [...dst, ...moving];
+    const stayIdx = src.map((_, i) => i).filter(i => !idxs.includes(i));
+    const ann = {
+      [from]: { dishes: [...entriesFor(from, stayIdx), ...(swap ? entriesFor(to, dst.map((_, i) => i)) : [])], leftovers: [] },
+      [to]: { dishes: [...(swap ? [] : entriesFor(to, dst.map((_, i) => i))), ...entriesFor(from, idxs)], leftovers: [] },
+    };
+    setMealPlan(prev => ({ ...prev, [from]: nextFrom, [to]: nextTo }), ann);
+    const back = swap && dst.length ? ` · ${dst.join(", ")} → ${dayShort(from)}` : "";
+    showToast(`${moving.join(", ")} → ${dayShort(to)}${back}`, undo);
   };
 
-  const MealSearch = ({ day, mealIdx }) => (
-    <div style={{ marginTop:8 }}>
-      <input style={{ ...S.input, marginBottom:8 }} placeholder="Search meals or tags (e.g. pasta, meaty)..." value={search} onChange={e => setSearch(e.target.value)} autoFocus />
-      <div style={{ display:"flex", gap:6, alignItems:"center", fontSize:11, color:C.faint, marginBottom:6 }}>
-        Sort:
-        {[["oldest","longest since"],["newest","most recent"]].map(([k, l]) => (
-          <button key={k} style={{ ...S.pill(pickSort === k), fontSize:11, padding:"2px 8px" }} onClick={() => setPickSort(k)}>{l}</button>
-        ))}
+  const share = async () => {
+    const text = draftPlanText(days, daysFull, mealPlan);
+    try { if (navigator.share) { await navigator.share({ text }); return; } } catch (e) { if (e?.name === "AbortError") return; }
+    copyToClipboard(text);
+    showToast("Copied plan");
+  };
+
+  // ── What each day shows ────────────────────────────────────────────────────────
+  const concernsByDay = {};
+  for (const o of weekCheck.observations || []) if (o.severity === "concern" && o.day) (concernsByDay[o.day] = concernsByDay[o.day] || []).push(o);
+  // Ruling 17.1: a planned home-cooked dish with nothing on its ingredient list (the app's line).
+  const nothingToBuy = [];
+  for (const day of days) for (const d of dishesOf(day)) {
+    const m = mealRec(d.name);
+    if (m && !(m.ingredients || []).length && !notHomeCooked(m)) nothingToBuy.push({ day, name: d.name.trim(), id: m.id });
+  }
+  // A plate changed after ordering (11/12): its dishes differ from the order's snapshot.
+  const changedSinceOrder = day => !!orderedMeals && JSON.stringify(orderedMeals[day] || []) !== JSON.stringify(mealPlan[day] || []);
+
+  // ── Sheets ─────────────────────────────────────────────────────────────────────
+  const [plateDay, setPlateDay] = useState(null);
+  const [choose, setChoose] = useState(null);     // { day, idx|null, kind: "main"|"side", title }
+  const [moveFrom, setMoveFrom] = useState(null);
+  const [checkOpen, setCheckOpen] = useState(false);
+
+  // ── Compact: drag a night onto another to swap them (11/12) ───────────────────────
+  const [drag, setDrag] = useState(null);   // { from, over, dy, y0 }
+  const dragRef = useRef(null);
+  const onHandleDown = (e, day) => {
+    if (locked(day)) return;
+    e.preventDefault();
+    try { e.currentTarget.setPointerCapture(e.pointerId); } catch { /* no capture: moves still reach the handle */ }
+    dragRef.current = { from: day, over: day, y0: e.clientY, dy: 0 };
+    setDrag(dragRef.current);
+  };
+  const onHandleMove = e => {
+    const d = dragRef.current;
+    if (!d) return;
+    const el = document.elementsFromPoint(e.clientX, e.clientY).find(x => x.dataset?.day && x.dataset.day !== d.from);
+    const over = el && !locked(el.dataset.day) ? el.dataset.day : d.from;
+    dragRef.current = { ...d, dy: e.clientY - d.y0, over };
+    setDrag(dragRef.current);
+  };
+  const onHandleUp = () => {
+    const d = dragRef.current;
+    dragRef.current = null; setDrag(null);
+    if (d && d.over !== d.from) swapNights(d.from, d.over);
+  };
+
+  const concernCount = (weekCheck.observations || []).filter(o => o.severity === "concern").length + fillNotes.length + nothingToBuy.length;
+  const noteCount = (weekCheck.observations || []).filter(o => o.severity !== "concern").length;
+  const checkWords = [concernCount && `${concernCount} concern${concernCount === 1 ? "" : "s"}`, noteCount && `${noteCount} note${noteCount === 1 ? "" : "s"}`].filter(Boolean).join(" · ");
+
+  const header = (
+    <div className="wv-head">
+      <button type="button" className="wv-check" onClick={() => setCheckOpen(true)}>
+        {concernCount > 0 && <span className="wv-dot" aria-hidden="true" />}
+        <span className="wv-check-text"><strong>Week check</strong>{checkWords && <span className="wv-check-sub"> · {checkWords}</span>}</span>
+        <RowChevron />
+      </button>
+      <div className="wv-actions">
+        <button type="button" className="wv-suggest-all" onClick={suggestAll}>Suggest all</button>
+        <button type="button" className="wv-share" aria-label="Share draft plan with family" onClick={share}><Icon name="share" size={18} /></button>
+        <label className="wv-compact">Compact<Switch small checked={compact} onChange={setCompact} label="Compact" /></label>
       </div>
-      <div style={{ maxHeight:220, overflowY:"auto" }}>
-        {pickList(day, mealIdx).map(m => (
-          <div key={m.id} style={{ padding:"10px 4px", borderBottom:`1px solid ${C.border}`, fontSize:14, cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"space-between" }}
-            onClick={() => {
-              if (mealIdx !== undefined) replaceMeal(day, mealIdx, m.name, false);
-              else addMeal(day, m.name, false);
-            }}>
-            <span>{m.name} <span style={{ fontSize:11, color:C.faint, marginLeft:4 }}>{recencyLabel(m)}</span></span>
-            <span style={{ display:"flex", gap:4, alignItems:"center" }}>
-              {m.type === "side"    && <span style={S.tag(C.accent,  C.primaryLight)}>side</span>}
-            </span>
-          </div>
-        ))}
-        {search && (
-          <div style={{ padding:"10px 4px", fontSize:14, cursor:"pointer", color:C.primary, fontWeight:600 }}
-            onClick={() => { if (mealIdx!==undefined) replaceMeal(day, mealIdx, search, true); else addMeal(day, search, true); }}>
-            + Use "{search}" <span style={{ fontWeight:500, color:C.faint }}>— adds to Meals list</span>
-          </div>
-        )}
-      </div>
-      <button style={{ ...S.btn, ...S.btnD, marginTop:4, marginBottom:0 }} onClick={() => { setEditing(null); setSearch(""); }}>Cancel</button>
     </div>
   );
 
   return (
-    <div>
-      <div style={S.card}>
-        <div style={S.sectionLabel}>Step 2 - Meal Plan</div>
-        <div style={S.h2}>This week's dinners</div>
-        <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", gap:10, padding:"8px 0", marginBottom:8, borderTop:`1px solid ${C.border}` }}>
-          <div style={{ fontWeight:600, fontSize:14 }}>Try something new</div>
-          <Toggle value={!!adventurousWeek} onChange={v => setAdventurousWeek(v)} />
-        </div>
-        <button style={{ ...S.btn, ...(totalMeals === 0 ? S.btnP : S.btnS), marginBottom:0 }} onClick={regenerate} disabled={loading}>{loading?"Thinking...":"Fill empty days"}</button>
-        {fillNotes.map((n, k) => (
-          <div key={k} style={{ fontSize:12, lineHeight:1.45, padding:"6px 8px", marginTop:8, borderRadius:6, color:C.warning, background:C.warningLight }}>⚠ {prettyDates(n.text)}</div>
-        ))}
-      </div>
-      <WeekCheckPanel check={weekCheck} total={days.length} onFix={suggestSides} fixLabel={d => (dishesOf(d).some(x => x.role === "main") ? "Suggest a side" : "Suggest a main")} showInfo={showWeekInfo} setShowInfo={setShowWeekInfo} learnMode={learnMode} setLearnMode={setLearnMode} />
-      {days.map((day, i) => {
-        const dayMeals      = mealPlan[day] || [];
-        // Stored "grill" pills are from before grill became engine-derived; not shown.
-        const pills         = (dayPills?.[day] || []).filter(p => p.label !== "grill");
-        const dayFc         = forecastByDate[dateOfDay[day]];
-        const grillOk       = engineGrillOk(grillOpen, dayFc);
-        const timeLevel     = (timeLevels || {})[day] || seedTimeLevel(dateOfDay[day] ? abbrOfISO(dateOfDay[day]) : day);
-        const isEditingNew  = editing?.day === day && editing?.mealIdx == null;
-        const editingPills  = pillEditDay === day;
-        // The day as a PLATE (REFACTOR C1): the plate entry for each listed meal, when
-        // the day has one (days untouched since before plates existed don't).
-        const plate         = plates?.[day];
-        const dishAt        = idx => (plate?.dishes?.[idx]?.name === dayMeals[idx] ? plate.dishes[idx] : null);
-        const isSide        = idx => (dishAt(idx)?.role || (allMeals.find(m => m.name === dayMeals[idx])?.type === "side" ? "side" : "main")) === "side";
-        // A main tagged noSidesUnlessNeeded is complete on its own (sides built in, or
-        // takeout): the engine adds a side only to cover someone who won't eat it, so the
-        // day shows "no sides needed" and offers "Suggest sides" only for a floor concern.
-        const noSidesMain   = idx => !isSide(idx) && allMeals.find(m => m.name === dayMeals[idx])?.noSidesUnlessNeeded === true;
-        const floorConcern  = (weekCheck.floorConcernDays || []).includes(day);
-        const offerSides    = floorConcern || !dayMeals.some((_, k) => noSidesMain(k));
-        const sidesLabel    = !dayMeals.some((_, k) => !isSide(k)) ? "Suggest a main" : dayMeals.some((_, k) => isSide(k)) ? "More sides" : "Suggest sides";
-        // Why each dish is here (REFACTOR C2), from the reasons saved when it was placed.
-        // A side's headline reason is its floor-fill/affinity sentence. Other reasons the
-        // engine marked "always" show by default; learn mode shows every reason.
-        const reasons       = idx => reasonsOf(dishAt(idx));
-        const headline      = idx => isSide(idx) ? (reasons(idx).find(r => r.factor === "floor-fill" || r.factor === "affinity") || reasons(idx)[0]) : null;
-        const extraReasons  = idx => reasons(idx).filter(r => r !== headline(idx) && (learnMode || r.visibility === "always"));
-        const dayLeftovers  = weekCheck.leftovers?.[day] || [];
+    <div className={compact ? "wv is-compact" : "wv"}>
+      {headSlot ? createPortal(header, headSlot) : header}
+      {days.map(day => {
+        const iso = dateOfDay[day];
+        const dishes = dishesOf(day);
+        const mains = dishes.filter(d => d.role === "main"), sides = dishes.filter(d => d.role === "side");
+        const fc = forecastByDate[iso];
+        const wx = [forecastWords(fc), engineGrillOk(grillOpen, fc) && "grill ok"].filter(Boolean).join(" · ");
+        const pills = (dayPills?.[day] || []).filter(p => p.label !== "grill");
+        const note = (dayNotes?.[day] || "").trim();
+        const level = (timeLevels || {})[day] || seedTimeLevel(iso ? abbrOfISO(iso) : day);
+        const concerns = concernsByDay[day] || [];
+        const leftovers = groupLeftoverNotes(weekCheck.leftovers?.[day]);
+        const past = locked(day);
+        const changed = !past && dishes.length > 0 && changedSinceOrder(day);
+        const isDragged = drag?.from === day, isTarget = drag && drag.over === day && drag.from !== day;
         return (
-          <div key={day} style={S.mealCard(timeLevel === "none" ? "easy" : "medium")}>
-            <div style={{ fontSize:11, fontWeight:700, color:C.accentMuted, letterSpacing:"0.06em", textTransform:"uppercase", marginBottom:4 }}>
-              {daysFull[i]}{isExtraDay(day) && dateOfDay[day] && ` · ${Number(dateOfDay[day].slice(5, 7))}/${Number(dateOfDay[day].slice(8))}`}
-              {isExtraDay(day) && canExtend && day === `X${extraDays}` && (
-                <button title="Remove this extra day" style={{ marginLeft:8, background:"none", border:"none", color:C.faint, fontSize:12, cursor:"pointer", padding:0, textTransform:"none", letterSpacing:0 }}
-                  onClick={() => { if (!dayMeals.length || window.confirm(`Remove ${daysFull[i]}? Its meals and notes go with it.`)) setExtraDays(extraDays - 1); }}>× remove</button>
-              )}
-              {dayFc && <span style={{ marginLeft:8, fontWeight:600, color:C.muted, textTransform:"none", letterSpacing:0 }}>{dayFc.icon} {dayFc.hi}° · {dayFc.pop}% rain</span>}
+          <section key={day} data-day={day} className={["wv-day", past && "is-past", isDragged && "is-dragged", isTarget && "is-target"].filter(Boolean).join(" ")}
+            style={isDragged ? { transform: `translateY(${drag.dy}px)` } : undefined}>
+            <div className="wv-date">
+              <div className="wv-date-line">
+                <span className="wv-dow">{iso ? dayTitle(iso) : daysFull[days.indexOf(day)]}</span>
+                <Clocks n={LEVEL_N[level] || 2} />
+                {outLines[day]?.length > 0 && <span className="wv-out">{outLines[day].join(" · ")}</span>}
+                {!compact && wx && <span>{wx}</span>}
+                {(compact ? pills.slice(0, 1) : pills).map(p => <span key={p.label} className="wv-label">{p.label}{compact && pills.length > 1 ? ` +${pills.length - 1}` : ""}</span>)}
+                {compact && note && <span className="wv-note-inline">{note}</span>}
+              </div>
+              {!compact && note && <div className="wv-note">{note}</div>}
             </div>
-            <div style={{ display:"flex", alignItems:"center", gap:4, flexWrap:"wrap", marginBottom:6 }}>
-              <span style={{ fontSize:11, color:C.faint, fontWeight:600, marginRight:2 }}>Time</span>
-              {TIME_LEVELS.map(l => {
-                const on = timeLevel === l;
-                return <button key={l} style={{ ...S.btnSm, padding:"2px 10px", fontSize:11, background:on?C.primaryLight:"#FFF", color:on?C.primary:C.muted, border:`1px solid ${on?C.primary:C.border}`, fontWeight:on?700:500 }}
-                  onClick={() => setTimeLevels(prev => ({ ...prev, [day]: l }))}>{TIME_LABEL[l]}</button>;
-              })}
-            </div>
-            {roster.length > 0 && (
-              <div style={{ display:"flex", alignItems:"center", gap:4, flexWrap:"wrap", marginBottom:6 }}>
-                <span style={{ fontSize:11, color:C.faint, fontWeight:600, marginRight:2 }}>Home</span>
-                {roster.map(name => {
-                  const here = isPresentOn(name, day);
-                  return <span key={name} title={here ? "Tap to mark away tonight" : "Away — tap to mark home tonight"} onClick={() => togglePresence(day, name)}
-                    style={{ cursor:"pointer", ...S.tag(here ? C.muted : C.warning, here ? "#F1F1F1" : C.warningLight), textDecoration: here ? "none" : "line-through" }}>{name}</span>;
-                })}
+            {dishes.length === 0 ? (
+              <div className="wv-open">
+                {past ? <span className="wv-open-label">—</span> : <>
+                  <button type="button" className="wv-open-label" onClick={() => setChoose({ day, idx: null, kind: "main", title: `Pick for ${dayTitle(iso)}` })}>Open</button>
+                  <PillButton inline onClick={() => fillDay(day)}>Suggest</PillButton>
+                </>}
+              </div>
+            ) : (
+              <div className={concerns.length || changed ? "wv-tile has-problem" : "wv-tile"}>
+                <button type="button" className="wv-tile-body" onClick={() => setPlateDay(day)}>
+                  {compact ? (
+                    <span className="wv-tile-line"><span className="wv-mains">{mains.map(d => d.name).join(", ") || "—"}</span>{sides.length > 0 && <span className="wv-sides">  + {sides.map(d => d.name).join(", ")}</span>}</span>
+                  ) : <>
+                    <span className="wv-mains">{mains.map(d => d.name).join(", ") || "—"}</span>
+                    {sides.length > 0 && <span className="wv-sides">+ {sides.map(d => d.name).join(", ")}</span>}
+                    {leftovers.map((t, k) => <span key={k} className="wv-sides">{t}</span>)}
+                  </>}
+                  {concerns.map((o, k) => <span key={k} className="wv-concern">{o.text}</span>)}
+                  {changed && <span className="wv-concern">Check ingredients</span>}
+                </button>
+                {compact ? (!past && <span className="wv-handle" role="button" tabIndex={-1} aria-label="Drag to another day"
+                  onPointerDown={e => onHandleDown(e, day)} onPointerMove={onHandleMove} onPointerUp={onHandleUp} onPointerCancel={onHandleUp}><Icon name="handle" size={18} /></span>)
+                  : <RowChevron />}
               </div>
             )}
-            <div style={{ display:"flex", flexWrap:"wrap", gap:4, alignItems:"center", marginBottom:6 }}>
-              {grillOk && <span title="Grill weather and grill season open — grillable meals can be suggested" style={S.tag(PILL_STYLE.grill.c, PILL_STYLE.grill.bg)}>🔥 grill ok</span>}
-              {pills.map(p => {
-                const st = PILL_STYLE[p.label] || { c:C.muted, bg:"#F3F4F6" };
+          </section>
+        );
+      })}
+      {canExtend && weekStartDate && (extraDays < MAX_EXTRA_DAYS || extraDays > 0) && (
+        <div className="wv-extend">
+          {extraDays < MAX_EXTRA_DAYS && <button type="button" className="wv-add-day" onClick={() => setExtraDays(extraDays + 1)}>+ Add {dayTitle(addDaysISO(weekStartDate, 7 + extraDays))}</button>}
+          {extraDays > 0 && (() => {
+            const last = `X${extraDays}`;
+            return <button type="button" className="wv-remove-day" onClick={() => { if (!(mealPlan[last] || []).length || window.confirm(`Remove ${dayTitle(dateOfDay[last])}? Its meals and notes go with it.`)) setExtraDays(extraDays - 1); }}>Remove {dayTitle(dateOfDay[last])}</button>;
+          })()}
+        </div>
+      )}
+
+      {plateDay && (
+        <PlateSheet day={plateDay} iso={dateOfDay[plateDay]} past={locked(plateDay)} dishes={dishesOf(plateDay)} level={(timeLevels || {})[plateDay] || seedTimeLevel(abbrOfISO(dateOfDay[plateDay]))}
+          note={(dayNotes?.[plateDay] || "").trim()} concerns={concernsByDay[plateDay] || []} learnMode={learnMode} setLearnMode={setLearnMode}
+          onClose={() => setPlateDay(null)} onEdit={onEditDay ? () => { setPlateDay(null); onEditDay(plateDay); } : null} onOpenMeal={onOpenMeal}
+          onFix={() => suggestSides(plateDay)}
+          onReplace={d => setChoose({ day: plateDay, idx: d.idx, kind: d.role, title: `Replace ${d.name.trim()}` })}
+          onRemove={d => removeMeal(plateDay, d.idx)}
+          onAdd={kind => setChoose({ day: plateDay, idx: null, kind, title: kind === "side" ? "Add a side" : "Add a main" })}
+          onMove={() => setMoveFrom(plateDay)}
+          onClear={() => { clearDay(plateDay); setPlateDay(null); }} />
+      )}
+      {choose && (
+        <ChooseSheet key={`${choose.day}-${choose.idx}-${choose.kind}`} choose={choose} allMeals={allMeals} recencyValue={recencyValue} recencyLabel={recencyLabel}
+          present={roster.filter(n => !isOut(n, choose.day, dateOfDay[choose.day]))}
+          // A second main is placed by hand only, never composed (11/14): no Suggested for it.
+          suggest={choose.kind === "side" ? (dishesOf(choose.day).some(d => d.role === "main") ? shown => nextSideOptions(choose.day, shown) : null)
+            : (choose.idx == null && dishesOf(choose.day).some(d => d.role === "main")) ? null : shown => nextMainOptions(choose.day, shown)}
+          onTake={o => { if (o.side) takeSideOption(choose.day, choose.idx, o.side); else takeMainOption(choose.day, choose.idx, o); setChoose(null); }}
+          onPick={(name, isNew) => { if (choose.idx == null) addMeal(choose.day, name, isNew); else replaceMeal(choose.day, choose.idx, name, isNew); setChoose(null); }}
+          onCancel={() => setChoose(null)} />
+      )}
+      {moveFrom && (
+        <MoveSheet from={moveFrom} title={`Move from ${longTitle(dateOfDay[moveFrom])}`} dishes={dishesOf(moveFrom)} mealRec={mealRec}
+          targets={days.filter(d => d !== moveFrom && !locked(d)).map(d => ({ day: d, label: dayTitle(dateOfDay[d]), dishes: dishesOf(d) }))}
+          onGo={(idxs, to, swap) => { moveDishes(moveFrom, idxs, to, swap); setMoveFrom(null); setPlateDay(null); }}
+          onCancel={() => setMoveFrom(null)} />
+      )}
+      {checkOpen && (
+        <Sheet title="Week check" onClose={() => setCheckOpen(false)}>
+          <WeekCheckBody observations={weekCheck.observations || []} fillNotes={fillNotes} nothingToBuy={nothingToBuy} dayShort={dayShort}
+            hasMain={d => dishesOf(d).some(x => x.role === "main")} onFix={suggestSides} onOpenMeal={onOpenMeal ? id => { setCheckOpen(false); onOpenMeal(id); } : null} />
+        </Sheet>
+      )}
+    </div>
+  );
+}
+
+// ── Plate sheet (board "Plate sheet"): everything about one night ─────────────────────────
+function PlateSheet({ iso, past, dishes, level, note, concerns, learnMode, setLearnMode, onClose, onEdit, onOpenMeal, onFix, onReplace, onRemove, onAdd, onMove, onClear }) {
+  const hasMain = dishes.some(d => d.role === "main");
+  const sub = (
+    <div className="wv-plate-sub">
+      <Clocks n={LEVEL_N[level] || 2} />
+      {note && <span>{note}</span>}
+      {onEdit && !past && <button type="button" className="wv-link" onClick={onEdit}>Edit</button>}
+    </div>
+  );
+  const ordered = [...dishes.filter(d => d.role === "main"), ...dishes.filter(d => d.role === "side")];
+  return (
+    <Sheet title={longTitle(iso)} onClose={onClose}
+      headerExtra={<label className="wv-compact">Reasons<Switch small checked={learnMode} onChange={setLearnMode} label="Reasons" /></label>}>
+      <div className="wv-sheet">
+        {sub}
+        {concerns.map((o, k) => (
+          <div key={k} className="wv-fix is-plate">
+            <span className="wv-dot" aria-hidden="true" />
+            <span className="wv-fix-text">{o.text}</span>
+            {!past && o.property === "floor" && <PillButton inline onClick={onFix}>{hasMain ? "Add side" : "Suggest"}</PillButton>}
+          </div>
+        ))}
+        <Group>
+          {ordered.map(d => {
+            const why = reasonsOf(d.entry).filter(r => learnMode || r.visibility === "always");
+            return (
+              <div key={d.idx} className="wv-dish">
+                <div className="wv-dish-main">
+                  {d.mealId && onOpenMeal
+                    ? <button type="button" className={d.role === "main" ? "wv-dish-name is-main" : "wv-dish-name"} onClick={() => onOpenMeal(d.mealId)}>{d.name.trim()} <span className="wv-inline-chev">›</span></button>
+                    : <span className={d.role === "main" ? "wv-dish-name is-main" : "wv-dish-name"}>{d.name.trim()}</span>}
+                  {why.map((r, k) => <span key={k} className="ui-meta">{r.text}</span>)}
+                </div>
+                {!past && <>
+                  <button type="button" className="ui-icon-button wv-replace" aria-label={`Replace ${d.name.trim()}`} onClick={() => onReplace(d)}><Icon name="replace" size={20} strong /></button>
+                  <button type="button" className="ui-icon-button wv-remove" aria-label={`Remove ${d.name.trim()}`} onClick={() => onRemove(d)}><Icon name="close" size={18} /></button>
+                </>}
+              </div>
+            );
+          })}
+          {!past && (
+            <div className="wv-adds">
+              <button type="button" className="wv-link" onClick={() => onAdd("main")}>+ Add main</button>
+              {hasMain && <button type="button" className="wv-link" onClick={() => onAdd("side")}>+ Add side</button>}
+            </div>
+          )}
+        </Group>
+        {!past && (
+          <Group>
+            <button type="button" className="ui-row" onClick={onMove}><span className="ui-row-main">Move to another day</span><RowChevron /></button>
+            <button type="button" className="ui-row" onClick={onClear}><span className="ui-row-main">Clear this day</span></button>
+          </Group>
+        )}
+      </div>
+    </Sheet>
+  );
+}
+
+// ── Replace sheet (§4.5): Suggested · 3 from the engine's ranking, then Browse ─────────────
+function ChooseSheet({ choose, allMeals, recencyValue, recencyLabel, present, suggest, onTake, onPick, onCancel }) {
+  const wantSide = choose.kind === "side";
+  const [sugg, setSugg] = useState(() => (suggest ? suggest([]) : null));
+  const [q, setQ] = useState("");
+  const more = () => {
+    const shown = sugg.options.map(o => (o.side ? o.side.mealId : o.main.mealId));
+    const next = suggest(shown);
+    setSugg({ options: [...sugg.options, ...next.options], exhausted: next.exhausted, note: next.note });
+  };
+  const list = useMemo(() => {
+    const base = (q.trim() ? allMeals.filter(m => mealMatches(m, q)) : allMeals).filter(m => (m.type === "side") === wantSide);
+    return [...base].sort((a, b) => {
+      const va = recencyValue(a), vb = recencyValue(b);
+      return va !== vb ? (va < vb ? -1 : 1) : a.name.localeCompare(b.name);
+    });
+  }, [q, allMeals, wantSide]);
+  const wontEat = m => present.filter(n => (m.preferences || []).some(p => p.person === n && p.pref === "dislikes"));
+  const exact = q.trim() && allMeals.some(m => m.name.trim().toLowerCase() === q.trim().toLowerCase());
+  return (
+    <Sheet title={choose.title} onClose={onCancel} onCancel={onCancel} noDone>
+      <div className="wv-sheet">
+        {sugg && (sugg.options.length > 0 || sugg.note) && (
+          <section className="wv-section">
+            <div className="ui-section-label">Suggested</div>
+            <Group>
+              {sugg.options.map(o => {
+                const lead = o.side ? o.side : o.main;
+                const why = reasonsOf(lead).find(r => r.visibility === "always") || reasonsOf(lead)[0];
                 return (
-                  <span key={p.label} style={{ ...S.tag(st.c, st.bg), display:"inline-flex", alignItems:"center", gap:4 }}>
-                    {p.label}
-                    {editingPills && <span style={{ cursor:"pointer", fontWeight:700 }} onClick={() => removePill(day, p.label)}>×</span>}
-                  </span>
+                  <button key={lead.mealId} type="button" className="ui-row wv-pick" onClick={() => onTake(o)}>
+                    <span className="ui-row-main">
+                      <span className={o.side ? undefined : "ui-strong"}>{lead.name.trim()}</span>
+                      {!o.side && o.sides.length > 0 && <span className="ui-meta">+ {o.sides.map(s => s.name.trim()).join(", ")}</span>}
+                      {why && <span className="ui-meta">{why.text}</span>}
+                    </span>
+                  </button>
                 );
               })}
-              <button style={{ background:"none", border:"none", color:C.faint, fontSize:11, cursor:"pointer", textDecoration:"underline", padding:0 }}
-                onClick={() => { setPillEditDay(editingPills ? null : day); setNewPillLabel(""); }}>
-                {editingPills ? "done" : "+ pills"}
-              </button>
-            </div>
-            {editingPills && (
-              <div style={{ background:"#F9FAFB", border:`1px solid ${C.border}`, borderRadius:8, padding:8, marginBottom:8 }}>
-                <div style={{ display:"flex", gap:6, flexWrap:"wrap", marginBottom:6 }}>
-                  {BUILTIN_PILLS.map(l => {
-                    const on = pills.some(p => p.label === l);
-                    const st = PILL_STYLE[l];
-                    return <button key={l} style={{ ...S.btnSm, background:on?st.bg:"#FFF", color:on?st.c:C.muted, border:`1px solid ${on?st.c:C.border}`, fontWeight:on?700:500 }} onClick={() => togglePill(day, l)}>{l}</button>;
-                  })}
-                </div>
-                <div style={{ display:"flex", gap:6 }}>
-                  <input style={{ ...S.input, flex:1, marginBottom:0, fontSize:12 }} placeholder="Custom label (e.g. Kid's bday)" value={newPillLabel}
-                    onChange={e => setNewPillLabel(e.target.value)} onKeyDown={e => { if (e.key === "Enter") addCustomPill(day); }} />
-                  <button style={{ ...S.btnSm, background:C.primary, color:"#fff" }} onClick={() => addCustomPill(day)}>Add</button>
-                </div>
-                <div style={{ fontSize:10, color:C.faint, marginTop:6 }}>Labels are visual only. "grill ok" is worked out from the forecast and grill season.</div>
-              </div>
-            )}
-            {/* Wraps and grows so a long note reads in full; newlines are dropped to keep notes one line, as before. */}
-            <AutoGrowTextarea
-              style={{ display:"block", boxSizing:"border-box", fontSize:12, fontFamily:"inherit", lineHeight:1.4, resize:"none", overflow:"hidden", border:"none", borderBottom:`1px dashed ${C.border}`, outline:"none", background:"transparent", color:(dayNotes||{})[day]?C.warning:C.faint, width:"100%", padding:"2px 0", marginBottom:6, fontStyle:(dayNotes||{})[day]?"normal":"italic" }}
-              placeholder="📝 Note for this day (e.g. business trip — takeout)"
-              value={(dayNotes||{})[day]||""}
-              onChange={v => setDayNotes(prev => ({ ...prev, [day]:v.replace(/[\r\n]+/g, " ") }))}
-            />
-            {dayMeals.map((meal, mealIdx) => {
-              const isMoving   = moving?.day===day && moving?.mealIdx===mealIdx;
-              const isChanging = editing?.day===day && editing?.mealIdx===mealIdx;
+            </Group>
+            {sugg.note && <div className="ui-meta wv-pool">{sugg.note}</div>}
+            {!sugg.exhausted && <button type="button" className="wv-link wv-more" onClick={more}>More suggestions</button>}
+          </section>
+        )}
+        <section className="wv-section">
+          <SearchField value={q} onChange={setQ} placeholder={wantSide ? "Search sides" : "Search mains"} />
+          <Group>
+            {list.map(m => {
+              const no = wontEat(m);
               return (
-                <div key={mealIdx} style={{ marginTop:6 }}>
-                  {isMoving ? (
-                    <div>
-                      <div style={{ fontSize:12, color:C.muted, marginBottom:6 }}>Move to:</div>
-                      <div style={{ display:"flex", flexWrap:"wrap", gap:6 }}>
-                        {days.filter(d=>d!==day).map(d => <button key={d} style={{ ...S.btnSm, background:C.primaryLight, color:C.primary }} onClick={() => moveMeal(day,mealIdx,d)}>{isExtraDay(d) ? "+" + daysFull[days.indexOf(d)].replace("Extra ", "").slice(0, 3) : d}</button>)}
-                        <button style={{ ...S.btnSm, background:C.dangerLight, color:C.danger }} onClick={() => setMoving(null)}>Cancel</button>
-                      </div>
-                    </div>
-                  ) : isChanging ? (
-                    <MealSearch day={day} mealIdx={mealIdx} />
-                  ) : (
-                    <div style={{ display:"flex", alignItems:"center", gap:8, ...(isSide(mealIdx) ? { paddingLeft:14 } : {}) }}>
-                      <div style={{ flex:1, minWidth:0 }}>
-                        <div style={{ fontWeight: isSide(mealIdx) ? 400 : 600, fontSize: isSide(mealIdx) ? 14 : 15, display:"flex", alignItems:"center", gap:6, flexWrap:"wrap" }}>
-                          {meal}
-                          {sideBadge(dishAt(mealIdx))}
-                          {noSidesMain(mealIdx) && <span style={S.tag(C.muted, "#F3F4F6")} title="Complete on its own. A side is added only to cover someone who won't eat it.">no sides needed</span>}
-                        </div>
-                        {headline(mealIdx) && <div style={{ fontSize:11, color:C.faint, lineHeight:1.35 }}>{prettyDates(headline(mealIdx).text)}</div>}
-                        {extraReasons(mealIdx).map((r, k) => (
-                          <div key={k} style={{ fontSize:11, lineHeight:1.35, color: r.visibility === "always" ? C.muted : C.faint }}>
-                            {learnMode && r.tier ? <span style={{ fontWeight:600 }}>{r.tier} · {r.role}: </span> : "• "}{prettyDates(r.text)}
-                          </div>
-                        ))}
-                      </div>
-                      <button title={isSide(mealIdx) ? "Swap this side for another" : "See other mains for this day (their sides follow)"} style={{ ...S.btnSm, background:"none", border:`1px solid ${C.border}`, color:C.muted, fontSize:12, padding:"4px 8px" }} onClick={() => (isSide(mealIdx) ? rerollSide(day, mealIdx) : (shortlist?.day === day ? setShortlist(null) : openShortlist(day)))}>⟳</button>
-                      <button style={{ ...S.btnSm, background:"none", border:`1px solid ${C.border}`, color:C.muted, fontSize:11 }} onClick={() => setMoving({day,mealIdx})}>Move</button>
-                      <button style={{ ...S.btnSm, background:"none", border:`1px solid ${C.border}`, color:C.muted, fontSize:11 }} onClick={() => setEditing({day,mealIdx})}>Change</button>
-                      <button style={{ background:"none", border:"none", color:C.faint, fontSize:18, cursor:"pointer", padding:"0 4px" }} onClick={() => removeMeal(day,mealIdx)}>×</button>
-                    </div>
-                  )}
+                <button key={m.id} type="button" className="ui-row wv-pick" onClick={() => onPick(m.name, false)}>
+                  <span className="ui-row-main">
+                    <span className={wantSide ? undefined : "ui-strong"}>{m.name}</span>
+                    <span className={no.length ? "ui-meta ui-problem" : "ui-meta"}>{no.length ? `${no.join(" and ")} won't eat it` : recencyLabel(m)}</span>
+                  </span>
+                </button>
+              );
+            })}
+            {q.trim() && !exact && (
+              <button type="button" className="ui-row wv-pick" onClick={() => onPick(q.trim(), true)}><span className="ui-row-main wv-link-text">Add “{q.trim()}”</span></button>
+            )}
+          </Group>
+        </section>
+      </div>
+    </Sheet>
+  );
+}
+
+// ── Move sheet (11/14): pick dishes, then ⇄ Swap or → Add on another day ───────────────────
+function MoveSheet({ title, dishes, mealRec, targets, onGo, onCancel }) {
+  const [on, setOn] = useState(() => dishes.map(d => d.idx));
+  const mains = dishes.filter(d => d.role === "main");
+  // A side "goes with" a main when it's linked to it (pairsWith), or it's an accompaniment on a
+  // night with only one main. Unchecking a main unchecks those; sides covering a person stay.
+  const goesWith = (side, main) => (mealRec(side.name)?.pairsWith || []).includes(main.mealId) || (side.source === "accompaniment" && mains.length === 1);
+  const toggle = d => setOn(cur => {
+    if (cur.includes(d.idx)) {
+      const drop = new Set([d.idx]);
+      if (d.role === "main") dishes.filter(s => s.role === "side" && goesWith(s, d)).forEach(s => drop.add(s.idx));
+      return cur.filter(i => !drop.has(i));
+    }
+    return [...cur, d.idx];
+  });
+  const n = dishes.length, k = on.length;
+  const label = k === n ? `Moving all ${n}` : `Moving ${k} · Keeping ${n - k}`;
+  const ordered = [...mains, ...dishes.filter(d => d.role === "side")];
+  const idxs = dishes.map(d => d.idx).filter(i => on.includes(i));
+  return (
+    <Sheet title={title} onClose={onCancel} onCancel={onCancel} noDone>
+      <div className="wv-sheet">
+        <section className="wv-section">
+          <div className="ui-section-label">{label}</div>
+          <Group>
+            {ordered.map(d => <CheckRow key={d.idx} on={on.includes(d.idx)} strong={d.role === "main"} onClick={() => toggle(d)}>{d.name.trim()}</CheckRow>)}
+          </Group>
+        </section>
+        <section className="wv-section">
+          <div className="ui-section-label">To</div>
+          <Group>
+            {targets.map(t => {
+              const tm = t.dishes.filter(d => d.role === "main"), ts = t.dishes.filter(d => d.role === "side");
+              return (
+                <div key={t.day} className="wv-target">
+                  <span className="wv-target-day">{t.label}</span>
+                  <span className="wv-target-dishes">
+                    {t.dishes.length ? <><span className="ui-strong">{tm.map(d => d.name.trim()).join(", ")}</span>{ts.length > 0 && <span className="ui-meta">+ {ts.map(d => d.name.trim()).join(", ")}</span>}</> : <span className="ui-meta">Open</span>}
+                  </span>
+                  <span className="wv-target-actions">
+                    <button type="button" className="wv-mini" disabled={!k} onClick={() => onGo(idxs, t.day, true)}>⇄ Swap</button>
+                    <button type="button" className="wv-mini" disabled={!k} onClick={() => onGo(idxs, t.day, false)}>→ Add</button>
+                  </span>
                 </div>
               );
             })}
-            {shortlist?.day === day && (
-              <div style={{ marginTop:8, border:`1px solid ${C.border}`, borderRadius:8, padding:"8px 10px", background:"#FAFAFA" }}>
-                <div style={{ display:"flex", alignItems:"center", marginBottom:4 }}>
-                  <div style={{ flex:1, fontSize:11, fontWeight:700, color:C.muted, textTransform:"uppercase", letterSpacing:0.4 }}>Other mains for this day</div>
-                  <button style={{ background:"none", border:"none", color:C.faint, fontSize:16, cursor:"pointer", padding:"0 4px" }} title="Keep the current main" onClick={() => setShortlist(null)}>×</button>
-                </div>
-                {shortlist.options.map((o, k) => {
-                  const why = reasonsOf(o.main).find(r => r.visibility === "always") || reasonsOf(o.main)[0];
-                  return (
-                    <div key={o.main.mealId} style={{ display:"flex", alignItems:"center", gap:8, padding:"7px 0", borderTop: k ? `1px solid ${C.border}` : "none", cursor:"pointer" }} onClick={() => takeOption(o)}>
-                      <div style={{ flex:1, minWidth:0 }}>
-                        <div style={{ fontSize:14, fontWeight:600 }}>{o.main.name}{k === 0 && <span style={{ ...S.tag(C.primary, C.primaryLight), marginLeft:6 }}>best fit</span>}</div>
-                        {o.sides.length > 0 && <div style={{ fontSize:12, color:C.muted }}>with {o.sides.map(d => d.name.trim()).join(", ")}</div>}
-                        {why && <div style={{ fontSize:11, color:C.faint, lineHeight:1.35 }}>{prettyDates(why.text)}</div>}
-                      </div>
-                      <span style={{ fontSize:12, fontWeight:600, color:C.primary }}>Use</span>
-                    </div>
-                  );
-                })}
-                {shortlist.exhausted ? (
-                  <div style={{ fontSize:11, color:C.muted, fontStyle:"italic", paddingTop:6 }}>
-                    {shortlist.options.length ? "That's every main that fits this day this session." : "No other main fits this day this session."} To pick any meal yourself, use Change.
-                  </div>
-                ) : (
-                  <button style={{ background:"none", border:"none", color:C.primary, fontSize:12, fontWeight:600, cursor:"pointer", padding:"6px 0 0" }} onClick={moreOptions}>+ More options</button>
-                )}
-              </div>
-            )}
-            {dayLeftovers.length > 0 && (
-              <div style={{ marginTop:6 }}>
-                {groupLeftoverNotes(dayLeftovers).map((t, k) => (
-                  <div key={"l"+k} style={{ fontSize:11, color:C.muted, lineHeight:1.4 }}>🥡 {t}</div>
-                ))}
-              </div>
-            )}
-            {dayMsg?.day === day && (
-              <div style={{ fontSize:12, lineHeight:1.4, color:C.muted, fontStyle:"italic", padding:"6px 0 0" }}>{dayMsg.text}</div>
-            )}
-            {!isEditingNew && dayMeals.length > 0 && offerSides && dayMsg?.day !== day && (
-              <button style={{ background:"none", border:"none", color:floorConcern ? C.warning : C.primary, fontSize:12, fontWeight:600, cursor:"pointer", padding:"6px 0 0" }} onClick={() => suggestSides(day)}>
-                {floorConcern ? "⚠ " : "+ "}{sidesLabel}
-              </button>
-            )}
-            {isEditingNew ? <MealSearch day={day} /> : (
-              <div style={{ display:"flex", gap:8, marginTop:8 }}>
-                {dayMeals.length === 0 && (
-                  <button style={{ background:C.primaryLight, border:`1.5px solid ${C.primaryLight}`, borderRadius:8, padding:"6px 12px", fontSize:13, cursor:"pointer", color:C.primary, fontWeight:600, flex:"0 0 auto" }} onClick={() => fillDay(day)}>⟳ Fill this day</button>
-                )}
-                <button style={{ background:"none", border:`1.5px dashed ${C.border}`, borderRadius:8, padding:"6px 12px", fontSize:13, cursor:"pointer", color:C.faint, flex:1 }} onClick={() => setEditing({day, mealIdx:null})}>
-                  + Add meal
-                </button>
-              </div>
-            )}
-          </div>
-        );
-      })}
-      {/* Shopping a day or two later than usual: add days after the week's last day. Only
-          the latest week can (see setExtraDays in PlanTab), so a boundary never moves. */}
-      {canExtend && extraDays < MAX_EXTRA_DAYS && weekStartDate && (() => {
-        const iso = addDaysISO(weekStartDate, 7 + extraDays);
-        return (
-          <button style={{ background:"none", border:`1.5px dashed ${C.border}`, borderRadius:8, padding:"8px 12px", fontSize:13, cursor:"pointer", color:C.muted, width:"100%", marginBottom:10 }} onClick={() => setExtraDays(extraDays + 1)}>
-            + Add an extra day ({DAYS_FULL[new Date(iso + "T00:00:00").getDay()]} {Number(iso.slice(5, 7))}/{Number(iso.slice(8))}) — shopping later than usual
-          </button>
-        );
-      })()}
-      {totalMeals > 0 && (
-        <div style={{ marginBottom:10 }}>
-          <button style={{ ...S.btn, ...S.btnS, marginBottom:draftSms?8:0 }} onClick={textDraftPlan}>{draftCopied ? "✓ Copied — paste into Messages" : "📋 Copy draft plan for family"}</button>
-          {draftSms && (
-            <div style={{ fontSize:12, color:C.muted }}>
-              <div style={{ marginBottom:6, color:C.verified, fontWeight:600 }}>✓ Copied — paste into Messages:</div>
-              <textarea readOnly value={draftSms} onFocus={e => e.target.select()} style={{ ...S.input, height:120, fontSize:12, resize:"none", marginBottom:0, fontFamily:"inherit" }} />
-            </div>
-          )}
+          </Group>
+        </section>
+      </div>
+    </Sheet>
+  );
+}
+
+// ── Week check sheet (board "Rationale B"): concerns with their fixes, the app's nothing-to-buy
+// lines, then Notes. Engine text verbatim. ──────────────────────────────────────────────────
+function WeekCheckBody({ observations, fillNotes, nothingToBuy, dayShort, hasMain, onFix, onOpenMeal }) {
+  const concerns = [...fillNotes, ...observations.filter(o => o.severity === "concern")];
+  const notes = observations.filter(o => o.severity !== "concern");
+  return (
+    <div className="wv-sheet">
+      {concerns.map((o, k) => (
+        <div key={"c" + k} className="wv-fix">
+          <span className="wv-dot" aria-hidden="true" />
+          <span className="wv-fix-text">{o.text}</span>
+          {o.day && o.property === "floor" && <PillButton inline onClick={() => onFix(o.day)}>{hasMain(o.day) ? "Add side" : "Suggest"}</PillButton>}
         </div>
+      ))}
+      {nothingToBuy.map((x, k) => (
+        <div key={"n" + k} className="wv-fix">
+          <span className="wv-dot" aria-hidden="true" />
+          <span className="wv-fix-text">{x.name} on {dayShort(x.day)}: nothing to buy</span>
+          {onOpenMeal && <PillButton inline secondary onClick={() => onOpenMeal(x.id)}>Open</PillButton>}
+        </div>
+      ))}
+      {notes.length > 0 && (
+        <section className="wv-section">
+          <div className="ui-section-label">Notes</div>
+          <Group>{notes.map((o, k) => <div key={k} className="ui-row ui-row-plain"><span className="ui-row-main">{o.text}</span></div>)}</Group>
+        </section>
       )}
-      {!inFlow && <button style={{ ...S.btn, ...S.btnP }} onClick={onNext} disabled={totalMeals===0}>Looks good</button>}
+      {!concerns.length && !nothingToBuy.length && !notes.length && <div className="ui-meta">No concerns</div>}
     </div>
   );
 }

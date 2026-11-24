@@ -200,3 +200,8 @@ button.ui-row:active { background: var(--pressed); }
 .ui-toast-undo { flex: none; min-height: var(--touch); padding: 0 var(--space-3); font: inherit; font-weight: 700; color: var(--toast-text); background: none; border: 0; cursor: pointer; }
 @keyframes ui-toast-in { from { opacity: 0; transform: translate(-50%, var(--space-2)); } to { opacity: 1; transform: translateX(-50%); } }
 @media (prefers-reduced-motion: reduce) { .ui-toast { animation: none; } }
+
+/* Header-size switch, 40×24 (Compact, Reasons; decided 11/12). */
+.ui-switch-small { width: var(--switch-sm-w); height: var(--switch-sm-h); border-radius: var(--switch-sm-h); }
+.ui-switch-small::after { width: calc(var(--switch-sm-h) - 2 * var(--switch-inset)); height: calc(var(--switch-sm-h) - 2 * var(--switch-inset)); }
+.ui-switch-small[aria-checked="true"]::after { transform: translateX(calc(var(--switch-sm-w) - var(--switch-sm-h))); }

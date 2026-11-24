@@ -1,0 +1,88 @@
+/* The week view (phase 2 stage 4b; boards "Week view · DETAILED / COMPACT", "Plate sheet",
+   "Replace sheet", "Move sheet", "Rationale B"). Tokens only. */
+
+/* ── Header controls (in the frame's sticky header) ── */
+.wv-head { display: flex; flex-direction: column; gap: var(--space-2); }
+.wv-check { display: flex; align-items: center; gap: var(--space-2); min-height: var(--touch); padding: 0 var(--space-3) 0 var(--space-4); border: 1px solid var(--pill-outline-soft); border-radius: var(--radius-pill); background: none; font: inherit; color: var(--text); text-align: left; cursor: pointer; }
+.wv-check .ui-chevron { margin-left: auto; }
+.wv-check-text { flex: 1; min-width: 0; font-size: var(--meta-size); line-height: var(--meta-line); }
+.wv-check-text strong { font-weight: 600; }
+.wv-check-sub { color: var(--text-muted); }
+.wv-dot { flex: none; width: var(--dot); height: var(--dot); border-radius: 50%; background: var(--problem); }
+.wv-actions { display: flex; align-items: center; gap: var(--space-2); }
+.wv-suggest-all { flex: 1; min-height: var(--pill-height); border: var(--pill-outline) solid var(--action); border-radius: var(--radius-pill); background: none; color: var(--action); font: inherit; font-size: var(--label-size); font-weight: 700; cursor: pointer; }
+.wv-share { flex: none; width: var(--touch); min-height: var(--pill-height); display: inline-flex; align-items: center; justify-content: center; border: 1px solid var(--pill-outline-soft); border-radius: var(--radius-pill); background: var(--surface); color: var(--action); cursor: pointer; }
+.wv-compact { flex: none; display: inline-flex; align-items: center; gap: var(--space-2); min-height: var(--touch); font-size: var(--label-size); color: var(--text-muted); }
+.wv-suggest-all:active, .wv-share:active, .wv-check:active { background: var(--pressed); }
+
+/* ── Days ── */
+.wv { display: flex; flex-direction: column; gap: var(--day-gap-detailed); }
+.wv.is-compact { gap: var(--space-2); }
+.wv-day { display: flex; flex-direction: column; gap: var(--space-2); position: relative; }
+.wv.is-compact .wv-day { gap: var(--space-1); }
+.wv-date { display: flex; flex-direction: column; gap: var(--space-1); padding: 0 var(--space-1); }
+.wv-date-line { display: flex; align-items: center; flex-wrap: wrap; gap: var(--space-2); font-size: var(--label-size); line-height: var(--label-line); color: var(--text-muted); }
+.wv.is-compact .wv-date-line { flex-wrap: nowrap; white-space: nowrap; min-width: 0; }
+.wv-dow { font-size: var(--meta-size); font-weight: 700; color: var(--text); }
+.wv-out { font-weight: 600; }
+.wv-label { font-size: var(--label-size); font-weight: 700; color: var(--text); border: var(--pill-outline) solid var(--text); border-radius: var(--radius-pill); padding: 0 var(--space-2); }
+.wv-note { font-size: var(--label-size); line-height: var(--label-line); color: var(--text); }
+.wv-note-inline { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; color: var(--text); }
+
+.wv-tile { display: flex; align-items: center; background: var(--surface); border-radius: var(--radius-control); border: var(--problem-outline) solid transparent; }
+.wv-tile.has-problem { border-color: var(--problem); }
+.wv-tile > .ui-chevron { margin-right: var(--space-3); }
+.wv-tile-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: var(--space-half); padding: var(--space-3) var(--space-2) var(--space-3) var(--space-4); border: 0; background: none; font: inherit; color: var(--text); text-align: left; cursor: pointer; border-radius: var(--radius-control); }
+.wv-tile-body:active { background: var(--pressed); }
+.wv.is-compact .wv-tile-body { padding: var(--space-2) var(--space-1) var(--space-2) var(--space-3); min-height: var(--touch); justify-content: center; }
+.wv-mains { font-size: var(--title-size); line-height: var(--title-line); font-weight: 600; }
+.wv.is-compact .wv-mains { font-size: var(--body-size); line-height: var(--body-line); }
+.wv-sides { font-size: var(--meta-size); line-height: var(--meta-line); color: var(--text-muted); }
+.wv-tile-line { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.wv.is-compact .wv-sides { font-size: var(--label-size); }
+.wv-concern { font-size: var(--label-size); line-height: var(--label-line); font-weight: 600; color: var(--problem); }
+.wv-handle { align-self: stretch; flex: none; width: var(--handle-w); display: flex; align-items: center; justify-content: center; border-left: 1px solid var(--divider); color: var(--control-border); touch-action: none; cursor: grab; }
+.wv-day.is-dragged { z-index: 5; }
+.wv-day.is-dragged .wv-tile { box-shadow: var(--float-shadow); }
+.wv-day.is-target .wv-tile, .wv-day.is-target .wv-open { border-color: var(--action); }
+.wv-day.is-past .wv-tile, .wv-day.is-past .wv-date { opacity: 0.55; }
+
+.wv-open { display: flex; align-items: center; gap: var(--space-3); min-height: var(--block-button); padding: 0 var(--space-2) 0 var(--space-4); border: var(--pill-outline) dashed var(--open-dash); border-radius: var(--radius-control); box-sizing: border-box; }
+.wv.is-compact .wv-open { min-height: var(--touch); padding-left: var(--space-3); }
+.wv-open-label { flex: 1; min-height: var(--touch); padding: 0; border: 0; background: none; font: inherit; font-size: var(--body-size); color: var(--text-muted); text-align: left; cursor: pointer; }
+
+.wv-extend { display: flex; align-items: center; gap: var(--space-3); }
+.wv-add-day { flex: 1; min-height: var(--touch); border: var(--pill-outline) dashed var(--open-dash); border-radius: var(--radius-control); background: none; font: inherit; font-size: var(--meta-size); color: var(--text-muted); cursor: pointer; }
+.wv-remove-day { min-height: var(--touch); border: 0; background: none; font: inherit; font-size: var(--meta-size); color: var(--text-muted); cursor: pointer; }
+
+/* ── Sheets ── */
+.wv-sheet { display: flex; flex-direction: column; gap: var(--space-4); }
+.wv-section { display: flex; flex-direction: column; gap: var(--space-2); }
+.wv-plate-sub { display: flex; align-items: center; flex-wrap: wrap; gap: var(--space-1) var(--space-2); margin-top: calc(-1 * var(--space-2)); padding: 0 var(--space-1); font-size: var(--meta-size); line-height: var(--meta-line); color: var(--text-muted); }
+.wv-link { min-height: var(--touch); padding: 0; border: 0; background: none; font: inherit; font-size: var(--body-size); font-weight: 600; color: var(--action); cursor: pointer; }
+.wv-plate-sub .wv-link { min-height: var(--touch-compact); font-size: var(--meta-size); }
+.wv-link-text { color: var(--action); font-weight: 600; }
+.wv-fix { display: flex; align-items: center; gap: var(--space-3); min-height: var(--block-button); padding: var(--space-1) var(--space-2) var(--space-1) var(--space-4); background: var(--surface); border-radius: var(--radius-group); }
+.wv-fix-text { flex: 1; min-width: 0; font-size: var(--body-size); line-height: var(--body-line); padding: var(--space-2) 0; }
+.wv-fix.is-plate .wv-fix-text { color: var(--problem); font-weight: 600; }
+.wv-dish { position: relative; display: flex; align-items: flex-start; gap: var(--space-1); padding: var(--space-2) var(--space-1) var(--space-2) var(--space-4); }
+.wv-dish + .wv-dish::before, .wv-adds::before { content: ""; position: absolute; top: 0; left: 0; right: 0; height: 1px; background: var(--divider); }
+.wv-dish-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: var(--space-half); padding: var(--space-2) 0; }
+.wv-dish-name { padding: 0; border: 0; background: none; font: inherit; font-size: var(--body-size); line-height: var(--body-line); color: var(--text); text-align: left; cursor: pointer; }
+.wv-dish-name.is-main { font-size: var(--title-size); line-height: var(--title-line); font-weight: 600; }
+.wv-inline-chev { color: var(--control-border); font-weight: 400; }
+.wv-replace { color: var(--action); }
+.wv-remove { color: var(--text-muted); }
+.wv-adds { position: relative; display: flex; gap: var(--space-5); padding: 0 var(--space-4); }
+.wv-pick .ui-row-main { gap: var(--space-half); }
+.wv-more { align-self: flex-start; padding: 0 var(--space-4); }
+.wv-pool { padding: 0 var(--space-4); }
+.wv-target { position: relative; display: flex; align-items: center; gap: var(--space-3); min-height: var(--row-height); padding: var(--space-1) var(--space-3) var(--space-1) var(--space-4); }
+.wv-target + .wv-target::before { content: ""; position: absolute; top: 0; left: 0; right: 0; height: 1px; background: var(--divider); }
+.wv-target-day { flex: none; white-space: nowrap; font-size: var(--label-size); font-weight: 700; color: var(--text-muted); }
+.wv-target-dishes { flex: 1; min-width: 0; display: flex; flex-direction: column; font-size: var(--meta-size); }
+.wv-target-actions { flex: none; display: flex; gap: var(--space-1); }
+/* Swap / Add: outlined 32px pills; the row's padding makes up the 44px tap height. */
+.wv-mini { min-height: var(--pill-height); padding: 0 var(--space-3); border: 1px solid var(--control-border); border-radius: var(--radius-pill); background: var(--surface); color: var(--action); font: inherit; font-size: var(--label-size); font-weight: 700; white-space: nowrap; cursor: pointer; }
+.wv-mini:active { background: var(--pressed); }
+.wv-mini:disabled { opacity: 0.45; cursor: default; }

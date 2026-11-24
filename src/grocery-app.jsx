@@ -333,7 +333,7 @@ export default function App() {
           onPendingLoaded={() => setPendingAtStart(false)}
           onOpenPending={p => setGrab({ kind: "meal", name: p.job?.name || "", link: p.job?.link || "", text: p.job?.text || "", role: p.job?.role || "main" })}
           persistDB={persistDB} />}
-        {tab==="plan" && <PlanTab key={db.activePlan || "current"} db={db} persistDB={persistDB} headerIcons={headerIcons} onDone={() => setTab("home")} />}
+        {tab==="plan" && <PlanTab key={db.activePlan || "current"} db={db} persistDB={persistDB} headerIcons={headerIcons} onDone={() => setTab("home")} onOpenMeal={id => openLibraryPage({ kind: "meal", id })} />}
         {tab==="library" && <LibraryTab db={db} persistDB={persistDB} view={libraryView} setView={setLibraryView} headerIcons={headerIcons} resetKey={tabTaps} openRequest={libOpen} onGrab={init => setGrab(init)} />}
         <TabBarSpacer />
         <TabBar tabs={TABS} active={tab} onSelect={id => {

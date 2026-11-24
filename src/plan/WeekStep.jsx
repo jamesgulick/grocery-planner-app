@@ -18,7 +18,7 @@ import { Clocks, Group, Row, Segmented, Switch } from "../ui/kit.jsx";
 
 const WD = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 export const dayTitle = iso => { const d = new Date(iso + "T12:00:00"); return `${WD[d.getDay()]} ${d.getDate()}`; };
-const forecastWords = fc => (!fc ? null : fc.pop >= 50 ? `rain ${fc.pop}%` : fc.pop >= 30 ? `${fc.hi}° · rain ${fc.pop}%` : `${fc.hi}°`);
+export const forecastWords = fc => (!fc ? null : fc.pop >= 50 ? `rain ${fc.pop}%` : fc.pop >= 30 ? `${fc.hi}° · rain ${fc.pop}%` : `${fc.hi}°`);
 export const TIME_OPTIONS = [
   { value: "none", label: "Little", n: 1 }, { value: "some", label: "Some", n: 2 }, { value: "much", label: "Lots", n: 3 },
 ];

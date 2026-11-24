@@ -23,6 +23,8 @@ const PATHS = {
   down:     <><path d="M12 4v14" /><path d="M6 12l6 6 6-6" /></>,   /* Import (Data sheet) */
   up:       <><path d="M12 20V6" /><path d="M6 12l6-6 6 6" /></>,   /* Back up (Data sheet) */
   trash:    <><path d="M4 7h16" /><path d="M10 11v6M14 11v6" /><path d="M6 7l1 13a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1l1-13" /><path d="M9 7V4h6v3" /></>,
+  replace:  <><path d="M21 12a9 9 0 0 1-15.5 6.2L3 16" /><path d="M3 21v-5h5" /><path d="M3 12a9 9 0 0 1 15.5-6.2L21 8" /><path d="M21 3v5h-5" /></>,   /* ↻ replace a dish: the only meaning */
+  handle:   <><circle cx="9" cy="6" r="1.3" /><circle cx="15" cy="6" r="1.3" /><circle cx="9" cy="12" r="1.3" /><circle cx="15" cy="12" r="1.3" /><circle cx="9" cy="18" r="1.3" /><circle cx="15" cy="18" r="1.3" /></>,   /* drag a night (Compact) */
   cart:     <><circle cx="9" cy="20" r="1.4" /><circle cx="18" cy="20" r="1.4" /><path d="M2 3h3l2.6 12.2a1 1 0 0 0 1 .8h9.6a1 1 0 0 0 1-.8L21 7H6.1" /></>,   /* pickup: groceries arrive this day */
 };
 
@@ -166,8 +168,9 @@ export const IconButton = ({ icon, label, onClick, dot }) => (
 );
 
 // ── Switch: the only binary control ──────────────────────────────────────────
-export const Switch = ({ checked, onChange, label }) => (
-  <button type="button" role="switch" aria-checked={!!checked} aria-label={label} className="ui-switch" onClick={() => onChange(!checked)} />
+// `small`: the header size, 40×24 (Compact, Reasons; decided 11/12). Settings rows use the full size.
+export const Switch = ({ checked, onChange, label, small }) => (
+  <button type="button" role="switch" aria-checked={!!checked} aria-label={label} className={small ? "ui-switch ui-switch-small" : "ui-switch"} onClick={() => onChange(!checked)} />
 );
 
 // ── Segmented choice ─────────────────────────────────────────────────────────
@@ -183,7 +186,9 @@ export const Segmented = ({ options, value, onChange, label, tone }) => (
 // `onCancel`: a typed sheet (Cancel · Done); `doneDisabled` greys Done out.
 // `sub` is a line under the title; `footer` is pinned under the scrolling body (a primary action).
 // `onInfo`: an ⓘ after the title, for a sheet that is one field (Who eats it, How often).
-export function Sheet({ title, sub, onClose, onBack, backLabel, onCancel, onDone, doneDisabled, doneLabel = "Done", footer, onInfo, children }) {
+// `headerExtra`: a control just before Done (the plate sheet's Reasons switch).
+// `noDone`: a sheet whose only way out is Cancel (the Replace and Move sheets).
+export function Sheet({ title, sub, onClose, onBack, backLabel, onCancel, onDone, doneDisabled, doneLabel = "Done", footer, onInfo, headerExtra, noDone, children }) {
   const [drag, setDrag] = useState(0);
   const start = useRef(null);
   useEffect(() => {
@@ -207,8 +212,9 @@ export function Sheet({ title, sub, onClose, onBack, backLabel, onCancel, onDone
             {sub ? <div className="ui-sheet-titles"><h2 className="ui-heading">{title}</h2><span className="ui-meta">{sub}</span></div>
               : onInfo ? <div className="ui-sheet-titles ui-sheet-title-info"><h2 className="ui-heading">{title}</h2><InfoButton label={title} onClick={onInfo} /></div>
               : <h2 className="ui-heading">{title}</h2>}
+            {headerExtra}
             {onCancel && <button type="button" className="ui-sheet-done ui-sheet-cancel" onClick={onCancel}>Cancel</button>}
-            <button type="button" className="ui-sheet-done" disabled={doneDisabled} onClick={onDone || onClose}>{doneLabel}</button>
+            {!noDone && <button type="button" className="ui-sheet-done" disabled={doneDisabled} onClick={onDone || onClose}>{doneLabel}</button>}
           </div>
         </div>
         <div className="ui-sheet-body">{children}</div>
