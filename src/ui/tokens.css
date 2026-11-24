@@ -34,6 +34,7 @@
   --space-4: 16px;
   --space-5: 24px;
   --space-6: 32px;
+  --week-gap: 18px;          /* between Home's week cards (11/24) */
   --gutter: var(--space-4);
   /* Grid (decided 11/14, board "Spacing and grid"): 4px base, scale 4 · 8 · 12 · 16 · 24
      (2 only inside two-line text stacks). Two left edges: 16 (gutter, card edges, titles,

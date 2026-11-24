@@ -265,15 +265,15 @@ export function HomeScreen({ db, dataDot, onOpenData, onOpenSettings, onOpenPlan
           )}
         </section>
 
-        {/* No "Coming up" heading (11/18): the Tonight band and each green week row say what they are. */}
-        <section aria-label="Coming up">
-          <Group>
+        {/* No "Coming up" heading (11/18): the Tonight band and each green week row say what they are.
+            One card per week, each headed by its green band (board "Week cards", 11/24). */}
+        <section aria-label="Coming up" className="home-weeks">
             {groups.map(({ week, rows }) => {
               const state = weekState(week, today);
               const showDays = state.kind !== "unplanned";
               const away = showDays ? awayLines(rows, week.plan, db) : {};
               return (
-                <div key={week.start} className="home-week-group">
+                <Group key={week.start}>
                   <WeekRow week={week} state={state} today={today}
                     pickup={week.plan ? pickupDateOf(week.plan) : !upcoming.key && week.start === upcoming.start ? upcoming.date : null}
                     onOpen={() => openWeek(week)} onContinue={() => continueWeek(week, state)} />
@@ -293,10 +293,9 @@ export function HomeScreen({ db, dataDot, onOpenData, onOpenSettings, onOpenPlan
                       </button>
                     );
                   })}
-                </div>
+                </Group>
               );
             })}
-          </Group>
         </section>
 
         <div className="home-share-spacer" aria-hidden="true" />
