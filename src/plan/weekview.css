@@ -55,7 +55,7 @@
 
 .wv-extend { display: flex; align-items: center; gap: var(--space-3); }
 .wv-add-day { flex: 1; min-height: var(--touch); border: var(--pill-outline) dashed var(--open-dash); border-radius: var(--radius-control); background: none; font: inherit; font-size: var(--meta-size); color: var(--text-muted); cursor: pointer; }
-.wv-remove-day { min-height: var(--touch); border: 0; background: none; font: inherit; font-size: var(--meta-size); color: var(--text-muted); cursor: pointer; }
+.wv-remove-day { flex: none; white-space: nowrap; min-height: var(--touch); border: 0; background: none; font: inherit; font-size: var(--meta-size); color: var(--text-muted); cursor: pointer; }
 
 /* ── Sheets ── */
 .wv-sheet { display: flex; flex-direction: column; gap: var(--space-4); }

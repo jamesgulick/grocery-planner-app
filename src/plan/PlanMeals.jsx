@@ -430,12 +430,14 @@ function PlanMeals({ mealPlan, plates, setMealPlan, restoreMeals, commitMealToPl
         );
       })}
       {canExtend && weekStartDate && (extraDays < MAX_EXTRA_DAYS || extraDays > 0) && (
+        // In date order (11/24): Remove <last day> on the left, the dashed + Add <next day> filling
+        // the rest on the right, on the thumb side like Next. Each shows only when allowed.
         <div className="wv-extend">
-          {extraDays < MAX_EXTRA_DAYS && <button type="button" className="wv-add-day" onClick={() => setExtraDays(extraDays + 1)}>+ Add {dayTitle(addDaysISO(weekStartDate, 7 + extraDays))}</button>}
           {extraDays > 0 && (() => {
             const last = `X${extraDays}`;
             return <button type="button" className="wv-remove-day" onClick={() => { if (!(mealPlan[last] || []).length || window.confirm(`Remove ${dayTitle(dateOfDay[last])}? Its meals and notes go with it.`)) setExtraDays(extraDays - 1); }}>Remove {dayTitle(dateOfDay[last])}</button>;
           })()}
+          {extraDays < MAX_EXTRA_DAYS && <button type="button" className="wv-add-day" onClick={() => setExtraDays(extraDays + 1)}>+ Add {dayTitle(addDaysISO(weekStartDate, 7 + extraDays))}</button>}
         </div>
       )}
 
