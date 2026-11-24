@@ -20,8 +20,8 @@ const PATHS = {
   search:   <><circle cx="11" cy="11" r="6" /><path d="M20 20l-4.5-4.5" /></>,
   close:    <><path d="M6 6l12 12" /><path d="M18 6L6 18" /></>,
   plus:     <><path d="M12 5v14" /><path d="M5 12h14" /></>,
-  down:     <><path d="M12 4v14" /><path d="M6 12l6 6 6-6" /></>,   /* Import (Data sheet) */
-  up:       <><path d="M12 20V6" /><path d="M6 12l6-6 6 6" /></>,   /* Back up (Data sheet) */
+  down:     <><path d="M12 4v11" /><path d="M7.5 10.5l4.5 4.5 4.5-4.5" /><path d="M5 15v4a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-4" /></>,   /* Import, Paste data (Data sheet): into a tray */
+  up:       <><path d="M12 15V4" /><path d="M7.5 8.5L12 4l4.5 4.5" /><path d="M5 15v4a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-4" /></>,   /* Back up (Data sheet): out of a tray */
   trash:    <><path d="M4 7h16" /><path d="M10 11v6M14 11v6" /><path d="M6 7l1 13a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1l1-13" /><path d="M9 7V4h6v3" /></>,
   replace:  <><path d="M21 12a9 9 0 0 1-15.5 6.2L3 16" /><path d="M3 21v-5h5" /><path d="M3 12a9 9 0 0 1 15.5-6.2L21 8" /><path d="M21 3v5h-5" /></>,   /* ↻ replace a dish: the only meaning */
   handle:   <><circle cx="9" cy="6" r="1.3" /><circle cx="15" cy="6" r="1.3" /><circle cx="9" cy="12" r="1.3" /><circle cx="15" cy="12" r="1.3" /><circle cx="9" cy="18" r="1.3" /><circle cx="15" cy="18" r="1.3" /></>,   /* drag a night (Compact) */

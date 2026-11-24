@@ -81,7 +81,6 @@
   --pill-inset: 6px;                      /* (44 - 32) / 2 */
   --step-num: 20px;                       /* the AI steps' number disc (11/23) */
   --step-num-size: 11px;
-  --step-pad: 6px;                        /* pill edge to the disc */
   --dot: 8px;
   --dot-inset: 9px;
   --seg-gap: 2px;                         /* between segments in the track */

@@ -44,20 +44,20 @@
 .sync-chev { flex: none; color: var(--control-border); font-size: var(--label-size); font-weight: 400; }
 .sync-welcome { margin-bottom: var(--space-2); }
 /* AI round trips (standing rules, 11/23): a title with the status on the right, then
-   ① Send to AI › ② Re-import as outlined pills (32px face, 44px tap area, as .sync-pill). The
-   lit step has a green outline and a filled number; the other is grey; a sent step 1 shows ✓. */
-.trip { font-family: var(--font); display: flex; flex-direction: column; gap: var(--space-1); padding: var(--space-3) var(--space-4) var(--space-2); }
+   ① Send to AI › ② Re-import as two outlined pills sharing the row (44px face, boards "Data
+   sheet", "Plan › Week · Calendar sync", "Grab"). The lit step has a green outline, green text
+   and a filled number; the other is grey with a grey disc; a sent step 1 shows ✓. */
+.trip { font-family: var(--font); display: flex; flex-direction: column; gap: var(--space-2); padding: var(--space-3) var(--space-4); }
 .trip-card { background: var(--surface); border-radius: var(--radius-group); }
 .trip-head { display: flex; align-items: baseline; justify-content: space-between; gap: var(--space-3); }
 .trip-title { font-size: var(--body-size); line-height: var(--body-line); color: var(--text); }
 .trip-status { flex: none; font-size: var(--meta-size); line-height: var(--meta-line); color: var(--text-muted); white-space: nowrap; }
-.trip-steps { display: flex; align-items: center; gap: var(--space-2); flex-wrap: wrap; }
-.step-pill { flex: none; display: inline-flex; align-items: center; gap: var(--space-2); font: inherit; font-size: var(--label-size); font-weight: 700; color: var(--text-muted); background: transparent; cursor: pointer;
-  min-height: var(--touch); padding: 0 var(--space-3) 0 var(--step-pad); border: 0; border-top: var(--pill-inset) solid transparent; border-bottom: var(--pill-inset) solid transparent;
-  background-clip: padding-box; box-shadow: inset 0 0 0 var(--pill-outline) var(--control-border); border-radius: calc(var(--pill-height) / 2) / calc(var(--touch) / 2); }
+.trip-steps { display: flex; align-items: center; gap: var(--space-2); }
+.step-pill { flex: 1 1 0; min-width: 0; display: inline-flex; align-items: center; justify-content: center; gap: var(--space-2); font: inherit; font-size: var(--body-size); font-weight: 600; color: var(--text-muted); background: var(--surface); cursor: pointer; white-space: nowrap;
+  min-height: var(--touch); padding: 0 var(--space-3); border: 0; box-shadow: inset 0 0 0 var(--pill-outline) var(--pill-outline-soft); border-radius: var(--radius-pill); }
 .step-pill.is-lit { color: var(--action); box-shadow: inset 0 0 0 var(--pill-outline) var(--action); }
-.step-num { display: inline-flex; align-items: center; justify-content: center; width: var(--step-num); height: var(--step-num); border-radius: 50%; box-sizing: border-box; border: var(--pill-outline) solid currentColor; font-size: var(--step-num-size); line-height: 1; }
-.step-pill.is-lit .step-num { background: var(--action); border-color: var(--action); color: var(--on-action); }
+.step-num { flex: none; display: inline-flex; align-items: center; justify-content: center; width: var(--step-num); height: var(--step-num); border-radius: 50%; box-sizing: border-box; background: var(--track); color: var(--text-muted); font-size: var(--step-num-size); font-weight: 700; line-height: 1; }
+.step-pill.is-lit .step-num { background: var(--action); color: var(--on-action); }
 .step-pill:active { background-color: var(--pressed); }
 .step-pill:focus-visible { outline: 2px solid var(--action); outline-offset: 2px; }
 .step-pill:disabled { opacity: 0.4; cursor: default; }
@@ -84,6 +84,6 @@
 .grab-recipe { min-height: var(--grab-recipe-h); }
 
 /* Grab's AI pair (11/16): the Calendar sync row's [Send to AI] › [Re-import], centred. */
-.grab-ai { display: flex; align-items: center; justify-content: center; gap: var(--space-2); flex-wrap: wrap; }
+.grab-ai { display: flex; align-items: center; gap: var(--space-2); flex-wrap: wrap; }
 
 .grab-ai .reimport-error { flex-basis: 100%; text-align: center; }
