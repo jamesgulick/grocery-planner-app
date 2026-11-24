@@ -57,10 +57,12 @@ export const RowChevron = ({ top }) => (
 );
 
 // `dim`: a row that's past (an ended away stretch) reads in the muted colour.
-export function Row({ title, sub, value, onClick, trailing, dim, strong, problem, chevron = !!onClick }) {
+// `icon`: an action row (board "Data sheet"): a leading icon and the title in the action colour.
+export function Row({ title, sub, value, onClick, trailing, dim, strong, problem, icon, chevron = !!onClick }) {
   const body = (
     <>
-      <span className="ui-row-main"><span className={strong ? "ui-strong" : undefined}>{title}</span>{sub && <span className={problem ? "ui-meta ui-problem" : "ui-meta"}>{sub}</span>}</span>
+      {icon && <span className="ui-row-icon" aria-hidden="true"><Icon name={icon} size={22} /></span>}
+      <span className="ui-row-main"><span className={icon ? "ui-row-action" : strong ? "ui-strong" : undefined}>{title}</span>{sub && <span className={problem ? "ui-meta ui-problem" : "ui-meta"}>{sub}</span>}</span>
       {value != null && <span className="ui-row-value">{value}</span>}
       {trailing}
       {chevron && <RowChevron top={!!sub} />}

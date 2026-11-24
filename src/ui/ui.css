@@ -18,6 +18,8 @@
 .ui-row + .ui-row::before { content: ""; position: absolute; top: 0; left: 0; right: 0; height: 1px; background: var(--divider); pointer-events: none; }
 button.ui-row { cursor: pointer; }
 button.ui-row:active { background: var(--pressed); }
+.ui-row-icon { flex: none; display: inline-flex; color: var(--action); }
+.ui-row-action { color: var(--action); font-weight: 600; }
 .ui-row-main { flex: 1; min-width: 0; display: flex; flex-direction: column; padding: var(--space-3) 0; }
 .ui-row-value { color: var(--text-muted); font-size: var(--meta-size); }
 .ui-chevron { color: var(--control-border); flex: none; display: flex; }
@@ -131,7 +133,7 @@ button.ui-row:active { background: var(--pressed); }
 
 /* ── Outlined and delete buttons (full width, 52) ─────────────────────── */
 .ui-block-outline { background: var(--surface); color: var(--action); border: var(--pill-outline) solid var(--action); }
-.ui-block-delete-filled { background: var(--destructive); color: var(--on-action); }
+.ui-block-delete.ui-block-delete-filled { background: var(--destructive); color: var(--on-action); }
 .ui-sheet-title-info { flex-direction: row; align-items: center; gap: var(--space-1); }
 .ui-sheet-header .ui-sheet-title-info .ui-heading { flex: none; }
 .ui-block-delete { background: var(--surface); color: var(--destructive); border: var(--pill-outline) solid var(--destructive); display: flex; align-items: center; justify-content: center; gap: var(--space-2); }

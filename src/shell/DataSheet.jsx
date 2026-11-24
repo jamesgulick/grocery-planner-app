@@ -10,14 +10,23 @@ import { downloadBackup, exportFileName } from "../app/exportData.js";
 import { showToast } from "../ui/toast.js";
 import { extractJSON } from "../app/globals.js";
 import { DEFAULT_DB } from "../app/seed.js";
-import { Group, Icon, PillButton, Row, Sheet } from "../ui/kit.jsx";
+import { endDateFor, extraDaysOf } from "../engine/assembleInputs.js";
+import { DeleteButton, Group, Icon, PillButton, Row, Sheet } from "../ui/kit.jsx";
 import { ImportCheck } from "./ImportCheck.jsx";
 import { SyncRow, clipboardText, planFile } from "./SyncRow.jsx";
 
 const daysSince = iso => Math.floor((Date.now() - new Date(iso).getTime()) / 86400000);
+const MON = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+const shortDate = d => `${MON[d.getMonth()]} ${d.getDate()}`;
+// "Nov 11–17", or "Nov 28–Dec 4" across a month.
+const planRange = p => {
+  const a = new Date(p.weekStartDate + "T12:00:00"), b = new Date(endDateFor(p.weekStartDate, extraDaysOf(p)) + "T12:00:00");
+  return a.getMonth() === b.getMonth() ? `${shortDate(a)}–${b.getDate()}` : `${shortDate(a)}–${shortDate(b)}`;
+};
+const plural = (n, w) => `${n} ${w}${n === 1 ? "" : "s"}`;
 
 export function DataSheet({ db, persistDB, overdue, onClose }) {
-  const [page, setPage]       = useState("main");   // main | paste | confirm | reset
+  const [page, setPage]       = useState("main");   // main | paste | confirm | erase
   const [paste, setPaste]     = useState("");
   const [result, setResult]   = useState(null);     // { ok, text }
   const [pending, setPending] = useState(null);     // an import read and checked, awaiting "Load it"
@@ -60,10 +69,15 @@ export function DataSheet({ db, persistDB, overdue, onClose }) {
     <ImportCheck device={db} prepared={pending} source={source} onLoad={load} onCancel={() => { setPending(null); setPage("main"); }} />
   );
 
+  // Status (board "Data sheet"): "Last backup · Nov 4" ("· Today"; overdue adds "· 9 days ago"),
+  // then the counts.
   const exported = db.lastExportedAt;
+  const ago = exported ? daysSince(exported) : null;
+  const when = !exported ? null : ago <= 0 ? "Today" : shortDate(new Date(exported));
   const status = !exported ? "Not backed up yet"
-    : daysSince(exported) <= 0 ? "Backed up today"
-    : `Last backup ${daysSince(exported)} day${daysSince(exported) === 1 ? "" : "s"} ago`;
+    : `Last backup · ${when}${overdue && ago > 0 ? ` · ${plural(ago, "day")} ago` : ""}`;
+  const plans = [db.plans?.current, db.plans?.next].filter(p => p?.weekStartDate);
+  const counts = `${plural((db.meals || []).length, "meal")} · ${plural((db.ingredients || []).length, "item")} · ${plural(plans.length, "plan")}`;
 
   if (page === "paste") return (
     <Sheet title="Paste data" onClose={onClose} onBack={() => setPage("main")}>
@@ -73,19 +87,30 @@ export function DataSheet({ db, persistDB, overdue, onClose }) {
     </Sheet>
   );
 
-  if (page === "reset") return (
-    <Sheet title="Reset to example data?" onClose={onClose} onBack={() => setPage("main")} doneLabel="Cancel">
-      <div className="ui-meta">Your meals, items and plans on this device are replaced by the example data. Back up first if you might want them.</div>
-      <Group><Row title="Reset to example data" onClick={() => { persistDB(DEFAULT_DB); onClose(); showToast("Example data loaded"); }} chevron={false} /></Group>
+  // Erase this device: the speed bump lists what goes. The device then shows the example
+  // data with "Import your file" (Home), as on a first visit.
+  if (page === "erase") return (
+    <Sheet title="Erase this device?" onClose={onClose} noDone>
+      <Group>
+        <Row title="Meals" value={(db.meals || []).length} />
+        <Row title="Items" value={(db.ingredients || []).length} />
+        <Row title="Plans" value={plans.length ? plans.map(planRange).join(", ") : "None"} />
+        <Row title="Last backup" value={when || "Never"} />
+      </Group>
+      <div className="lib-cant-undo">Can't be undone</div>
+      <div className="data-pair data-erase">
+        <button type="button" className="ui-block-button ui-block-plain" onClick={() => setPage("main")}>Cancel</button>
+        <button type="button" className="ui-block-button ui-block-delete ui-block-delete-filled" onClick={() => { persistDB(DEFAULT_DB); onClose(); showToast("Erased"); }}><Icon name="trash" size={20} />Erase</button>
+      </div>
     </Sheet>
   );
 
   return (
-    <Sheet title="Your data" onClose={onClose}>
+    <Sheet title="Data" onClose={onClose}>
       <Group>
-        <div className="shell-status">
-          <span className={overdue ? "ui-problem" : "ui-meta"}>{overdue && <span className="ui-problem-dot" aria-hidden="true" />}{status}</span>
-          {overdue && <span className="ui-meta"> · changes since</span>}
+        <div className={overdue ? "shell-status is-overdue" : "shell-status"}>
+          {overdue && <span className="shell-status-dot" aria-hidden="true" />}
+          <span className="shell-status-text"><span className={overdue ? "ui-problem" : undefined}>{status}</span><span className="ui-meta">{counts}</span></span>
         </div>
       </Group>
       <div className="data-pair">
@@ -97,9 +122,9 @@ export function DataSheet({ db, persistDB, overdue, onClose }) {
       {result && <div className={result.ok ? "ui-meta" : "ui-problem"}>{result.text}</div>}
       <Group>
         <SyncRow db={db} persistDB={persistDB} inCard />
-        <Row title="Paste data" sub="From the clipboard" onClick={pasteData} />
+        <Row icon="down" title="Paste data" sub="From the clipboard" onClick={pasteData} chevron={false} />
       </Group>
-      <Group><Row title="Reset to example data…" onClick={() => setPage("reset")} chevron={false} /></Group>
+      <DeleteButton onClick={() => setPage("erase")}>Erase this device</DeleteButton>
     </Sheet>
   );
 }
