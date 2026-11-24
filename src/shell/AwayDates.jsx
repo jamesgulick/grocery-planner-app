@@ -30,7 +30,7 @@ function StretchEditor({ stretch, family, onCancel, onSave, onDelete }) {
   const save = () => { if (canSave) onSave({ who, from, to: open ? null : untilShown }); };
 
   return (
-    <Sheet title={editing ? "Away dates" : "Add away dates"} onClose={onCancel} onCancel={onCancel} onDone={save} doneDisabled={!canSave}>
+    <Sheet tall title={editing ? "Away dates" : "Add away dates"} onClose={onCancel} onCancel={onCancel} onDone={save} doneDisabled={!canSave}>
       <Field label="Who">
         <div className="ui-chips">
           {family.map(f => <Chip key={f.name} on={who.includes(f.name)} onClick={() => toggle(f.name)}>{f.name}</Chip>)}
@@ -79,7 +79,7 @@ export function AwayDates({ db, persistDB, onClose, onBack }) {
 
   const list = sortStretches(ranges, today);
   return (
-    <Sheet title="Away dates" onClose={onClose} onBack={onBack} backLabel="Settings">
+    <Sheet tall title="Away dates" onClose={onClose} onBack={onBack} backLabel="Settings">
       {list.length > 0 && (
         <Group>
           {list.map(r => <Row key={r.id} title={r.name} sub={stretchDates(r, today)} dim={isEnded(r, today)} onClick={() => setEditing(r)} />)}

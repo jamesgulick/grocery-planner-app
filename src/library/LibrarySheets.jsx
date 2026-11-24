@@ -66,7 +66,7 @@ export function PairsSheet({ meal, meals, chosen, onChange, onClose }) {
   const mains = isSide(meal);   // a side picks mains (bold); a main picks sides
   const row = m => <CheckRow key={m.id} on={chosen.includes(m.id)} strong={mains} onClick={() => onChange(toggled(chosen, m.id))}>{m.name}</CheckRow>;
   return (
-    <Sheet title={mains ? "Goes with" : "Sides that go with it"} onClose={onClose}>
+    <Sheet tall title={mains ? "Goes with" : "Sides that go with it"} onClose={onClose}>
       <SearchField value={q} onChange={setQ} placeholder={mains ? "Search mains" : "Search sides"} />
       {on.length > 0 && <Field label={`Chosen · ${chosen.length}`}><Group>{on.map(row)}</Group></Field>}
       {off.length > 0 && <Field label={mains ? "Mains" : "Sides"}><Group>{off.map(row)}</Group></Field>}
@@ -192,14 +192,14 @@ export function IngredientsSheet({ meal, db, startPasting, onChange, onCreate, o
   const exact = items.some(i => i.name.trim().toLowerCase() === t);
   const row = i => <CheckRow key={i.id} on={chosen.includes(i.id)} onClick={() => onChange(toggled(chosen, i.id))}>{i.name}</CheckRow>;
   if (pasting) return (
-    <Sheet title="Paste a recipe" onClose={onClose} onBack={() => setPasting(false)}>
+    <Sheet tall title="Paste a recipe" onClose={onClose} onBack={() => setPasting(false)}>
       <RecipePaste chosen={chosen} meals={db.meals} ingredients={items} pantryIgnore={db.settings?.pantryIgnore}
         onSetPantryIgnore={onSetPantryIgnore} onCancel={() => setPasting(false)}
         onAdd={(ids, created) => { onCreate(created, ids); setPasting(false); }} />
     </Sheet>
   );
   return (
-    <Sheet title="Ingredients" onClose={onClose}>
+    <Sheet tall title="Ingredients" onClose={onClose}>
       <SearchField value={q} onChange={setQ} placeholder="Search items" />
       {t && !exact && (
         <Group><Row title={`Add “${q.trim()}”`} onClick={() => { onCreate([{ name: q.trim() }]); setQ(""); }} /></Group>

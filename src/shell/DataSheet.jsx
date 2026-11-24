@@ -80,33 +80,15 @@ export function DataSheet({ db, persistDB, overdue, onClose }) {
   const counts = `${plural((db.meals || []).length, "meal")} · ${plural((db.ingredients || []).length, "item")} · ${plural(plans.length, "plan")}`;
 
   if (page === "paste") return (
-    <Sheet title="Paste data" onClose={onClose} onBack={() => setPage("main")}>
+    <Sheet tall title="Paste data" onClose={onClose} onBack={() => setPage("main")}>
       <textarea className="ui-textarea" aria-label="Data" value={paste} onChange={e => { setPaste(e.target.value); setResult(null); }} />
       {result && !result.ok && <div className="ui-problem">{result.text}</div>}
       <PillButton onClick={fromPaste} disabled={!paste.trim()}>Import</PillButton>
     </Sheet>
   );
 
-  // Erase this device: the speed bump lists what goes. The device then shows the example
-  // data with "Import your file" (Home), as on a first visit.
-  if (page === "erase") return (
-    <Sheet title="Erase this device?" onClose={onClose} noDone>
-      <Group>
-        <Row title="Meals" value={(db.meals || []).length} />
-        <Row title="Items" value={(db.ingredients || []).length} />
-        <Row title="Plans" value={plans.length ? plans.map(planRange).join(", ") : "None"} />
-        <Row title="Last backup" value={when || "Never"} />
-      </Group>
-      <div className="lib-cant-undo">Can't be undone</div>
-      <div className="data-pair data-erase">
-        <button type="button" className="ui-block-button ui-block-plain" onClick={() => setPage("main")}>Cancel</button>
-        <button type="button" className="ui-block-button ui-block-delete ui-block-delete-filled" onClick={() => { persistDB(DEFAULT_DB); onClose(); showToast("Erased"); }}><Icon name="trash" size={20} />Erase</button>
-      </div>
-    </Sheet>
-  );
-
   return (
-    <Sheet title="Data" onClose={onClose}>
+    <Sheet tall title="Data" onClose={onClose}>
       <Group>
         <div className={overdue ? "shell-status is-overdue" : "shell-status"}>
           {overdue && <span className="shell-status-dot" aria-hidden="true" />}
@@ -125,6 +107,23 @@ export function DataSheet({ db, persistDB, overdue, onClose }) {
         <Row icon="down" title="Paste data" sub="From the clipboard" onClick={pasteData} chevron={false} />
       </Group>
       <DeleteButton onClick={() => setPage("erase")}>Erase this device</DeleteButton>
+      {/* Erase this device: a fit sheet over this one listing what goes. The device then shows the
+          example data with "Import your file" (Home), as on a first visit. */}
+      {page === "erase" && (
+        <Sheet title="Erase this device?" onClose={() => setPage("main")} noDone>
+          <Group>
+            <Row title="Meals" value={(db.meals || []).length} />
+            <Row title="Items" value={(db.ingredients || []).length} />
+            <Row title="Plans" value={plans.length ? plans.map(planRange).join(", ") : "None"} />
+            <Row title="Last backup" value={when || "Never"} />
+          </Group>
+          <div className="lib-cant-undo">Can't be undone</div>
+          <div className="data-pair data-erase">
+            <button type="button" className="ui-block-button ui-block-plain" onClick={() => setPage("main")}>Cancel</button>
+            <button type="button" className="ui-block-button ui-block-delete ui-block-delete-filled" onClick={() => { persistDB(DEFAULT_DB); onClose(); showToast("Erased"); }}><Icon name="trash" size={20} />Erase</button>
+          </div>
+        </Sheet>
+      )}
     </Sheet>
   );
 }

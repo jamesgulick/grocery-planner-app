@@ -50,8 +50,9 @@
 .trip { font-family: var(--font); display: flex; flex-direction: column; gap: var(--space-2); padding: var(--space-3) var(--space-4); }
 .trip-card { background: var(--surface); border-radius: var(--radius-group); }
 .trip-head { display: flex; align-items: baseline; justify-content: space-between; gap: var(--space-3); }
-.trip-title { font-size: var(--body-size); line-height: var(--body-line); color: var(--text); }
-.trip-status { flex: none; font-size: var(--meta-size); line-height: var(--meta-line); color: var(--text-muted); white-space: nowrap; }
+/* Card titles (11/24): 16px semibold, any status on the same line at the right, 13px muted. */
+.trip-title { font-size: var(--card-title-size); line-height: var(--card-title-line); font-weight: var(--card-title-weight); color: var(--text); }
+.trip-status { flex: none; font-size: var(--label-size); line-height: var(--label-line); font-weight: 400; color: var(--text-muted); white-space: nowrap; }
 .trip-steps { display: flex; align-items: center; gap: var(--space-2); }
 .step-pill { flex: 1 1 0; min-width: 0; display: inline-flex; align-items: center; justify-content: center; gap: var(--space-2); font: inherit; font-size: var(--body-size); font-weight: 600; color: var(--text-muted); background: var(--surface); cursor: pointer; white-space: nowrap;
   min-height: var(--touch); padding: 0 var(--space-3); border: 0; box-shadow: inset 0 0 0 var(--pill-outline) var(--pill-outline-soft); border-radius: var(--radius-pill); }

@@ -33,7 +33,7 @@ function RecordRow({ row, onOpen }) {
 
 function PreviewSheet({ meal, db, onClose }) {
   return (
-    <Sheet title={meal.name} sub="New meal · in this file" onClose={onClose}>
+    <Sheet tall title={meal.name} sub="New meal · in this file" onClose={onClose}>
       {mealPreview(meal, db).map(g => (
         <Section key={g.label} label={g.label}>
           <Group>{g.rows.map(([label, value], k) => <Row key={k} title={label || value} value={label ? value : null} />)}</Group>
@@ -46,7 +46,7 @@ function PreviewSheet({ meal, db, onClose }) {
 function PeekSheet({ row, onClose }) {
   const p = row.peek;
   return (
-    <Sheet title={row.name} sub="Filled in by this file" onClose={onClose}>
+    <Sheet tall title={row.name} sub="Filled in by this file" onClose={onClose}>
       {p.added.length > 0 && <Section label="Added"><Group>{p.added.map(a => <Row key={a.label} title={a.label} value={a.value} />)}</Group></Section>}
       {p.changed.length > 0 && <Section label="Changed"><Group>{p.changed.map(a => <Row key={a.label} title={a.label} value={a.value} />)}</Group></Section>}
       {p.ingredients.length > 0 && (
@@ -109,7 +109,7 @@ export function ImportCheck({ device, prepared, onLoad, onCancel, fromClipboard 
   );
 
   return (
-    <Sheet title="Load this file?" sub={sub} onClose={onCancel} doneLabel="Cancel"
+    <Sheet tall title="Load this file?" sub={sub} onClose={onCancel} doneLabel="Cancel"
       footer={<BlockButton onClick={() => { clearPending(); settleTrips(); onLoad(); }}>{stale ? "Load anyway" : "Load"}</BlockButton>}>
       {r?.purposeLine && <div className="ui-group"><RecordRow row={{ name: "Different job", line: r.purposeLine, problem: true }} /></div>}
       {stale && (

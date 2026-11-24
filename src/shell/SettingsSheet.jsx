@@ -55,20 +55,20 @@ export function SettingsSheet({ db, persistDB, onClose }) {
     );
   }
   if (page === "ai") return (
-    <Sheet title="Instructions for AI" onClose={onClose} onBack={back} backLabel="Settings">
+    <Sheet tall title="Instructions for AI" onClose={onClose} onBack={back} backLabel="Settings">
       <Group>
         {AI_JOBS.map(j => <Row key={j.key} title={j.label} value={isSet(j.key) ? "Set" : "Not set"} onClick={() => setPage("ai:" + j.key)} />)}
       </Group>
     </Sheet>
   );
   if (page === "family") return (
-    <Sheet title="Family" onClose={onClose} onBack={back} backLabel="Settings">
+    <Sheet tall title="Family" onClose={onClose} onBack={back} backLabel="Settings">
       <Group>{family.map(f => <Row key={f.name} title={f.name} />)}</Group>
     </Sheet>
   );
   if (page === "away") return <AwayDates db={db} persistDB={persistDB} onClose={onClose} onBack={back} />;
   if (page === "day") return (
-    <Sheet title="Usual shopping day" onClose={onClose} onBack={back} backLabel="Settings">
+    <Sheet tall title="Usual shopping day" onClose={onClose} onBack={back} backLabel="Settings">
       <Group>
         {WEEKDAYS.map(d => (
           <Row key={d} title={d} onClick={() => upd("shoppingDay", d)} chevron={false}
@@ -78,14 +78,14 @@ export function SettingsSheet({ db, persistDB, onClose }) {
     </Sheet>
   );
   if (page === "help") return (
-    <Sheet title="Help" onClose={onClose} onBack={back} backLabel="Settings">
+    <Sheet tall title="Help" onClose={onClose} onBack={back} backLabel="Settings">
       <div className="shell-legacy"><ManageHelp /></div>
     </Sheet>
   );
 
   const setCount = AI_JOBS.filter(j => isSet(j.key)).length;
   return (
-    <Sheet title="Settings" onClose={onClose}>
+    <Sheet tall title="Settings" onClose={onClose}>
       <Section label="Planning">
         <Group>
           <Row title="Usual shopping day" value={settings.shoppingDay || "Wednesday"} onClick={() => setPage("day")} />

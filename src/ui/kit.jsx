@@ -1,7 +1,7 @@
 // Primitives (polish Phase 2, SPEC §4): each built when the first screen needs it. Styled
 // only by class names in ui.css, which reads tokens.css; the lint rule bans raw colours
 // and sizes here. Real <button>s wherever something can be acted on.
-import React, { useEffect, useRef, useState } from "react";
+import React, { createContext, useContext, useEffect, useRef, useState } from "react";
 
 // ── Icons: inline stroke SVG, currentColor ────────────────────────────────────
 const PATHS = {
@@ -190,20 +190,32 @@ export const Segmented = ({ options, value, onChange, label, tone }) => (
 // `onInfo`: an ⓘ after the title, for a sheet that is one field (Who eats it, How often).
 // `headerExtra`: a control just before Done (the plate sheet's Reasons switch).
 // `noDone`: a sheet whose only way out is Cancel (the Replace and Move sheets).
-export function Sheet({ title, sub, onClose, onBack, backLabel, onCancel, onDone, doneDisabled, doneLabel = "Done", footer, onInfo, headerExtra, noDone, children }) {
+// `tall` (board "Sheet heights", 11/24): opens at a fixed top whatever its content (Data,
+// Settings, import check, Paste, Grab, the day sheet, Week check, long pick lists). Otherwise a
+// fit sheet: on the bottom, sized to its content, never taller than a tall one (one-field pick
+// sheets, ⓘ, Pickup, speed bumps). A sheet opened over another sits 12px lower.
+const SheetDepth = createContext(0);
+const openSheets = [];   // Escape closes only the top one
+export function Sheet({ title, sub, onClose, onBack, backLabel, onCancel, onDone, doneDisabled, doneLabel = "Done", footer, onInfo, headerExtra, noDone, tall, children }) {
   const [drag, setDrag] = useState(0);
   const start = useRef(null);
+  const depth = useContext(SheetDepth);
+  const closeRef = useRef(onClose);
+  closeRef.current = onClose;
   useEffect(() => {
-    const onKey = e => { if (e.key === "Escape") onClose(); };
+    const me = {};
+    openSheets.push(me);
+    const onKey = e => { if (e.key === "Escape" && openSheets[openSheets.length - 1] === me) closeRef.current(); };
     window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [onClose]);
+    return () => { window.removeEventListener("keydown", onKey); openSheets.splice(openSheets.indexOf(me), 1); };
+  }, []);
   const onTouchStart = e => { start.current = e.touches[0].clientY; };
   const onTouchMove  = e => { if (start.current != null) setDrag(Math.max(0, e.touches[0].clientY - start.current)); };
   const onTouchEnd   = () => { if (drag > 80) onClose(); setDrag(0); start.current = null; };
   return (
     <div className="ui-sheet-scrim" onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
-      <section role="dialog" aria-modal="true" aria-label={title} className="ui-sheet" style={drag ? { transform: `translateY(${drag}px)`, transition: "none" } : undefined}>
+      <section role="dialog" aria-modal="true" aria-label={title} className={tall ? "ui-sheet is-tall" : "ui-sheet"}
+        style={{ "--sheet-depth": depth, ...(drag ? { transform: `translateY(${drag}px)`, transition: "none" } : null) }}>
         <div onTouchStart={onTouchStart} onTouchMove={onTouchMove} onTouchEnd={onTouchEnd}>
           <div className="ui-sheet-grabber" aria-hidden="true" />
           {onBack && backLabel && (
@@ -219,8 +231,10 @@ export function Sheet({ title, sub, onClose, onBack, backLabel, onCancel, onDone
             {!noDone && <button type="button" className="ui-sheet-done" disabled={doneDisabled} onClick={onDone || onClose}>{doneLabel}</button>}
           </div>
         </div>
-        <div className="ui-sheet-body">{children}</div>
-        {footer && <div className="ui-sheet-footer">{footer}</div>}
+        <SheetDepth.Provider value={depth + 1}>
+          <div className="ui-sheet-body">{children}</div>
+          {footer && <div className="ui-sheet-footer">{footer}</div>}
+        </SheetDepth.Provider>
       </section>
     </div>
   );

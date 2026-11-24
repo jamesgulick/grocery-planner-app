@@ -25,6 +25,7 @@
   --body-size: 15px;         --body-line: 20px;         --body-weight: 400;
   --meta-size: 14px;         --meta-line: 18px;         --meta-weight: 400;
   --label-size: 13px;        --label-line: 16px;        --label-weight: 600;
+  --card-title-size: 16px;   --card-title-line: 21px;   --card-title-weight: 600;   /* titles inside cards (11/24) */
 
   /* Space, radius, size */
   --space-half: 2px;          /* two-line text stacks only (name over subline) */
@@ -98,7 +99,8 @@
   --seg-height: 34px;                     /* in a 40px track: 3px padding */
   --seg-pad: 3px;
   --radius-sheet: 20px;
-  --sheet-top-gap: 48px;
+  --sheet-top: 98px;                      /* a tall sheet's top; a fit sheet's ceiling (11/24) */
+  --sheet-stack: 12px;                    /* a sheet over a sheet sits this much lower */
   --grabber-w: 36px;
   --grabber-h: 5px;
   --tab-height: 48px;

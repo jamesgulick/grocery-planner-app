@@ -467,7 +467,7 @@ function PlanMeals({ mealPlan, plates, setMealPlan, restoreMeals, commitMealToPl
           onCancel={() => setMoveFrom(null)} />
       )}
       {checkOpen && (
-        <Sheet title="Week check" onClose={() => setCheckOpen(false)}>
+        <Sheet tall title="Week check" onClose={() => setCheckOpen(false)}>
           <WeekCheckBody observations={weekCheck.observations || []} fillNotes={fillNotes} nothingToBuy={nothingToBuy} dayShort={dayShort}
             hasMain={d => dishesOf(d).some(x => x.role === "main")} onFix={suggestSides} onOpenMeal={onOpenMeal ? id => { setCheckOpen(false); onOpenMeal(id); } : null} />
         </Sheet>
@@ -488,7 +488,7 @@ function PlateSheet({ iso, past, dishes, level, note, concerns, learnMode, setLe
   );
   const ordered = [...dishes.filter(d => d.role === "main"), ...dishes.filter(d => d.role === "side")];
   return (
-    <Sheet title={longTitle(iso)} onClose={onClose}
+    <Sheet tall title={longTitle(iso)} onClose={onClose}
       headerExtra={<label className="wv-compact">Reasons<Switch small checked={learnMode} onChange={setLearnMode} label="Reasons" /></label>}>
       <div className="wv-sheet">
         {sub}
@@ -555,7 +555,7 @@ function ChooseSheet({ choose, allMeals, recencyValue, recencyLabel, present, su
   const wontEat = m => present.filter(n => (m.preferences || []).some(p => p.person === n && p.pref === "dislikes"));
   const exact = q.trim() && allMeals.some(m => m.name.trim().toLowerCase() === q.trim().toLowerCase());
   return (
-    <Sheet title={choose.title} onClose={onCancel} onCancel={onCancel} noDone>
+    <Sheet tall title={choose.title} onClose={onCancel} onCancel={onCancel} noDone>
       <div className="wv-sheet">
         {sugg && (sugg.options.length > 0 || sugg.note) && (
           <section className="wv-section">
@@ -623,7 +623,7 @@ function MoveSheet({ title, dishes, mealRec, targets, onGo, onCancel }) {
   const ordered = [...mains, ...dishes.filter(d => d.role === "side")];
   const idxs = dishes.map(d => d.idx).filter(i => on.includes(i));
   return (
-    <Sheet title={title} onClose={onCancel} onCancel={onCancel} noDone>
+    <Sheet tall title={title} onClose={onCancel} onCancel={onCancel} noDone>
       <div className="wv-sheet">
         <section className="wv-section">
           <div className="ui-section-label">{label}</div>

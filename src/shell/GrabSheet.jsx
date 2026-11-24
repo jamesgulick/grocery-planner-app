@@ -68,7 +68,7 @@ export function GrabSheet({ db, persistDB, init = {}, onClose, onOpenPage }) {
   const [s1, s2] = stepStates(sentAt);
 
   return (
-    <Sheet title={kind === "meal" ? "Grab a meal" : "Grab an item"} onClose={onClose} doneLabel="Cancel"
+    <Sheet tall title={kind === "meal" ? "Grab a meal" : "Grab an item"} onClose={onClose} doneLabel="Cancel"
       footer={kind === "meal" ? (
         <div className="grab-footer">
           <BlockButton onClick={() => { if (canSave) { saveMeal(); onClose(); } }} disabled={!canSave}>Save</BlockButton>
