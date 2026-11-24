@@ -98,7 +98,7 @@ export function WeekStep({ sub, db, persistDB, days, dates, dayNotes, setDayNote
       <Group>
         {days.map(day => (
           <div key={day} className="wk-day">
-            <div className="wk-day-head"><span className="wk-dow">{dayTitle(dates[day])}</span></div>
+            <div className="wk-day-head"><span className="wk-dow">{dayTitle(dates[day])}</span>{lines[day].length > 0 && <span className="wk-out">{lines[day].join(" · ")}</span>}</div>
             {(dayNotes?.[day] || "").trim() && <div className="wk-note-read">{dayNotes[day]}</div>}
             <div className="wk-chips">
               {family.map(name => {

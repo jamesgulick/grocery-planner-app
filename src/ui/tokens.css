@@ -130,6 +130,7 @@
   --destructive: #B42318;                 /* deleting a whole record, and nothing else */
   --disabled: #A1A1A6;                    /* a disabled text button (Done) */
   --chip-height: 40px;
+  --day-strip: #F0F0EC;                   /* Plan › Week day header strip (board "Week day headers", 11/24) */
   --who-chip-h: 34px;                     /* Who's home chips (board "Who's home columns", 11/24) */
   --who-chip-min: 56px;
   --who-chip-gap: 5px;
