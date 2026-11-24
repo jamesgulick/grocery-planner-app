@@ -52,7 +52,7 @@
 .trip-head { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); }
 /* Card titles (11/24): 16px semibold, any status on the same line at the right, 13px muted. */
 .trip-title { font-size: var(--card-title-size); line-height: var(--card-title-line); font-weight: var(--card-title-weight); color: var(--text); }
-.trip-name { display: inline-flex; align-items: center; gap: var(--space-1); min-width: 0; }
+.trip-name { display: inline-flex; align-items: center; min-width: 0; }
 .grab-ai-title { font-size: var(--body-size); line-height: var(--body-line); font-weight: 600; color: var(--text); }
 .grab-footer > .trip-name { align-self: flex-start; margin-top: var(--space-2); }
 .trip-info p { margin: 0; font-size: var(--body-size); line-height: var(--body-line); color: var(--text); }

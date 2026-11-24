@@ -135,13 +135,18 @@ button.ui-row:active { background: var(--pressed); }
 /* ── Outlined and delete buttons (full width, 52) ─────────────────────── */
 .ui-block-outline { background: var(--surface); color: var(--action); border: var(--pill-outline) solid var(--action); }
 .ui-block-delete.ui-block-delete-filled { background: var(--destructive); color: var(--on-action); }
-.ui-sheet-title-info { flex-direction: row; align-items: center; gap: var(--space-1); }
+.ui-sheet-title-info { flex-direction: row; align-items: center; gap: 0; }
 .ui-sheet-header .ui-sheet-title-info .ui-heading { flex: none; }
 .ui-block-delete { background: var(--surface); color: var(--destructive); border: var(--pill-outline) solid var(--destructive); display: flex; align-items: center; justify-content: center; gap: var(--space-2); }
 
 /* ── ⓘ, field labels ──────────────────────────────────────────────────── */
-.ui-field-label { display: flex; align-items: center; gap: var(--space-1); }
-.ui-info { display: inline-flex; align-items: center; justify-content: center; width: var(--touch-compact); height: var(--touch-compact); margin: calc(-1 * var(--space-2)) 0; padding: 0; border: 0; background: none; color: var(--text-muted); cursor: pointer; }
+.ui-field-label { display: flex; align-items: center; }
+/* ⓘ spacing (11/24): the 15px circle's edge sits 6px after its label, everywhere. The 30px tap
+   area is centred on it and overlaps the gap and padding with negative margins, so it never
+   pushes the icon away from the text. Its parent adds no gap of its own. */
+.ui-info { flex: none; display: inline-flex; align-items: center; justify-content: center; width: var(--info-tap); height: var(--info-tap); padding: 0; border: 0; background: none; color: var(--text-muted); cursor: pointer;
+  margin: calc((var(--info-icon) - var(--info-tap)) / 2); margin-left: calc(var(--info-gap) - (var(--info-tap) - var(--info-icon)) / 2); }
+.ui-info svg { width: calc(var(--info-icon) * 24 / 18); height: calc(var(--info-icon) * 24 / 18); }   /* the circle is 18 of the icon's 24 */
 .ui-strong { font-weight: 600; }
 
 /* ── Check box + check row ────────────────────────────────────────────── */
