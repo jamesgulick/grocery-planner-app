@@ -93,6 +93,8 @@
   --day-gap-detailed: 26px;               /* week view: between days in Detailed (11/12 night) */
   --open-dash: #C9C9C4;                   /* week view: an open day's dashed tile */
   --pill-outline-soft: #D6D6D1;           /* Week check pill (11/14) */
+  --wv-action-h: 36px;                    /* week view: Suggest all and share (board "Week view") */
+  --wv-share-w: 40px;
   --handle-w: 32px;                       /* Compact: the drag handle column */
   --seg-height: 34px;                     /* in a 40px track: 3px padding */
   --seg-pad: 3px;

@@ -10,8 +10,10 @@
 .wv-check-sub { color: var(--text-muted); }
 .wv-dot { flex: none; width: var(--dot); height: var(--dot); border-radius: 50%; background: var(--problem); }
 .wv-actions { display: flex; align-items: center; gap: var(--space-2); }
-.wv-suggest-all { flex: 1; min-height: var(--pill-height); border: var(--pill-outline) solid var(--action); border-radius: var(--radius-pill); background: none; color: var(--action); font: inherit; font-size: var(--label-size); font-weight: 700; cursor: pointer; }
-.wv-share { flex: none; width: var(--touch); min-height: var(--pill-height); display: inline-flex; align-items: center; justify-content: center; border: 1px solid var(--pill-outline-soft); border-radius: var(--radius-pill); background: var(--surface); color: var(--action); cursor: pointer; }
+.wv-suggest-all { position: relative; flex: 1; min-height: var(--wv-action-h); border: var(--pill-outline) solid var(--action); border-radius: var(--radius-pill); background: none; color: var(--action); font: inherit; font-size: var(--label-size); font-weight: 700; cursor: pointer; }
+.wv-share { position: relative; flex: none; width: var(--wv-share-w); min-height: var(--wv-action-h); display: inline-flex; align-items: center; justify-content: center; border: 1px solid var(--pill-outline-soft); border-radius: var(--radius-pill); background: var(--surface); color: var(--action); cursor: pointer; }
+/* Drawn 36 tall (board); the tap area reaches 44 above and below the pill. */
+.wv-suggest-all::after, .wv-share::after { content: ""; position: absolute; left: 0; right: 0; top: calc((var(--wv-action-h) - var(--touch)) / 2); bottom: calc((var(--wv-action-h) - var(--touch)) / 2); }
 .wv-compact { flex: none; display: inline-flex; align-items: center; gap: var(--space-2); min-height: var(--touch); font-size: var(--label-size); color: var(--text-muted); }
 .wv-suggest-all:active, .wv-share:active, .wv-check:active { background: var(--pressed); }
 
