@@ -78,6 +78,9 @@ button.ui-row:active { background: var(--pressed); }
 .ui-sheet.is-tall { height: calc(100% - var(--sheet-top) - var(--sheet-depth, 0) * var(--sheet-stack)); }
 .ui-sheet-grabber { width: var(--grabber-w); height: var(--grabber-h); border-radius: var(--grabber-h); background: var(--control-border); opacity: 0.6; margin: var(--space-2) auto 0; }   /* centred by margin: its parent (the swipe area) is a block, not flex */
 .ui-sheet-header { display: flex; align-items: center; gap: var(--space-2); padding: var(--space-1) var(--space-2) var(--space-1) var(--gutter); flex: none; touch-action: none; }
+.ui-sheet-header.is-top { align-items: flex-start; }
+.ui-sheet-header.is-top .ui-heading { padding-top: calc((var(--touch) - var(--heading-line)) / 2); }
+.ui-sheet-sub-below { display: flex; flex-direction: column; gap: var(--space-half); padding: 0 var(--gutter) var(--space-1); }
 .ui-sheet-titles { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: var(--space-half); }
 .ui-sheet-footer { flex: none; padding: var(--space-2) var(--gutter) 0; border-top: 1px solid var(--divider); }
 .ui-sheet-header .ui-heading { flex: 1; min-width: 0; }

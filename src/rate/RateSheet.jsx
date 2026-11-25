@@ -50,7 +50,7 @@ export function RateSheet({ db, persistDB, items, onClose, onOpenMeal }) {
   ) : <BlockButton onClick={() => finish(null, null)}>{last ? "Done" : "Next"}</BlockButton>;
 
   return (
-    <Sheet tall title={`How did ${meal.name} go?`} doneLabel="Close" onClose={onClose} footer={footer}
+    <Sheet tall title={`How did ${meal.name} go?`} doneLabel="Close" onClose={onClose} footer={footer} subBelow
       headerExtra={items.length > 1 ? <span className="rate-step">{at + 1} of {items.length}</span> : null}
       sub={<>{meta}{(item.why || onOpenMeal) && (
         <span className="rate-why">
