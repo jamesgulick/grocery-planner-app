@@ -6,7 +6,7 @@
 //   Days: a date header ABOVE the plate (day, clocks, who's out, forecast and grill ok, labels,
 //     the note), then a white tile (mains bold, "+ sides", leftovers, plate concerns in amber)
 //     or a dashed open tile (Open → pick, Suggest → the engine's pick). Compact: one-line
-//     headers and a drag handle; a drag swaps whole nights.
+//     headers and a drag handle; a drag swaps whole nights, and only the meal card moves (11/24).
 //   Sheets: the plate sheet (one night: dishes with ↻ / ×, + Add main / side, Move, Clear),
 //     Replace (Suggested · 3 from the engine's ranking, then Browse), Move (pick dishes, then
 //     Swap or Add on another day) and Week check (concerns with fixes, nothing-to-buy lines,
@@ -395,8 +395,7 @@ function PlanMeals({ mealPlan, plates, setMealPlan, restoreMeals, commitMealToPl
         const changed = !past && dishes.length > 0 && changedSinceOrder(day);
         const isDragged = drag?.from === day, isTarget = drag && drag.over === day && drag.from !== day;
         return (
-          <section key={day} data-day={day} className={["wv-day", past && "is-past", isDragged && "is-dragged", isTarget && "is-target"].filter(Boolean).join(" ")}
-            style={isDragged ? { transform: `translateY(${drag.dy}px)` } : undefined}>
+          <section key={day} data-day={day} className={["wv-day", past && "is-past", isDragged && "is-dragged", isTarget && "is-target"].filter(Boolean).join(" ")}>
             <DayBar onOpen={() => setDetail({ day, stacked: false })}>
               <div className="wv-date-line day-line">
                 <span className="day-dow">{iso ? dayTitle(iso) : daysFull[days.indexOf(day)]}</span>
@@ -416,7 +415,8 @@ function PlanMeals({ mealPlan, plates, setMealPlan, restoreMeals, commitMealToPl
                 </>}
               </div>
             ) : (
-              <div className={concerns.length || changed ? "wv-tile has-problem" : "wv-tile"}>
+              <div className={concerns.length || changed ? "wv-tile has-problem" : "wv-tile"}
+                style={isDragged ? { transform: `translateY(${drag.dy}px)` } : undefined}>
                 <button type="button" className="wv-tile-body" onClick={() => setPlateDay(day)}>
                   {compact ? (
                     <span className="wv-tile-line"><span className="wv-mains">{mains.map(d => d.name).join(", ") || "—"}</span>{sides.length > 0 && <span className="wv-sides">  + {sides.map(d => d.name).join(", ")}</span>}</span>
