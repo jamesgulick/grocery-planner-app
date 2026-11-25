@@ -2,7 +2,7 @@
 import React, { useState } from "react";
 import { createPortal } from "react-dom";
 import { addDaysISO } from "../app/globals.js";
-import { notHomeCooked } from "../library/libraryModel.js";
+import { buyWord, notHomeCooked } from "../library/libraryModel.js";
 import { dayTitle } from "./WeekStep.jsx";
 import "./confirm.css";
 import { multiMealCounts } from "../app/pills.js";
@@ -15,7 +15,7 @@ import { showToast } from "../ui/toast.js";
 import { latestDB } from "../app/latestDB.js";
 import { isExplicitNo, isOrdering, isRelevant } from "./ordering.js";
 
-function PlanConfirm({ headSlot, onOpenMeal, onOpenItem, registerHeld, inFlow, registerNext, mode = "confirm", onUpdateItem, keptIds = [], checkedIds, setOrdering, addedOff = [], setAddedOff, addedItems, setAddedItems, stapleFlags, quantities = {}, setQuantities, mealPlan, meals, ingredients, onNext, onFinish, db, persistDB, days, daysFull }) {
+function PlanConfirm({ headSlot, onOpenMeal, onOpenItem, registerHeld, inFlow, registerNext, mode = "confirm", onUpdateItem, keptIds = [], addedIds = [], onAddFromLibrary, checkedIds, setOrdering, addedOff = [], setAddedOff, addedItems, setAddedItems, stapleFlags, quantities = {}, setQuantities, mealPlan, meals, ingredients, onNext, onFinish, db, persistDB, days, daysFull }) {
   const [newItem, setNewItem]   = useState("");
   const [adding, setAdding]     = useState(false);
   const [view, setView]         = useState("meal");
@@ -58,13 +58,19 @@ function PlanConfirm({ headSlot, onOpenMeal, onOpenItem, registerHeld, inFlow, r
   const [showSkipped, setShowSkipped] = useState(false);
   const inArrival = i => arrival.listed.has(i.id);
 
+  // "Added" (brief §5, 11/25): Library items added here or reclassified to As needed while
+  // checked (addedIds), and any older As needed item kept with no meal (keptIds). They show
+  // only in Added, never also in their own group.
+  const isAdded = id => addedIds.includes(id) || (keptIds.includes(id) && !mealIngIds.has(id));
+  const addedReal = [...new Set([...addedIds, ...keptIds])].filter(isAdded)
+    .map(id => ingredients.find(i => i.id === id)).filter(i => i && isRelevant(i, st));
   const seen = new Set();
-  const dedup = arr => arr.filter(i => { if(seen.has(i.id)) return false; seen.add(i.id); return true; });
+  const dedup = arr => arr.filter(i => { if(seen.has(i.id) || isAdded(i.id)) return false; seen.add(i.id); return true; });
   const alwaysNeeded  = dedup(ingredients.filter(i => i.tier==="always" && inArrival(i)));
   const stapleNeeded  = dedup(ingredients.filter(i => i.tier==="staple" && inArrival(i)));
   const mealNeeded    = dedup(ingredients.filter(i => i.tier==="specialty" && inArrival(i)));
   const allListed     = [...alwaysNeeded, ...stapleNeeded, ...mealNeeded];
-  const skippedRows   = ingredients.filter(i => arrival.skipped.has(i.id)).sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity:"base" }));
+  const skippedRows   = ingredients.filter(i => arrival.skipped.has(i.id) && !isAdded(i.id)).sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity:"base" }));
   // Authoritative set of what's actually being ordered right now. Count, copy, save and
   // the shared check all read this, so they can't disagree with the checkboxes.
   const byTier        = arr => [...arr.filter(i => i.tier==="always"), ...arr.filter(i => i.tier==="staple"), ...arr.filter(i => i.tier==="specialty")];
@@ -322,8 +328,18 @@ function PlanConfirm({ headSlot, onOpenMeal, onOpenItem, registerHeld, inFlow, r
   const nothingToBuy = (days || []).flatMap((d, i) => (mealPlan[d] || []).map(n => ({ d, i, name: n.trim(), meal: meals.find(m => m.name === n) })))
     .filter(x => x.meal && !(x.meal.ingredients || []).length && !notHomeCooked(x.meal));
   const addItem = () => { const v = newItem.trim(); if (v) { setAddedItems(prev => [...prev, v]); setNewItem(""); } };
+  // "+ Add an item" searches the Library as you type (brief §5, 11/25): a match adds the real
+  // item to Added; one already being bought reads "Already on the list · <place>"; below the
+  // matches, Add "<text>" adds free text as before. Nothing new goes into the Library here.
+  const query = newItem.trim().toLowerCase();
+  const matches = !query ? [] : ingredients
+    .filter(i => query.split(/s+/).every(w => i.name.toLowerCase().includes(w)))
+    .sort((a, b) => (b.name.toLowerCase().startsWith(query) - a.name.toLowerCase().startsWith(query)) || a.name.localeCompare(b.name, undefined, { sensitivity: "base" }))
+    .slice(0, 8);
+  const placeOf = i => i.storageLocation && i.storageLocation !== "Unassigned" ? i.storageLocation : "No place";
+  const addMatch = ing => { onAddFromLibrary?.(ing); setNewItem(""); };
   const flatRows = [
-    ...allListed.map(i => ({ key: i.id, name: i.name, ing: i })),
+    ...[...allListed, ...addedReal].map(i => ({ key: i.id, name: i.name, ing: i })),
     ...addedItems.map((item, idx) => ({ key: "added" + idx, name: item, added: item })),
   ].sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: "base" }));
 
@@ -372,7 +388,10 @@ function PlanConfirm({ headSlot, onOpenMeal, onOpenItem, registerHeld, inFlow, r
             const ings = ingredients.filter(i => (meal.ingredients || []).includes(i.id) && inArrival(i) && i.tier === "specialty");
             return ings.length ? <CfGroup key={meal.id} label={meal.name}>{ings.map(i => <ItemRow key={i.id} ing={i} />)}</CfGroup> : null;
           })}
-          {addedItems.length > 0 && <CfGroup label="Added">{addedItems.map((item, idx) => <AddedRow key={idx} item={item} />)}</CfGroup>}
+          {(addedReal.length > 0 || addedItems.length > 0) && <CfGroup label="Added">
+            {addedReal.map(i => <ItemRow key={i.id} ing={i} />)}
+            {addedItems.map((item, idx) => <AddedRow key={idx} item={item} />)}
+          </CfGroup>}
         </> : flatRows.length > 0 && (
           <CfGroup>{flatRows.map(r => (r.ing ? <ItemRow key={r.key} ing={r.ing} flat /> : <AddedRow key={r.key} item={r.added} flat />))}</CfGroup>
         )}
@@ -388,11 +407,26 @@ function PlanConfirm({ headSlot, onOpenMeal, onOpenItem, registerHeld, inFlow, r
         )}
 
         {adding ? (
-          <div className="cf-add-field">
-            <input autoFocus className="cf-add-input" aria-label="Item name" placeholder="Item name" value={newItem} onChange={e => setNewItem(e.target.value)}
-              onKeyDown={e => { if (e.key === "Enter") addItem(); if (e.key === "Escape") { setNewItem(""); setAdding(false); } }}
-              onBlur={() => { if (!newItem.trim()) setAdding(false); }} />
-            <PillButton inline onClick={addItem}>Add</PillButton>
+          <div className="cf-add-box">
+            <div className="cf-add-field">
+              <input autoFocus className="cf-add-input" aria-label="Item name" placeholder="Item name" value={newItem} onChange={e => setNewItem(e.target.value)}
+                onKeyDown={e => { if (e.key === "Enter") addItem(); if (e.key === "Escape") { setNewItem(""); setAdding(false); } }}
+                onBlur={() => { if (!newItem.trim()) setAdding(false); }} />
+            </div>
+            {query && (
+              <div className="cf-card cf-matches">
+                {matches.map(i => {
+                  const on = buying(i);
+                  return (
+                    <button key={i.id} type="button" className="cf-match" disabled={on} onMouseDown={e => e.preventDefault()} onClick={() => addMatch(i)}>
+                      <span className="cf-name">{i.name}</span>
+                      <span className="cf-sub">{on ? `Already on the list · ${placeOf(i)}` : `${placeOf(i)} · ${buyWord(i)}`}</span>
+                    </button>
+                  );
+                })}
+                <button type="button" className="cf-match cf-match-free" onMouseDown={e => e.preventDefault()} onClick={addItem}>Add “{newItem.trim()}”</button>
+              </div>
+            )}
           </div>
         ) : <button type="button" className="cf-add" onClick={() => setAdding(true)}>+ Add an item</button>}
       </div>

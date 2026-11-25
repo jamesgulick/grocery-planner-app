@@ -47,7 +47,7 @@ export const PREF_OPTIONS = [
 // Buy: tier + stapleType shown as one four-way choice, in Inventory's words.
 export const BUY_OPTIONS = [
   { value: "always", label: "Always buy" }, { value: "weekly", label: "Weekly staple" },
-  { value: "slow", label: "Slow staple" }, { value: "meals", label: "For meals" },
+  { value: "slow", label: "Slow staple" }, { value: "meals", label: "As needed" },
 ];
 export const buyOf = i => (i.tier === "always" ? "always" : i.tier === "staple" ? (i.stapleType === "slow" ? "slow" : "weekly") : "meals");
 export const buyWord = i => BUY_OPTIONS.find(o => o.value === buyOf(i)).label;

@@ -40,7 +40,7 @@ const ITEM_FIELD_LABEL = { name: "Name", tier: "Buy", stapleType: "Buy", storage
 const EFFORT = { easy: "Little", medium: "Some", involved: "Lots" };
 const CADENCE = { weekly: "Weekly", biweekly: "Every 2 weeks", occasional: "Occasional" };
 const ROTATION = { in: "In rotation", experimental: "New", manual: "Hand-picked" };
-export const buyWords = i => (i.tier === "always" ? "Always buy" : i.tier === "staple" ? (i.stapleType === "slow" ? "Slow staple" : "Weekly staple") : "For meals");
+export const buyWords = i => (i.tier === "always" ? "Always buy" : i.tier === "staple" ? (i.stapleType === "slow" ? "Slow staple" : "Weekly staple") : "As needed");
 const placeWords = i => (i.storageLocation && i.storageLocation !== "Unassigned" ? i.storageLocation : "No place");
 
 function mealValue(m, f, ctx) {

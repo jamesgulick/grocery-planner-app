@@ -19,7 +19,7 @@ import {
 } from "./libraryModel.js";
 
 const MEAL_FILTERS = [{ value: "mains", label: "Mains" }, { value: "sides", label: "Sides" }];
-const ITEM_FILTERS = [{ value: "always", label: "Always" }, { value: "staples", label: "Staples" }, { value: "meals", label: "For meals" }];
+const ITEM_FILTERS = [{ value: "always", label: "Always" }, { value: "staples", label: "Staples" }, { value: "meals", label: "As needed" }];
 
 // Pages open as a stack (11/16): the back link names the screen you came from and returns to
 // it at its scroll position ("‹ Corn on the cob" after Item › Used in › meal). Tapping the

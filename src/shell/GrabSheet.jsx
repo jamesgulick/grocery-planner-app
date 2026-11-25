@@ -7,7 +7,7 @@
 //     "Add details" text (saves, then opens the meal page). A saved meal is New with Wanted
 //     soon on. Grab stays open after Send to AI (the app survives the trip, 11/16); Re-import
 //     opens the file picker, then "Load this file?", and loading closes Grab.
-//   Item: Name · Where it lives · How often (Always · Weekly · Slow; none = For meals).
+//   Item: Name · Where it lives · How often (Always · Weekly · Slow · As needed; none = As needed).
 //     [Add details] | [Save] side by side.
 import { useState } from "react";
 import { INVENTORY_LOCS, toSentenceCase } from "../app/globals.js";
@@ -39,7 +39,7 @@ export function GrabSheet({ db, persistDB, init = {}, onClose, onOpenPage }) {
   const [text, setText] = useState(init.text || "");
   const [role, setRole] = useState(init.role || "main");
   const [place, setPlace] = useState(null);
-  const [often, setOften] = useState(null);   // always | weekly | slow | null (For meals)
+  const [often, setOften] = useState(null);   // always | weekly | slow | needed | null (As needed)
   const clean = toSentenceCase(name.trim());
 
   const saveMeal = () => {
@@ -52,7 +52,7 @@ export function GrabSheet({ db, persistDB, init = {}, onClose, onOpenPage }) {
   };
   const saveItem = () => {
     const id = newId("i");
-    const buy = often === "always" ? { tier: "always" } : often ? { tier: "staple", stapleType: often } : { tier: "specialty" };
+    const buy = often === "always" ? { tier: "always" } : often === "weekly" || often === "slow" ? { tier: "staple", stapleType: often } : { tier: "specialty" };
     persistDB({ ...db, ingredients: [...(db.ingredients || []), { id, createdAt: new Date().toISOString(), name: clean, storageLocation: place || "Unassigned", ...buy, defaultQuantity: "" }] });
     showToast(`Grabbed ${clean}`);
     return id;
@@ -110,7 +110,7 @@ export function GrabSheet({ db, persistDB, init = {}, onClose, onOpenPage }) {
         </Field>
         <Field label="How often">
           <Segmented label="How often" value={often} onChange={v => setOften(often === v ? null : v)}
-            options={[{ value: "always", label: "Always" }, { value: "weekly", label: "Weekly" }, { value: "slow", label: "Slow" }]} />
+            options={[{ value: "always", label: "Always" }, { value: "weekly", label: "Weekly" }, { value: "slow", label: "Slow" }, { value: "needed", label: "As needed" }]} />
         </Field>
       </>}
     </Sheet>

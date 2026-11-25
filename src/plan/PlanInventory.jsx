@@ -36,7 +36,7 @@ function PlanInventory({ onOpenItem, loc, placed = {}, setPlaced, checkedIds, st
   const weeklyHere = weeklyAll.filter(i => !mealIngIds.has(i.id));
   const slowHere   = slowAll.filter(i => !mealIngIds.has(i.id));
   const mealHere   = [
-    ...locIngs.filter(i => i.tier === "specialty" && (mealIngIds.has(i.id) || keptIds.includes(i.id))),
+    ...locIngs.filter(i => i.tier === "specialty" && mealIngIds.has(i.id)),   // As needed with no meal: Confirm's "Added"
     ...weeklyAll.filter(i => mealIngIds.has(i.id)), ...slowAll.filter(i => mealIngIds.has(i.id)),
   ];
 
@@ -80,7 +80,6 @@ function PlanInventory({ onOpenItem, loc, placed = {}, setPlaced, checkedIds, st
     onUpdateItem(ing.id, patch);
     const to = patch.storageLocation;
     if (to && to !== ing.storageLocation && INVENTORY_LOCS.includes(to)) showToast(`${ing.name} goes in ${to} from now on`);
-    else if (patch.tier === "specialty" && ing.tier !== "specialty" && !mealIngIds.has(ing.id) && !buying(ing)) showToast(`${ing.name} is off this week's list`);
   };
   const applyPending = (extra = {}) => {
     const open = editId && ingredients.find(i => i.id === editId);

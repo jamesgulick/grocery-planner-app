@@ -36,6 +36,6 @@ export const exportVocab = () => ({
     { label: "Always buy", tier: "always" },
     { label: "Weekly staple", tier: "staple", stapleType: "weekly" },
     { label: "Slow staple", tier: "staple", stapleType: "slow" },
-    { label: "For meals", tier: "specialty" },
+    { label: "As needed", tier: "specialty" },
   ],
 });
