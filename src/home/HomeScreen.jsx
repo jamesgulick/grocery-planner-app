@@ -169,6 +169,12 @@ export function HomeScreen({ db, dataDot, onOpenData, onOpenSettings, onOpenPlan
       // Past the rolling window, keep going only to the end of a planned week already begun.
       if (iso > last && !(w.plan && iso < w.end && find(iso) === w)) break;
     }
+    // The week after the last planned one always has a card, its band only, even before its
+    // days reach the window (brief §7, 11/25). One at most: none when the list already ends
+    // on an unplanned week.
+    for (let n = 0; n < 3 && weekState(groups[groups.length - 1].week, today).kind !== "unplanned"; n++) {
+      groups.push({ week: find(groups[groups.length - 1].week.end), rows: [] });
+    }
     return { tonightWeek, groups };
   }, [plans, shoppingDay, today]);
 
