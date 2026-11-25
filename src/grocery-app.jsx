@@ -1,6 +1,6 @@
 // The app shell (App, header, tabs). The rest of the app lives in modules under
 // src/app, src/components, src/plan, src/manage and src/tonight (polish Phase 1.5).
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { buildExportDB, buildPublished, downloadBackup, previewImportOk, stripExportNodes } from "./app/exportData.js";
 import { IS_PREVIEW, PREVIEW_SLOT, extractJSON, formatSavedAt, todayLocalISO } from "./app/globals.js";
 import { pruneEnded } from "./app/awayDates.js";
@@ -105,7 +105,17 @@ export default function App() {
       }
     } catch { /* no URL params */ }
   }, []);
-  const openLibraryPage = p => { setTab("library"); setLibraryView(p.kind === "item" ? "items" : "meals"); setLibOpen({ ...p, n: Date.now() }); };
+  // `from`: the screen a page was opened from ({ label, tab, y, weekView }), so its back link
+  // reads "‹ <label>" and returns there at the same scroll position (Back link, 11/16).
+  const openLibraryPage = (p, from = null) => { setTab("library"); setLibraryView(p.kind === "item" ? "items" : "meals"); setLibOpen({ ...p, n: Date.now(), from }); };
+  // The week view standalone (stage 4e): opened from Home, it lives under Plan (the lit tab shows
+  // where a screen lives, 11/18). { day, fromHome, n } or null for the Plan flow.
+  const [weekView, setWeekView] = useState(null);
+  const homeY = useRef(0);
+  const returnY = useRef(null);
+  const returnTo = from => { if (from.tab === "plan") setWeekView(from.weekView || null); returnY.current = from.y || 0; setTab(from.tab); };
+  // Runs after the screen's own scroll-to-top, so a return lands where you left it.
+  useLayoutEffect(() => { if (returnY.current != null) { window.scrollTo(0, returnY.current); returnY.current = null; } }, [tab, weekView]);
   const [sheet, setSheet]         = useState(null);       // "data" | "settings" | null
   const [libraryView, setLibraryView] = useState("meals"); // Library: Meals | Items
   const [loading, setLoading]     = useState(true);
@@ -243,6 +253,7 @@ export default function App() {
   // Plan's Welcome, where next week is started.
   // From Home: open a week's plan (at a step), or start one for an unplanned week (`start`).
   const openPlan = (key, atStep, start) => {
+    setWeekView(null);
     const plans = db.plans || {};
     if (!key || !plans[key]) {
       const next = start && startPlan(db, start);
@@ -328,18 +339,26 @@ export default function App() {
           </div>
         )}
         {tab==="home" && <HomeScreen db={db} dataDot={dataDot} onOpenData={() => setSheet("data")} onOpenSettings={() => setSheet("settings")} onOpenPlan={openPlan}
+          onOpenWeekView={(key, day = null) => {
+            homeY.current = window.scrollY;
+            if (key !== db.activePlan) persistDB({ ...db, activePlan: key }, { background: true });
+            setWeekView({ day, fromHome: !!day, n: Date.now() }); setTab("plan");
+          }}
           pending={pendingAtStart ? loadPending() : null}
           onDismissPending={() => { clearPending(); setPendingAtStart(false); }}
           onPendingLoaded={() => setPendingAtStart(false)}
           onOpenPending={p => setGrab({ kind: "meal", name: p.job?.name || "", link: p.job?.link || "", text: p.job?.text || "", role: p.job?.role || "main" })}
           persistDB={persistDB} />}
-        {tab==="plan" && <PlanTab key={db.activePlan || "current"} db={db} persistDB={persistDB} headerIcons={headerIcons} onDone={() => setTab("home")} onOpenMeal={id => openLibraryPage({ kind: "meal", id })} />}
-        {tab==="library" && <LibraryTab db={db} persistDB={persistDB} view={libraryView} setView={setLibraryView} headerIcons={headerIcons} resetKey={tabTaps} openRequest={libOpen} onGrab={init => setGrab(init)} />}
+        {tab==="plan" && <PlanTab key={(db.activePlan || "current") + (weekView ? "-week" + weekView.n : "")} db={db} persistDB={persistDB} headerIcons={headerIcons} onDone={() => setTab("home")}
+          onOpenMeal={(id, label) => openLibraryPage({ kind: "meal", id }, { label, tab: "plan", y: window.scrollY, weekView: weekView && { n: weekView.n } })}
+          weekView={weekView} onBack={() => returnTo({ tab: "home", y: homeY.current })}
+          onSwitchWeek={k => { if (k !== db.activePlan) persistDB({ ...db, activePlan: k }, { background: true }); setWeekView(w => w && { n: w.n }); }} />}
+        {tab==="library" && <LibraryTab db={db} persistDB={persistDB} view={libraryView} setView={setLibraryView} headerIcons={headerIcons} resetKey={tabTaps} openRequest={libOpen} onReturn={returnTo} onGrab={init => setGrab(init)} />}
         <TabBarSpacer />
         <TabBar tabs={TABS} active={tab} onSelect={id => {
           // The Plan tab opens the plan that needs you (spec §3.1).
           if (id === "plan") { const k = landingPlanKey(db); if (k && k !== db.activePlan) persistDB({ ...db, activePlan: k }, { background: true }); }
-          setTab(id); setTabTaps(n => n + 1); window.scrollTo(0, 0);
+          setWeekView(null); setTab(id); setTabTaps(n => n + 1); window.scrollTo(0, 0);
         }} action={{ label: "Grab", onClick: () => setGrab({ kind: "meal" }) }} />
         {sheet === "data" && <DataSheet db={db} persistDB={persistDB} overdue={dataDot} onClose={() => setSheet(null)} />}
         {sheet === "settings" && <SettingsSheet db={db} persistDB={persistDB} onClose={() => setSheet(null)} />}

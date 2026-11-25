@@ -53,7 +53,7 @@ const LONG_WD = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday
 const longTitle = iso => { const d = new Date(iso + "T12:00:00"); return `${LONG_WD[d.getDay()]} ${d.getDate()}`; };
 const SHORTLIST_SIZE = 3;
 
-function PlanMeals({ mealPlan, plates, setMealPlan, restoreMeals, commitMealToPlan, timeLevels, presence, weekStartDate, adventurousWeek, meals, days, daysFull, dayNotes, dayPills, setDayNotes, setDayPills, setPresence, setTimeLevels, db, persistDB, extraDays = 0, canExtend = false, setExtraDays, headSlot, onOpenMeal, orderedMeals }) {
+function PlanMeals({ mealPlan, plates, setMealPlan, restoreMeals, commitMealToPlan, timeLevels, presence, weekStartDate, adventurousWeek, meals, days, daysFull, dayNotes, dayPills, setDayNotes, setDayPills, setPresence, setTimeLevels, db, persistDB, extraDays = 0, canExtend = false, setExtraDays, headSlot, onOpenMeal, orderedMeals, openDay = null, onPlateClose = null }) {
   const allMeals = meals.length > 0 ? meals : SEED_MEALS;
   const today = todayLocalISO();
   const roster = (db.settings?.familyContacts || []).map(f => f.name);
@@ -323,7 +323,9 @@ function PlanMeals({ mealPlan, plates, setMealPlan, restoreMeals, commitMealToPl
   const changedSinceOrder = day => !!orderedMeals && JSON.stringify(orderedMeals[day] || []) !== JSON.stringify(mealPlan[day] || []);
 
   // ── Sheets ─────────────────────────────────────────────────────────────────────
-  const [plateDay, setPlateDay] = useState(null);
+  // `openDay`: Home's meal taps open that day's sheet over the week view (stage 4e); its Done
+  // then returns to Home (onPlateClose).
+  const [plateDay, setPlateDay] = useState(openDay);
   const [detail, setDetail] = useState(null);     // { day, stacked }: the day details sheet, alone or on the meals sheet
   const daySheet = detail && (
     <DaySheet day={detail.day} days={days} dates={dateOfDay} family={roster} ranges={awayRanges} forecast={forecastByDate}
@@ -452,7 +454,7 @@ function PlanMeals({ mealPlan, plates, setMealPlan, restoreMeals, commitMealToPl
       {plateDay && (
         <PlateSheet day={plateDay} iso={dateOfDay[plateDay]} past={locked(plateDay)} dishes={dishesOf(plateDay)} level={(timeLevels || {})[plateDay] || seedTimeLevel(abbrOfISO(dateOfDay[plateDay]))}
           note={(dayNotes?.[plateDay] || "").trim()} concerns={concernsByDay[plateDay] || []} learnMode={learnMode} setLearnMode={setLearnMode}
-          onClose={() => setPlateDay(null)} onEdit={() => setDetail({ day: plateDay, stacked: true })} onOpenMeal={onOpenMeal}
+          onClose={() => { setPlateDay(null); onPlateClose?.(); }} onEdit={() => setDetail({ day: plateDay, stacked: true })} onOpenMeal={onOpenMeal}
           stacked={detail?.stacked && detail.day === plateDay ? daySheet : null}
           onFix={() => suggestSides(plateDay)}
           onReplace={d => setChoose({ day: plateDay, idx: d.idx, kind: d.role, title: `Replace ${d.name.trim()}` })}

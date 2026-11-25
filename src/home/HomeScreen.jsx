@@ -149,7 +149,7 @@ function pendingWords(p) {
   return `Recipe sent ${clock(p.at)}`;
 }
 
-export function HomeScreen({ db, dataDot, onOpenData, onOpenSettings, onOpenPlan, pending, onDismissPending, onPendingLoaded, onOpenPending, persistDB }) {
+export function HomeScreen({ db, dataDot, onOpenData, onOpenSettings, onOpenPlan, onOpenWeekView, pending, onDismissPending, onPendingLoaded, onOpenPending, persistDB }) {
   const today = todayLocalISO();
   const plans = db.plans || {};
   const shoppingDay = db.settings?.shoppingDay;
@@ -207,7 +207,8 @@ export function HomeScreen({ db, dataDot, onOpenData, onOpenSettings, onOpenPlan
 
   // Plan / the week title: open that week (a week with no plan slot yet starts one).
   // Continue: the first unfinished step.
-  const openWeek = w => onOpenPlan(w.key, undefined, w.start);
+  // A planned week's title opens its week view (stage 4e); an unplanned one starts or opens the plan.
+  const openWeek = w => (w.key && w.plan && hasMeals(w.plan) && onOpenWeekView ? onOpenWeekView(w.key) : onOpenPlan(w.key, undefined, w.start));
   const continueWeek = (w, state) => onOpenPlan(w.key, state.next);
 
   const tPlan = tonightWeek.plan && hasMeals(tonightWeek.plan) ? tonightWeek.plan : null;
@@ -278,7 +279,7 @@ export function HomeScreen({ db, dataDot, onOpenData, onOpenSettings, onOpenPlan
         <section className="home-tonight-card" aria-label="Tonight">
           <div className="home-tonight-band"><span>Tonight</span>{cart(today)}</div>
           {tPlan ? (
-            <button type="button" className="home-tonight" onClick={() => onOpenPlan(tonightWeek.key)}>
+            <button type="button" className="home-tonight" onClick={() => (onOpenWeekView ? onOpenWeekView(tonightWeek.key, todayKey) : onOpenPlan(tonightWeek.key))}>
               <span className={tonight ? "home-tonight-main" : "home-tonight-none"}>{tonight?.main || "Nothing planned"}</span>
               {tonight?.sides.length > 0 && <span className="home-sub">+ {tonight.sides.join(", ")}</span>}
               {tonightNote && <span className="home-sub">{tonightNote}</span>}
@@ -306,7 +307,7 @@ export function HomeScreen({ db, dataDot, onOpenData, onOpenSettings, onOpenPlan
                     const d = dishesFor(week.plan, key);
                     const note = d ? "" : (week.plan.dayNotes?.[key] || "").trim();
                     return (
-                      <button key={iso} type="button" className="ui-row home-day" onClick={() => onOpenPlan(week.key)}>
+                      <button key={iso} type="button" className="ui-row home-day" onClick={() => (onOpenWeekView ? onOpenWeekView(week.key, key) : onOpenPlan(week.key))}>
                         <span className="home-day-abbr">{abbrOf(iso)}{cart(iso)}</span>
                         <span className="home-day-body">
                           <span className={d ? "home-day-main" : "home-day-main home-day-empty"}>{d?.main || note || "—"}</span>

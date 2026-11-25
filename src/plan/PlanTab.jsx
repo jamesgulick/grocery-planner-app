@@ -21,7 +21,10 @@ import { showToast } from "../ui/toast.js";
 
 // Phase 2 (SPEC-plan-flow-v2, stage 4a): Week · Meals · Inventory · Confirm · Order under one
 // frame. Welcome and "save & exit" are gone; Home's week rows and the empty state start plans.
-function PlanTab({ db, persistDB, headerIcons, onDone, onOpenMeal }) {
+// `weekView` (stage 4e; spec §4 "one module, two frames"): the week view standalone, opened from
+// Home: "‹ Home", the week's title, This week · Next week, and the Meals step's week view with
+// the same editing. { day } opens that day's meals sheet; with `fromHome`, Done returns to Home.
+function PlanTab({ db, persistDB, headerIcons, onDone, onOpenMeal: openMealPage, weekView = null, onBack, onSwitchWeek }) {
   // The plan the owner is currently EDITING — follows db.activePlan (current or
   // next), unlike Tonight's cards, which are pinned to today. This plan object
   // doubles as both the live-editing draft and the committed record (they were
@@ -296,6 +299,9 @@ function PlanTab({ db, persistDB, headerIcons, onDone, onOpenMeal }) {
     );
   }
 
+  // A meal page opened from here comes back here: "‹ <this screen>" (brief, Back link 11/16).
+  const onOpenMeal = id => openMealPage?.(id, weekView ? weekLabel(draft.weekStartDate) : PLAN_STEPS[step]);
+
   if (itemPage && (db.ingredients || []).some(i => i.id === itemPage.id)) {
     return <ItemPage db={db} persistDB={persistDB} itemId={itemPage.id} onBack={() => setItemPage(null)} backLabel={itemPage.back} onOpenMeal={onOpenMeal} />;
   }
@@ -318,6 +324,28 @@ function PlanTab({ db, persistDB, headerIcons, onDone, onOpenMeal }) {
     return { prev: { label: "‹ Confirm", go: () => goToStep(3) }, next: { label: "Finish plan", go: () => finishPlan(beforeNext.current?.() || {}) } };
   })();
 
+  if (weekView) {
+    const weeks = [["current", "This week"], ["next", "Next week"]].filter(([k]) => db.plans?.[k]?.weekStartDate).map(([value, label]) => ({ value, label }));
+    return (
+      <div className="plan">
+        <header className="plan-head" ref={headRef}>
+          <button type="button" className="lib-back plan-back" onClick={onBack}><span aria-hidden="true">‹</span> Home</button>
+          <div className="plan-title-row"><h1 className="ui-screen-title">{weekLabel(draft.weekStartDate)}</h1><HeaderButtons>{headerIcons}</HeaderButtons></div>
+          {weeks.length > 1 && <Segmented label="Week" value={db.activePlan || "current"} onChange={onSwitchWeek} options={weeks} />}
+          <div ref={setHeadSlot} />
+        </header>
+        <div className="plan-body">
+          <PlanMeals mealPlan={mealPlan} plates={plates} setMealPlan={setMealPlanP} restoreMeals={restoreMeals} commitMealToPlan={commitMealToPlan} timeLevels={timeLevels} presence={presence}
+            weekStartDate={draft.weekStartDate} adventurousWeek={!!draft.adventurousWeek} meals={meals} days={days} daysFull={daysFull} dayNotes={dayNotes} dayPills={dayPills}
+            setDayNotes={setDayNotesP} setDayPills={setDayPillsP} setPresence={setPresenceP} setTimeLevels={setTimeLevelsP}
+            db={db} persistDB={persistDB} extraDays={extraDays} canExtend={canExtend} setExtraDays={setExtraDays} headSlot={headSlot}
+            onOpenMeal={onOpenMeal} orderedMeals={draft.orderedAt ? draft.meals : null}
+            openDay={weekView.day} onPlateClose={weekView.fromHome ? onBack : null} />
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="plan">
       <header className="plan-head" ref={headRef}>
@@ -334,7 +362,7 @@ function PlanTab({ db, persistDB, headerIcons, onDone, onOpenMeal }) {
         {step === 0 && <WeekStep sub={weekSub} db={db} persistDB={persistDB} days={days} dates={dates} dayNotes={dayNotes} setDayNotes={setDayNotesP}
           dayPills={dayPills} setDayPills={setDayPillsP} presence={presence} setPresence={setPresenceP} timeLevels={timeLevels} setTimeLevels={setTimeLevelsP}
           adventurous={!!draft.adventurousWeek} setAdventurous={v => saveDraft({ adventurousWeek: v })} />}
-        {step === 1 && <PlanMeals mealPlan={mealPlan} plates={plates} setMealPlan={setMealPlanP} restoreMeals={restoreMeals} commitMealToPlan={commitMealToPlan} timeLevels={timeLevels} presence={presence}
+        {step === 1 && !weekView && <PlanMeals mealPlan={mealPlan} plates={plates} setMealPlan={setMealPlanP} restoreMeals={restoreMeals} commitMealToPlan={commitMealToPlan} timeLevels={timeLevels} presence={presence}
           weekStartDate={draft.weekStartDate} adventurousWeek={!!draft.adventurousWeek} meals={meals} days={days} daysFull={daysFull} dayNotes={dayNotes} dayPills={dayPills}
           setDayNotes={setDayNotesP} setDayPills={setDayPillsP} setPresence={setPresenceP} setTimeLevels={setTimeLevelsP}
           db={db} persistDB={persistDB} extraDays={extraDays} canExtend={canExtend} setExtraDays={setExtraDays} headSlot={headSlot}

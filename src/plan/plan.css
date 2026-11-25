@@ -75,3 +75,6 @@
 .item-panel-chips { display: flex; flex-wrap: wrap; gap: var(--space-2); }
 .item-panel .item-panel-input { min-height: var(--touch); }
 .item-panel-foot { display: flex; justify-content: flex-end; margin-top: var(--space-3); }
+
+/* The week view from Home: "‹ Home" above the title (stage 4e). */
+.plan-back { align-self: flex-start; }
