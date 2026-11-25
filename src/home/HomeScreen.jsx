@@ -111,10 +111,18 @@ function WeekRow({ week, state, today, pickup, planFrom, onOpen, onContinue }) {
   return (
     <div className="home-week">
       <div className="home-week-top">
-        <button type="button" className="home-week-open" onClick={onOpen}>
-          <span className="home-week-title">{weekLabel(week.start)} <span className="home-week-chev" aria-hidden="true">›</span></span>
-          {status && <span className="home-sub">{status}</span>}
-        </button>
+        {/* A week that can't be started yet (planFrom) has nothing to open: no tap, no › (11/25). */}
+        {planFrom ? (
+          <div className="home-week-open is-static">
+            <span className="home-week-title">{weekLabel(week.start)}</span>
+            {status && <span className="home-sub">{status}</span>}
+          </div>
+        ) : (
+          <button type="button" className="home-week-open" onClick={onOpen}>
+            <span className="home-week-title">{weekLabel(week.start)} <span className="home-week-chev" aria-hidden="true">›</span></span>
+            {status && <span className="home-sub">{status}</span>}
+          </button>
+        )}
         {/* Both plan slots full (11/25): it can be started once the old week archives, so the
             band says when instead of offering a Plan that can't start it. */}
         {state.kind === "unplanned" && (planFrom
