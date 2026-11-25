@@ -260,7 +260,7 @@ function PlanConfirm({ inFlow, registerNext, mode = "confirm", onUpdateItem, kep
     const tc     = TIER_COLORS[ing.tier] || {};
     return (
       <>
-      <div style={{ display:"flex", alignItems:"center", gap:10, padding:"11px 0", borderBottom:`1px solid ${C.border}`, opacity:on?1:0.45, cursor:"pointer", transition:"opacity 0.2s" }} onClick={() => setOrdering(ing, !on)}>
+      <div style={{ display:"flex", alignItems:"center", gap:10, padding:"11px 0", borderBottom:editId === ing.id ? "none" : `1px solid ${C.border}`, opacity:on?1:0.45, cursor:"pointer", transition:"opacity 0.2s" }} onClick={() => setOrdering(ing, !on)}>
         <Check checked={on} onChange={v => setOrdering(ing, v)} label={`Order ${ing.name}`} />
         <div style={{ flex:1, minWidth:0 }}>
           <div style={{ fontSize:14 }}>{ing.name}</div>

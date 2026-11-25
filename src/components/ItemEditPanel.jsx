@@ -1,28 +1,35 @@
 // Split verbatim from grocery-app.jsx in polish Phase 1.5; see CLAUDE.md's file map.
 import { useState } from "react";
-import { INVENTORY_LOCS, tierOptions, tierValueOf } from "../app/globals.js";
+import { INVENTORY_LOCS } from "../app/globals.js";
 import { C, S } from "../app/styles.js";
+import { BUY_OPTIONS, buyOf, buyPatch } from "../library/libraryModel.js";
+import { Chip } from "../ui/kit.jsx";
 
 // "⋯ edit item" (VALIDATION-LOG 10/27): fix an item's profile where it's noticed while
 // planning (Inventory, Confirm): how often it's bought, where it's kept, its USUAL
 // amount. Writes the item itself; this week's amount stays the amount button's job,
 // and the panel says so when the two differ.
-function ItemEditPanel({ ing, thisWeek, onUpdate, onClose }) {
+// Inventory item panel (brief §5, 11/24): the panel is part of its row (no line between them;
+// the row's line goes under the panel), Buy uses the item page's words, chips are tag chips
+// (pale green + ✓ when chosen), and "All details ›" (when `onDetails` is given) opens the
+// item page.
+function ItemEditPanel({ ing, thisWeek, onUpdate, onClose, onDetails }) {
   const [usual, setUsual] = useState(ing.defaultQuantity || "");
   const commitUsual = () => { const v = usual.trim(); if (v !== (ing.defaultQuantity || "")) onUpdate({ defaultQuantity: v }); };
-  const label = t => <div style={{ fontSize:11, color:C.muted, fontWeight:600, margin:"8px 0 4px" }}>{t}</div>;
-  const chip = (active, text, onClick) => (
-    <button key={text} style={{ ...S.btnSm, padding:"3px 8px", fontSize:11, background:active ? C.primary : "#fff", color:active ? "#fff" : C.muted, border:`1px solid ${active ? C.primary : C.border}` }} onClick={onClick}>{text}</button>
-  );
+  const label = t => <div className="ui-section-label item-panel-label">{t}</div>;
+  const chip = (active, text, onClick) => <Chip key={text} on={active} onClick={onClick}>{text}</Chip>;
   const locs = ing.storageLocation === "Unassigned" ? ["Unassigned", ...INVENTORY_LOCS] : INVENTORY_LOCS;
   return (
-    <div style={{ margin:"2px 0 10px", padding:"6px 10px 10px", background:"#FAFAFA", border:`1px solid ${C.border}`, borderRadius:8 }}>
-      {label("How often")}
-      <div style={{ display:"flex", flexWrap:"wrap", gap:4 }}>
-        {tierOptions().map(o => chip(tierValueOf(ing) === o.value, o.label, () => onUpdate({ tier: o.tier, stapleType: o.subtype || undefined })))}
+    <div className="item-panel" style={{ borderBottom:`1px solid ${C.border}` }}>
+      <div className="item-panel-head">
+        {label("Buy")}
+        {onDetails && <button type="button" className="item-panel-details" onClick={() => { commitUsual(); onDetails(); }}>All details ›</button>}
+      </div>
+      <div className="item-panel-chips">
+        {BUY_OPTIONS.map(o => chip(buyOf(ing) === o.value, o.label, () => onUpdate(buyPatch(o.value))))}
       </div>
       {label("Where it's kept")}
-      <div style={{ display:"flex", flexWrap:"wrap", gap:4 }}>
+      <div className="item-panel-chips">
         {locs.map(l => chip(ing.storageLocation === l, l, () => onUpdate({ storageLocation: l })))}
       </div>
       {label("Usual amount")}

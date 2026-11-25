@@ -7,7 +7,7 @@ import { Check } from "../components/common.jsx";
 import { ItemEditPanel } from "../components/ItemEditPanel.jsx";
 import { isOrdering } from "./ordering.js";
 
-function PlanInventory({ inFlow, locIdx: locIdxIn, setLocIdx: setLocIdxIn, checkedIds, stapleFlags, setOrdering, quantities, setQuantities, mealPlan, meals, ingredients, onNext, days, onUpdateItem, keptIds = [] }) {
+function PlanInventory({ onOpenItem, inFlow, locIdx: locIdxIn, setLocIdx: setLocIdxIn, checkedIds, stapleFlags, setOrdering, quantities, setQuantities, mealPlan, meals, ingredients, onNext, days, onUpdateItem, keptIds = [] }) {
   const [ownLoc, setOwnLoc] = useState(0);
   const locIdx = locIdxIn ?? ownLoc, setLocIdx = setLocIdxIn ?? setOwnLoc;   // the Plan frame's footer drives the walk
   const [editId, setEditId] = useState(null);     // item whose "⋯ edit" panel is open
@@ -121,7 +121,7 @@ function PlanInventory({ inFlow, locIdx: locIdxIn, setLocIdx: setLocIdxIn, check
     <button style={{ background:"none", border:"none", color:editId === ing.id ? C.primary : C.faint, fontSize:18, cursor:"pointer", minWidth:36, minHeight:44, padding:0 }} onClick={() => setEditId(editId === ing.id ? null : ing.id)} aria-label={`Edit ${ing.name}`}>⋯</button>
   );
   const EditPanel = ({ ing }) => editId !== ing.id ? null : (
-    <ItemEditPanel ing={ing} thisWeek={quantities[ing.id]} onUpdate={patch => updateItem(ing, patch)} onClose={() => setEditId(null)} />
+    <ItemEditPanel ing={ing} thisWeek={quantities[ing.id]} onUpdate={patch => updateItem(ing, patch)} onClose={() => setEditId(null)} onDetails={onOpenItem ? () => onOpenItem(ing.id) : null} />
   );
 
   // One row shape for every section. `dimOff`: an unchecked always or meal item is a
@@ -133,7 +133,7 @@ function PlanInventory({ inFlow, locIdx: locIdxIn, setLocIdx: setLocIdxIn, check
     const usedBy  = !multiMeal[ing.id] && (usedByMeal[ing.id] || []).length === 1 ? usedByMeal[ing.id] : [];
     return (
       <>
-      <div style={{ display:"flex", alignItems:"center", padding:"10px 0", borderBottom:`1px solid ${C.border}`, gap:10, cursor:"pointer", opacity:dim?0.45:1, transition:"opacity 0.2s" }} onClick={() => toggle(ing)}>
+      <div style={{ display:"flex", alignItems:"center", padding:"10px 0", borderBottom:editId === ing.id ? "none" : `1px solid ${C.border}`, gap:10, cursor:"pointer", opacity:dim?0.45:1, transition:"opacity 0.2s" }} onClick={() => toggle(ing)}>
         <Check checked={on} onChange={v => setOrdering(ing, v)} label={`Buy ${ing.name}`} />
         <div style={{ flex:1, minWidth:0 }}>
           <div style={{ fontSize:14, fontWeight:500 }}>{ing.name}{multiMeal[ing.id] && <span style={{ marginLeft:6, fontSize:11, fontWeight:700, color:"#B45309", background:"#FEF3C7", borderRadius:5, padding:"1px 5px" }}>×{multiMeal[ing.id]} meals</span>}</div>

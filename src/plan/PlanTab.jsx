@@ -7,6 +7,7 @@ import { ActionBar, BlockButton, HeaderButtons, Segmented } from "../ui/kit.jsx"
 import { PlanConfirm } from "./PlanConfirm.jsx";
 import { PlanInventory } from "./PlanInventory.jsx";
 import { PlanMeals } from "./PlanMeals.jsx";
+import { ItemPage } from "../library/ItemPage.jsx";
 import { orderingPatch } from "./ordering.js";
 import { WeekStep } from "./WeekStep.jsx";
 import "./plan.css";
@@ -231,6 +232,15 @@ function PlanTab({ db, persistDB, headerIcons, onDone, onOpenMeal }) {
   // switching week (this component remounts), Calendar / Who's home / Time, steps, Inventory's
   // places. Edits on the same screen never move it.
   useLayoutEffect(() => { window.scrollTo(0, 0); }, [step, weekSub, locIdx]);
+  // Inventory's "All details ›" opens the item page here, inside Plan, so "‹ Inventory" comes
+  // back to the same location and scroll position with the panel closed (brief §5, 11/24).
+  const [itemPage, setItemPage] = useState(null);
+  const itemReturnY = useRef(null);
+  const openItem = id => { itemReturnY.current = window.scrollY; setItemPage(id); };
+  useLayoutEffect(() => {
+    if (itemPage) window.scrollTo(0, 0);
+    else if (itemReturnY.current != null) { window.scrollTo(0, itemReturnY.current); itemReturnY.current = null; }
+  }, [itemPage]);
   // Confirm registers its order snapshot here; Next / Finish plan save it with the step change.
   const beforeNext = useRef(null);
   // The week view puts its controls (Week check, Suggest all, Compact) in the sticky header.
@@ -249,6 +259,10 @@ function PlanTab({ db, persistDB, headerIcons, onDone, onOpenMeal }) {
         <div className="plan-empty"><BlockButton onClick={() => { const next = startPlan(db, start); if (next) persistDB(next); }}>Plan this week</BlockButton></div>
       </div>
     );
+  }
+
+  if (itemPage && (db.ingredients || []).some(i => i.id === itemPage)) {
+    return <ItemPage db={db} persistDB={persistDB} itemId={itemPage} onBack={() => setItemPage(null)} backLabel="Inventory" onOpenMeal={onOpenMeal} />;
   }
 
   const dates = weekDates(draft.weekStartDate, extraDaysOf(draft));
@@ -289,7 +303,7 @@ function PlanTab({ db, persistDB, headerIcons, onDone, onOpenMeal }) {
           db={db} persistDB={persistDB} extraDays={extraDays} canExtend={canExtend} setExtraDays={setExtraDays} headSlot={headSlot}
           onOpenMeal={onOpenMeal} orderedMeals={draft.orderedAt ? draft.meals : null} />}
         <div className={step > 1 ? "shell-legacy-flow" : undefined}>
-          {step === 2 && <PlanInventory inFlow locIdx={locIdx} setLocIdx={setLocIdx} checkedIds={checkedIds} setCheckedIds={setCheckedIdsP} stapleFlags={stapleFlags} setOrdering={setOrdering} quantities={quantities} setQuantities={setQuantitiesP} mealPlan={mealPlan} meals={meals} ingredients={ingredients} onNext={() => goToStep(3)} days={days} onUpdateItem={updateItem} keptIds={keptIds} />}
+          {step === 2 && <PlanInventory onOpenItem={openItem} inFlow locIdx={locIdx} setLocIdx={setLocIdx} checkedIds={checkedIds} setCheckedIds={setCheckedIdsP} stapleFlags={stapleFlags} setOrdering={setOrdering} quantities={quantities} setQuantities={setQuantitiesP} mealPlan={mealPlan} meals={meals} ingredients={ingredients} onNext={() => goToStep(3)} days={days} onUpdateItem={updateItem} keptIds={keptIds} />}
           {step === 3 && <PlanConfirm inFlow registerNext={fn => { beforeNext.current = fn; }} mode="confirm" onUpdateItem={updateItem} keptIds={keptIds} checkedIds={checkedIds} setOrdering={setOrdering} addedOff={addedOff} setAddedOff={setAddedOffP} addedItems={addedItems} setAddedItems={setAddedItemsP} stapleFlags={stapleFlags} quantities={quantities} setQuantities={setQuantitiesP} mealPlan={mealPlan} meals={meals} ingredients={ingredients} onNext={() => goToStep(4)} db={db} persistDB={persistDB} days={days} daysFull={daysFull} />}
           {step === 4 && <PlanConfirm inFlow registerNext={fn => { beforeNext.current = fn; }} mode="sparky" onUpdateItem={updateItem} keptIds={keptIds} checkedIds={checkedIds} setOrdering={setOrdering} addedOff={addedOff} setAddedOff={setAddedOffP} addedItems={addedItems} setAddedItems={setAddedItemsP} stapleFlags={stapleFlags} quantities={quantities} setQuantities={setQuantitiesP} mealPlan={mealPlan} meals={meals} ingredients={ingredients} onFinish={finishPlan} db={db} persistDB={persistDB} days={days} daysFull={daysFull} />}
         </div>
