@@ -80,7 +80,8 @@
 .plan-back { align-self: flex-start; }
 
 /* The plan's span and pickup (board "Pickup day"): "Thu 19 – Tue 24 · 6 days" and a Pickup pill. */
-.plan-span { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); margin-top: calc(-1 * var(--space-2)); }
+/* 8px above the step bar, as on the board (the header's own gap is 12). */
+.plan-span { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); margin-top: calc(-1 * var(--space-2)); margin-bottom: calc(var(--space-2) - var(--space-3)); }
 .plan-span-text { font-size: var(--meta-size); line-height: var(--meta-line); color: var(--text-soft); }
-.plan-pickup { flex: none; display: inline-flex; align-items: center; gap: calc(var(--space-1) + var(--space-half)); min-height: var(--touch); padding: 0 var(--space-3); border: 0; border-top: var(--pill-inset) solid transparent; border-bottom: var(--pill-inset) solid transparent; background-clip: padding-box; box-shadow: inset 0 0 0 var(--problem-outline) var(--action); border-radius: calc(var(--pill-height) / 2) / calc(var(--touch) / 2); background-color: transparent; font: inherit; font-size: var(--label-size); font-weight: 700; color: var(--action); cursor: pointer; }
+.plan-pickup { flex: none; box-sizing: border-box; display: inline-flex; align-items: center; gap: calc(var(--space-1) + var(--space-half)); height: var(--pill-height); padding: 0 var(--space-3); border: var(--problem-outline) solid var(--action); border-radius: var(--radius-pill); background: transparent; font: inherit; font-size: var(--label-size); line-height: 1; font-weight: 700; color: var(--action); cursor: pointer; }
 .plan-pickup:active { background-color: var(--pressed); }
