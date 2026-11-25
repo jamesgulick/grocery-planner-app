@@ -11,9 +11,11 @@ function PlanInventory({ onOpenItem, inFlow, locIdx: locIdxIn, setLocIdx: setLoc
   const [ownLoc, setOwnLoc] = useState(0);
   const locIdx = locIdxIn ?? ownLoc, setLocIdx = setLocIdxIn ?? setOwnLoc;   // the Plan frame's footer drives the walk
   const [editId, setEditId] = useState(null);     // item whose "⋯ edit" panel is open
+  const [pending, setPending] = useState({});     // its Buy / place choice, applied when the panel closes
   const [moveNote, setMoveNote] = useState(null); // what happened to an item moved to another location
   const [slowOpen, setSlowOpen] = useState(null);   // slow staples card expanded? null = decide from the data
-  useEffect(() => { setMoveNote(null); setEditId(null); setSlowOpen(null); }, [locIdx]);
+  // Leaving the place with a panel open still keeps its choice (no move note: you've left).
+  useEffect(() => { if (editId && Object.keys(pending).length) onUpdateItem?.(editId, pending); setPending({}); setMoveNote(null); setEditId(null); setSlowOpen(null); }, [locIdx]);
   const LOCS    = INVENTORY_LOCS;
   const loc     = LOCS[locIdx];
 
@@ -117,11 +119,21 @@ function PlanInventory({ onOpenItem, inFlow, locIdx: locIdxIn, setLocIdx: setLoc
         : toIdx > locIdx ? `${ing.name} moved to ${to}. It'll come up there.` : `${ing.name} moved to ${to}.`);
     }
   };
+  // Closing the panel (Done, its ⋯ again, another item's ⋯, All details) applies the held choice
+  // in one save; only then does the item move to its new section or place.
+  const applyPending = (extra = {}) => {
+    const open = editId && ingredients.find(i => i.id === editId);
+    const patch = { ...pending, ...extra };
+    if (open && Object.keys(patch).length) updateItem(open, patch);
+    setPending({});
+  };
+  const openPanel = id => { applyPending(); setEditId(editId === id ? null : id); };
   const EditBtn = ({ ing }) => !onUpdateItem ? null : (
-    <button style={{ background:"none", border:"none", color:editId === ing.id ? C.primary : C.faint, fontSize:18, cursor:"pointer", minWidth:36, minHeight:44, padding:0 }} onClick={() => setEditId(editId === ing.id ? null : ing.id)} aria-label={`Edit ${ing.name}`}>⋯</button>
+    <button style={{ background:"none", border:"none", color:editId === ing.id ? C.primary : C.faint, fontSize:18, cursor:"pointer", minWidth:36, minHeight:44, padding:0 }} onClick={() => openPanel(ing.id)} aria-label={`Edit ${ing.name}`}>⋯</button>
   );
   const EditPanel = ({ ing }) => editId !== ing.id ? null : (
-    <ItemEditPanel ing={ing} thisWeek={quantities[ing.id]} onUpdate={patch => updateItem(ing, patch)} onClose={() => setEditId(null)} onDetails={onOpenItem ? () => onOpenItem(ing.id) : null} />
+    <ItemEditPanel ing={ing} thisWeek={quantities[ing.id]} onUpdate={patch => updateItem(ing, patch)} pending={pending} setPending={setPending}
+      onClose={extra => { applyPending(extra); setEditId(null); }} onDetails={onOpenItem ? extra => { applyPending(extra); onOpenItem(ing.id); } : null} />
   );
 
   // One row shape for every section. `dimOff`: an unchecked always or meal item is a
