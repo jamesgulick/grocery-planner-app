@@ -16,7 +16,7 @@ import { copyToClipboard } from "../app/clipboard.js";
 import { buildFridgeReportHTML } from "../app/fridgeReport.js";
 import { planDays, todayLocalISO, weekLabel } from "../app/globals.js";
 import { upcomingPickup } from "../app/pickup.js";
-import { draftPlanText } from "../app/shareText.js";
+import { homePlanText } from "../app/shareText.js";
 import { ActionBar, Group, HeaderButtons, Icon, IconButton, PillButton, RowChevron } from "../ui/kit.jsx";
 import { ReimportPill } from "../shell/ReimportPill.jsx";
 import { PickupSheet } from "./PickupSheet.jsx";
@@ -28,7 +28,6 @@ const abbrOf = iso => ABBR[new Date(iso + "T00:00:00").getDay()];
 // The five planning steps as Home's step bar names them. Index = the plan's step index
 // (PLAN_STEPS), where step 0 (today's Welcome) is where the Week setup step will live.
 const STEP_BAR = ["Week", "Meals", "Inventory", "Confirm", "Order"];
-const LIST_DAYS = 7;
 
 const hasMeals = plan => Object.values(plan?.mealPlan || {}).some(m => (m || []).length);
 
@@ -166,24 +165,23 @@ export function HomeScreen({ db, dataDot, onOpenData, onOpenSettings, onOpenPlan
     </span>
   ) : null;
 
-  // Tonight's week, then the list: tomorrow onward for LIST_DAYS days, grouped by week.
+  // Tonight's week, then the list (brief §7, "Coming up: every planned day, no rolling window",
+  // 11/25): every day from tomorrow through the last day of the last planned week, grouped by
+  // week, whatever the plans' lengths. With two plan slots that's about two weeks at most.
   const { tonightWeek, groups } = useMemo(() => {
     const find = weekFinder(plans, shoppingDay);
     const tonightWeek = find(today);
+    const lastEnd = ["current", "next"].filter(k => plans[k]?.weekStartDate).map(k => find(plans[k].weekStartDate).end).sort().pop();
     const groups = [];
     let iso = addDaysISO(today, 1);
-    const last = addDaysISO(today, LIST_DAYS);
-    for (;;) {
+    do {
       const w = find(iso);
       if (groups[groups.length - 1]?.week !== w) groups.push({ week: w, rows: [] });
       if (w.plan) groups[groups.length - 1].rows.push({ iso, key: dayKeyForDate(w.plan, iso) });
       iso = addDaysISO(iso, 1);
-      // Past the rolling window, keep going only to the end of a planned week already begun.
-      if (iso > last && !(w.plan && iso < w.end && find(iso) === w)) break;
-    }
-    // The week after the last planned one always has a card, its band only, even before its
-    // days reach the window (brief §7, 11/25). One at most: none when the list already ends
-    // on an unplanned week.
+    } while (lastEnd && iso < lastEnd);
+    // Then the week after the last planned one, its band only (brief §7, 11/25). One at most:
+    // none when the list already ends on an unplanned week.
     for (let n = 0; n < 3 && weekState(groups[groups.length - 1].week, today).kind !== "unplanned"; n++) {
       groups.push({ week: find(groups[groups.length - 1].week.end), rows: [] });
     }
@@ -219,7 +217,16 @@ export function HomeScreen({ db, dataDot, onOpenData, onOpenSettings, onOpenPlan
   const tonightConcerns = todayKey ? (concerns[tonightWeek.key]?.[todayKey] || []) : [];
   const dateTitle = new Date(today + "T00:00:00").toLocaleDateString(undefined, { weekday: "long", month: "short", day: "numeric" });
 
-  const sharePlan = tPlan || groups.map(g => g.week.plan).find(p => p && hasMeals(p)) || null;
+  // Share with family sends what Home shows: tonight onward, every planned week, by week.
+  const shareWeeks = [];
+  [...(tPlan ? [{ week: tonightWeek, iso: today, key: todayKey }] : []), ...groups.flatMap(g => g.rows.map(r => ({ week: g.week, ...r })))]
+    .filter(r => r.week.plan && hasMeals(r.week.plan) && r.key)
+    .forEach(r => {
+      let w = shareWeeks[shareWeeks.length - 1];
+      if (w?.start !== r.week.start) shareWeeks.push(w = { start: r.week.start, label: weekLabel(r.week.start), days: [] });
+      w.days.push({ day: new Date(r.iso + "T00:00:00").toLocaleDateString(undefined, { weekday: "long" }), dishes: r.week.plan.mealPlan?.[r.key] || [] });
+    });
+  const sharePlan = shareWeeks.length ? shareWeeks : null;
   const openFridgeReport = () => {
     const url = URL.createObjectURL(new Blob([buildFridgeReportHTML(db)], { type: "text/html" }));
     window.open(url, "_blank");
@@ -228,8 +235,7 @@ export function HomeScreen({ db, dataDot, onOpenData, onOpenSettings, onOpenPlan
   const [shared, setShared] = useState(false);
   const shareWithFamily = async () => {
     if (!sharePlan) return;
-    const { days, daysFull } = planDays(sharePlan, shoppingDay);
-    const text = draftPlanText(days, daysFull, sharePlan.mealPlan);
+    const text = homePlanText(sharePlan);
     try { if (navigator.share) { await navigator.share({ text }); return; } } catch (e) { if (e?.name === "AbortError") return; }
     copyToClipboard(text);
     setShared(true);
