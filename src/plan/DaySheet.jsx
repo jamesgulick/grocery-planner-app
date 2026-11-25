@@ -31,7 +31,7 @@ export function DaySheet({ day, days, dates, family, ranges, forecast, dayNotes,
     <Sheet tall title={`${LONG_WD[d.getDay()]} ${d.getDate()}`} sub={wx ? <span className="day-sheet-wx">{wx}</span> : null} onClose={onClose}>
       <div className="day-sheet">
         <Section label="Note">
-          <div className="day-sheet-card">{readOnly
+          <div className={readOnly ? "day-sheet-card" : "day-sheet-card is-note"}>{readOnly
             ? <div className={(dayNotes?.[day] || "").trim() ? "day-sheet-note" : "day-sheet-note day-sheet-none"}>{(dayNotes?.[day] || "").trim() || "—"}</div>
             : <NoteField value={dayNotes?.[day]} onSave={t => setDayNotes(prev => ({ ...prev, [day]: t }))} />}</div>
         </Section>

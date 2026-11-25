@@ -63,3 +63,6 @@
 .day-sheet-fields:disabled button { cursor: default; }
 .day-sheet-note { font-size: var(--body-size); line-height: var(--body-line); white-space: pre-wrap; }
 .day-sheet-none { color: var(--text-muted); }
+/* The note has its own card here, so no dashed line; the card takes the focus edge instead (11/24). */
+.day-sheet-card.is-note .wk-note { padding: 0; border-bottom: 0; }
+.day-sheet-card.is-note:focus-within { box-shadow: inset 0 0 0 var(--focus-edge) var(--action); }
