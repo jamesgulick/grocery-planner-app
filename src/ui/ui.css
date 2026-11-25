@@ -196,10 +196,6 @@ button.ui-row:active { background: var(--pressed); }
 .ui-textarea { font: inherit; font-size: var(--meta-size); width: 100%; box-sizing: border-box; min-height: var(--textarea-height); padding: var(--space-3); border-radius: var(--radius-control); border: 1px solid var(--control-border); background: var(--surface); color: var(--text); resize: vertical; }
 .ui-textarea:focus { outline: 2px solid var(--action); outline-offset: 1px; }
 
-/* Segmented, forest tone (Week › Time): the selected option is white on forest, its clocks white. */
-.ui-seg-forest button[aria-pressed="true"] { background: var(--action); color: var(--on-action); box-shadow: none; }
-.ui-seg-forest button[aria-pressed="true"] .ui-clock-hand { stroke: var(--action); }
-.ui-seg-forest button[aria-pressed="true"] .ui-clock-off { fill: var(--on-action); opacity: 0.35; }
 
 /* ── Confirmation bar (toast; brief standing rules, 11/17) ─────────────────── */
 .ui-toast-live { position: fixed; left: 0; right: 0; bottom: 0; height: 0; z-index: 300; pointer-events: none; }

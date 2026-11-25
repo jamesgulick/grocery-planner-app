@@ -130,7 +130,7 @@ export function WeekStep({ sub, db, persistDB, days, dates, dayNotes, setDayNote
               {outs(day)}
             </div>
             {(dayNotes?.[day] || "").trim() && <div className="wk-note-read">{dayNotes[day]}</div>}
-            <Segmented label="Time" tone="forest" value={timeLevels?.[day]} onChange={v => setTimeLevels(prev => ({ ...prev, [day]: v }))}
+            <Segmented label="Time" value={timeLevels?.[day]} onChange={v => setTimeLevels(prev => ({ ...prev, [day]: v }))}
               options={TIME_OPTIONS.map(o => ({ value: o.value, label: <span className="wk-time"><Clocks n={o.n} />{o.label}</span> }))} />
           </div>
         ))}
