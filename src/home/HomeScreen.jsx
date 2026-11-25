@@ -294,7 +294,7 @@ export function HomeScreen({ db, dataDot, onOpenData, onOpenSettings, onOpenPlan
               <span className="home-rate-title">Meals to rate · {toRate.length}</span>
               <span className="home-rate-names">{toRate.map(q => q.meal.name).join(", ")}</span>
             </span>
-            <PillButton inline onClick={() => setRating(toRate.map(q => ({ mealId: q.meal.id, iso: q.iso, out: q.out, why: q.why })))}>Rate</PillButton>
+            <PillButton inline outline onClick={() => setRating(toRate.map(q => ({ mealId: q.meal.id, iso: q.iso, out: q.out, why: q.why })))}>Rate</PillButton>
             <button type="button" className="home-pending-x" aria-label="Dismiss" onClick={() => { rateBannerHidden = true; setRateHidden(true); }}><Icon name="close" size={16} /></button>
           </div>
         )}

@@ -1,6 +1,6 @@
 /* The rate sheet (board "Graduation") and the Home banner "Meals to rate". */
 .rate { display: flex; flex-direction: column; gap: var(--space-4); }
-.rate-why { display: block; font-size: var(--label-size); color: var(--text-muted); }
+.rate-why { display: block; font-size: var(--label-size); color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }   /* one line (11/25) */
 .rate-card { display: flex; flex-direction: column; gap: var(--space-2); padding: var(--space-2) var(--space-3); background: var(--surface); border-radius: var(--radius-group); }
 .rate-person { display: flex; align-items: center; gap: var(--space-2); min-height: var(--touch); }
 .rate-person .ui-seg { flex: 1; min-width: 0; }

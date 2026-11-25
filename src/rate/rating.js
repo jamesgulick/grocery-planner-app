@@ -36,13 +36,14 @@ export const outOn = (night, family, ranges) => family.filter(n => !presentOn(ni
 /** The answered people: any stored Who eats it value, fine included. */
 const answered = m => new Set((m.preferences || []).filter(p => p && ["likes", "fine", "dislikes"].includes(p.pref)).map(p => p.person));
 
-/** The gaps judged at the table, as words: "How often", "Time needed", then names. */
+/** The gaps judged at the table, as words: "How often", "Time needed", "Who eats it (Kid 1, Me)". */
 export function mealGapsAt(m, homeNames) {
   const gaps = [];
   if (m.rotation !== "manual" && !m.cadence) gaps.push("How often");
   if (!m.effort) gaps.push("Time needed");
   const has = answered(m);
-  for (const n of homeNames) if (!has.has(n)) gaps.push(n);
+  const people = homeNames.filter(n => !has.has(n));
+  if (people.length) gaps.push(`Who eats it (${people.join(", ")})`);
   return gaps;
 }
 
@@ -80,7 +81,7 @@ export function rateQueue(db, today, hour) {
     const gaps = mealGapsAt(meal, home);
     if (!tried && !gaps.length) continue;
     const last = ns[ns.length - 1];
-    out.push({ meal, tried, gaps, iso: last.iso, out: outOn(last, family, ranges), why: tried ? "First try" : `Missing ${gaps.join(", ")}` });
+    out.push({ meal, tried, gaps, iso: last.iso, out: outOn(last, family, ranges), why: tried ? "First try" : `Missing ${gaps.join(" · ")}` });
   }
   return out.sort((a, b) => a.iso.localeCompare(b.iso) || a.meal.name.localeCompare(b.meal.name));
 }

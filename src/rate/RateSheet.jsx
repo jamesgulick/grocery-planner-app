@@ -3,7 +3,7 @@
 // Rate on any past dish. Who eats it per person (people out that night shown, not asked), How
 // often (not on a Hand-picked meal), Time needed, All details ›. Answers save as they're tapped;
 // the outcome button (New: Add to rotation · Keep as new · Move to hand-picked; others: Done)
-// also sets meal.ratedAt. Cancel closes, keeping what was tapped, and never sets ratedAt.
+// also sets meal.ratedAt. Close (top right) keeps what was tapped and never sets ratedAt (11/25).
 import { useState } from "react";
 import { todayLocalISO } from "../app/globals.js";
 import { BlockButton, Clocks, OutlineButton, Section, Segmented, Sheet } from "../ui/kit.jsx";
@@ -37,7 +37,7 @@ export function RateSheet({ db, persistDB, items, onClose, onOpenMeal }) {
   };
 
   return (
-    <Sheet tall title={`How did ${meal.name} go?`} noDone onCancel={onClose} onClose={onClose}
+    <Sheet tall title={`How did ${meal.name} go?`} doneLabel="Close" onClose={onClose}
       sub={<>{meta}{item.why && <span className="rate-why">{item.why}</span>}</>}>
       <div className="rate" key={meal.id}>
         <Section label="Who eats it">
