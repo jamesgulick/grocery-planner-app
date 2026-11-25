@@ -2,7 +2,8 @@
 // "Meals to rate" (steps through them, "1 of 2"), a past day's Rate pill, or the plate sheet's
 // Rate on any past dish. Who eats it per person (people out that night shown, not asked), How
 // often (not on a Hand-picked meal), Time needed, All details ›. Answers save as they're tapped;
-// the outcome button (New: Add to rotation · Keep as new · Move to hand-picked; others: Done)
+// the outcome button (New: Add to rotation · Keep as new · Move to hand-picked; others: Next on
+// every meal of a run but the last, then Done)
 // also sets meal.ratedAt. Close (top right) keeps what was tapped and never sets ratedAt (11/25).
 import { useState } from "react";
 import { todayLocalISO } from "../app/globals.js";
@@ -67,7 +68,7 @@ export function RateSheet({ db, persistDB, items, onClose, onOpenMeal }) {
             <BlockButton onClick={() => finish("in", "added to rotation")}>Add to rotation</BlockButton>
             <OutlineButton onClick={() => finish(null, "kept as new")}>Keep as new</OutlineButton>
             <button type="button" className="rate-text-button" onClick={() => finish("manual", "moved to hand-picked")}>Move to hand-picked</button>
-          </> : <BlockButton onClick={() => finish(null, null)}>Done</BlockButton>}
+          </> : <BlockButton onClick={() => finish(null, null)}>{at + 1 < items.length ? "Next" : "Done"}</BlockButton>}
         </div>
       </div>
     </Sheet>
