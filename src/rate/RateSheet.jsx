@@ -1,6 +1,6 @@
 // The rate sheet, "How did <meal> go?" (brief §2; board "Graduation"). Opened from Home's
 // "Meals to rate" (steps through them, "1 of 2"), a past day's Rate pill, or the plate sheet's
-// Rate on any past dish. Who eats it per person (people out that night shown, not asked), How
+// Rate on any past dish. "2 of 3" by the title in a run; "First try · All details ›" under it. Who eats it per person (people out that night shown, not asked), How
 // often (not on a Hand-picked meal), Time needed, All details ›. Answers save as they're tapped;
 // the outcome button (New: Add to rotation · Keep as new · Move to hand-picked; others: Next on
 // every meal of a run but the last, then Done)
@@ -25,7 +25,7 @@ export function RateSheet({ db, persistDB, items, onClose, onOpenMeal }) {
   const family = (db.settings?.familyContacts || []).map(f => f.name);
   const out = new Set(item.out || []);
   const cooked = mealHistoryIndex(db, today).count(meal.name) + (item.iso === today ? 1 : 0);
-  const meta = [items.length > 1 && `${at + 1} of ${items.length}`, dateWords(item.iso), `cooked ${cooked} time${cooked === 1 ? "" : "s"}`].filter(Boolean).join(" · ");
+  const meta = [dateWords(item.iso), `cooked ${cooked} time${cooked === 1 ? "" : "s"}`].filter(Boolean).join(" · ");
   const isNew = meal.rotation === "experimental";
 
   const save = fn => persistDB({ ...db, meals: db.meals.map(m => (m.id === meal.id ? fn(m) : m)) });
@@ -37,9 +37,28 @@ export function RateSheet({ db, persistDB, items, onClose, onOpenMeal }) {
     if (at + 1 < items.length) setAt(at + 1); else onClose();
   };
 
+  const last = at + 1 >= items.length;
+  // The footer tray (brief §2, 11/25): the thumb spot (dark, right) never changes rotation.
+  const footer = isNew ? (
+    <div className="rate-foot">
+      <button type="button" className="rate-text-button" onClick={() => finish("manual", "moved to hand-picked")}>Move to hand-picked</button>
+      <div className="rate-pair">
+        <OutlineButton onClick={() => finish("in", "added to rotation")}>Add to rotation</OutlineButton>
+        <BlockButton onClick={() => finish(null, null)}>Keep as new</BlockButton>
+      </div>
+    </div>
+  ) : <BlockButton onClick={() => finish(null, null)}>{last ? "Done" : "Next"}</BlockButton>;
+
   return (
-    <Sheet tall title={`How did ${meal.name} go?`} doneLabel="Close" onClose={onClose}
-      sub={<>{meta}{item.why && <span className="rate-why">{item.why}</span>}</>}>
+    <Sheet tall title={`How did ${meal.name} go?`} doneLabel="Close" onClose={onClose} footer={footer}
+      headerExtra={items.length > 1 ? <span className="rate-step">{at + 1} of {items.length}</span> : null}
+      sub={<>{meta}{(item.why || onOpenMeal) && (
+        <span className="rate-why">
+          {item.why && <span className="rate-why-text">{item.why}</span>}
+          {item.why && onOpenMeal && <span aria-hidden="true">&nbsp;·&nbsp;</span>}
+          {onOpenMeal && <button type="button" className="rate-details" onClick={() => { onClose(); onOpenMeal(meal.id); }}>All details ›</button>}
+        </span>
+      )}</>}>
       <div className="rate" key={meal.id}>
         <Section label="Who eats it">
           <div className="rate-card">
@@ -62,14 +81,6 @@ export function RateSheet({ db, persistDB, items, onClose, onOpenMeal }) {
           <Segmented label="Time needed" value={meal.effort} onChange={v => save(m => withField(m, "effort", v))}
             options={EFFORT_OPTIONS.map(o => ({ value: o.value, label: <span className="lib-with-clocks"><Clocks n={o.n} />{o.label}</span> }))} />
         </Section>
-        {onOpenMeal && <button type="button" className="rate-details" onClick={() => { onClose(); onOpenMeal(meal.id); }}>All details ›</button>}
-        <div className="rate-actions">
-          {isNew ? <>
-            <BlockButton onClick={() => finish("in", "added to rotation")}>Add to rotation</BlockButton>
-            <OutlineButton onClick={() => finish(null, "kept as new")}>Keep as new</OutlineButton>
-            <button type="button" className="rate-text-button" onClick={() => finish("manual", "moved to hand-picked")}>Move to hand-picked</button>
-          </> : <BlockButton onClick={() => finish(null, null)}>{at + 1 < items.length ? "Next" : "Done"}</BlockButton>}
-        </div>
       </div>
     </Sheet>
   );
