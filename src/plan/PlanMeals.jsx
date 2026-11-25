@@ -328,7 +328,7 @@ function PlanMeals({ mealPlan, plates, setMealPlan, restoreMeals, commitMealToPl
   const daySheet = detail && (
     <DaySheet day={detail.day} days={days} dates={dateOfDay} family={roster} ranges={awayRanges} forecast={forecastByDate}
       dayNotes={dayNotes} setDayNotes={setDayNotes} dayPills={dayPills} setDayPills={setDayPills} presence={presence} setPresence={setPresence}
-      timeLevels={timeLevels} setTimeLevels={setTimeLevels} onClose={() => setDetail(null)} />
+      timeLevels={timeLevels} setTimeLevels={setTimeLevels} readOnly={locked(detail.day)} onClose={() => setDetail(null)} />
   );
   const [choose, setChoose] = useState(null);     // { day, idx|null, kind: "main"|"side", title }
   const [moveFrom, setMoveFrom] = useState(null);
@@ -397,7 +397,7 @@ function PlanMeals({ mealPlan, plates, setMealPlan, restoreMeals, commitMealToPl
         return (
           <section key={day} data-day={day} className={["wv-day", past && "is-past", isDragged && "is-dragged", isTarget && "is-target"].filter(Boolean).join(" ")}
             style={isDragged ? { transform: `translateY(${drag.dy}px)` } : undefined}>
-            <DayBar past={past} onOpen={() => setDetail({ day, stacked: false })}>
+            <DayBar onOpen={() => setDetail({ day, stacked: false })}>
               <div className="wv-date-line day-line">
                 <span className="day-dow">{iso ? dayTitle(iso) : daysFull[days.indexOf(day)]}</span>
                 <Clocks n={LEVEL_N[level] || 2} />
@@ -489,9 +489,8 @@ function PlanMeals({ mealPlan, plates, setMealPlan, restoreMeals, commitMealToPl
 
 // ── Plate sheet (board "Plate sheet"): everything about one night ─────────────────────────
 // The Meals day bar: the whole bar opens the day details sheet, with a › at its right edge.
-// Locked past days have no details sheet, like Replace and Move.
-function DayBar({ past, onOpen, children }) {
-  if (past) return <div className="wv-date"><div className="wv-date-body">{children}</div></div>;
+// A locked past day's sheet opens read-only.
+function DayBar({ onOpen, children }) {
   return (
     <button type="button" className="wv-date is-tappable" onClick={onOpen}>
       <span className="wv-date-body">{children}</span>

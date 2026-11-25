@@ -38,7 +38,7 @@ export function NoteField({ value, onSave }) {
   );
 }
 
-export function Labels({ pills, onChange }) {
+export function Labels({ pills, onChange, readOnly }) {
   const [adding, setAdding] = useState(false);
   const [text, setText] = useState("");
   const add = () => { const l = text.trim(); if (l && !pills.some(p => p.label === l)) onChange([...pills, { label: l, source: "manual" }]); setText(""); setAdding(false); };
@@ -46,10 +46,10 @@ export function Labels({ pills, onChange }) {
     <div className="wk-labels">
       {pills.map(p => (
         <span key={p.label} className="wk-label">{p.label}
-          <button type="button" aria-label={`Remove ${p.label}`} onClick={() => onChange(pills.filter(x => x.label !== p.label))}>×</button>
+          {!readOnly && <button type="button" aria-label={`Remove ${p.label}`} onClick={() => onChange(pills.filter(x => x.label !== p.label))}>×</button>}
         </span>
       ))}
-      {adding
+      {readOnly ? (pills.length === 0 && <span className="day-sheet-none">—</span>) : adding
         ? <input autoFocus className="wk-label-input" aria-label="Label" value={text} onChange={e => setText(e.target.value)}
             onKeyDown={e => { if (e.key === "Enter") add(); if (e.key === "Escape") { setText(""); setAdding(false); } }} onBlur={add} />
         : <button type="button" className="wk-label-add" onClick={() => setAdding(true)}>+ label</button>}
