@@ -10,7 +10,7 @@ import { showToast } from "../ui/toast.js";
 import { latestDB } from "../app/latestDB.js";
 import { isExplicitNo, isOrdering, isRelevant } from "./ordering.js";
 
-function PlanConfirm({ onOpenItem, inFlow, registerNext, mode = "confirm", onUpdateItem, keptIds = [], checkedIds, setOrdering, addedOff = [], setAddedOff, addedItems, setAddedItems, stapleFlags, quantities = {}, setQuantities, mealPlan, meals, ingredients, onNext, onFinish, db, persistDB, days, daysFull }) {
+function PlanConfirm({ onOpenItem, registerHeld, inFlow, registerNext, mode = "confirm", onUpdateItem, keptIds = [], checkedIds, setOrdering, addedOff = [], setAddedOff, addedItems, setAddedItems, stapleFlags, quantities = {}, setQuantities, mealPlan, meals, ingredients, onNext, onFinish, db, persistDB, days, daysFull }) {
   const [newItem, setNewItem]   = useState("");
   const [view, setView]         = useState("meal");
   const [copied, setCopied]     = useState(false);
@@ -233,6 +233,8 @@ function PlanConfirm({ onOpenItem, inFlow, registerNext, mode = "confirm", onUpd
   });
   // In the Plan frame, its fixed Next / Finish plan take the snapshot from here.
   registerNext?.(orderSnapshot);
+  // Leaving the step with a panel open (Prev / Next) saves its held choice with the step change.
+  registerHeld?.(() => (editId && Object.keys(pending).length ? { id: editId, patch: pending } : null));
 
   const QtyChip = ({ ing }) => {
     const override = quantities[ing.id];
