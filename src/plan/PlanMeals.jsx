@@ -319,11 +319,13 @@ function PlanMeals({ mealPlan, plates, setMealPlan, restoreMeals, commitMealToPl
   };
 
   // ── What each day shows ────────────────────────────────────────────────────────
+  // Past nights can't be fixed (11/25): no amber on them, and the Week check lists today onward.
+  const checkObs = (weekCheck.observations || []).filter(o => !o.day || !locked(o.day));
   const concernsByDay = {};
-  for (const o of weekCheck.observations || []) if (o.severity === "concern" && o.day) (concernsByDay[o.day] = concernsByDay[o.day] || []).push(o);
+  for (const o of checkObs) if (o.severity === "concern" && o.day) (concernsByDay[o.day] = concernsByDay[o.day] || []).push(o);
   // Ruling 17.1: a planned home-cooked dish with nothing on its ingredient list (the app's line).
   const nothingToBuy = [];
-  for (const day of days) for (const d of dishesOf(day)) {
+  for (const day of days.filter(d => !locked(d))) for (const d of dishesOf(day)) {
     const m = mealRec(d.name);
     if (m && !(m.ingredients || []).length && !notHomeCooked(m)) nothingToBuy.push({ day, name: d.name.trim(), id: m.id });
   }
@@ -368,8 +370,8 @@ function PlanMeals({ mealPlan, plates, setMealPlan, restoreMeals, commitMealToPl
     if (d && d.over !== d.from) swapNights(d.from, d.over);
   };
 
-  const concernCount = (weekCheck.observations || []).filter(o => o.severity === "concern").length + fillNotes.length + nothingToBuy.length;
-  const noteCount = (weekCheck.observations || []).filter(o => o.severity !== "concern").length;
+  const concernCount = checkObs.filter(o => o.severity === "concern").length + fillNotes.length + nothingToBuy.length;
+  const noteCount = checkObs.filter(o => o.severity !== "concern").length;
   const checkWords = [concernCount && `${concernCount} concern${concernCount === 1 ? "" : "s"}`, noteCount && `${noteCount} note${noteCount === 1 ? "" : "s"}`].filter(Boolean).join(" · ");
 
   const header = (
@@ -495,7 +497,7 @@ function PlanMeals({ mealPlan, plates, setMealPlan, restoreMeals, commitMealToPl
       {rating && <RateSheet db={db} persistDB={persistDB} items={rating} onClose={() => setRating(null)} onOpenMeal={onOpenMeal} />}
       {checkOpen && (
         <Sheet tall title="Week check" onClose={() => setCheckOpen(false)}>
-          <WeekCheckBody observations={weekCheck.observations || []} fillNotes={fillNotes} nothingToBuy={nothingToBuy} dayShort={dayShort}
+          <WeekCheckBody observations={checkObs} fillNotes={fillNotes} nothingToBuy={nothingToBuy} dayShort={dayShort}
             hasMain={d => dishesOf(d).some(x => x.role === "main")} onFix={suggestSides} onOpenMeal={onOpenMeal ? id => { setCheckOpen(false); onOpenMeal(id); } : null} />
         </Sheet>
       )}
