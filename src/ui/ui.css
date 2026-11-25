@@ -39,6 +39,9 @@ button.ui-row:active { background: var(--pressed); }
   /* Round ends on the visible 32px face: the corner's vertical radius includes the
      transparent border, so it's half the tap height; the horizontal one half the face. */
   border-radius: calc(var(--pill-height) / 2) / calc(var(--touch) / 2); }
+/* An outlined inline pill draws its outline on the visible face (an inset ring), since its
+   top and bottom borders are the transparent tap margin. */
+.ui-pill-secondary.ui-pill-inline { border-left: 0; border-right: 0; box-shadow: inset 0 0 0 1px var(--control-border); }
 .ui-pill:active { opacity: 0.8; }
 .ui-pill:disabled { opacity: 0.45; cursor: default; }
 .ui-block-button { font: inherit; font-size: var(--body-size); font-weight: 700; width: 100%; min-height: var(--block-button); border-radius: var(--radius-pill); border: 0; cursor: pointer; background: var(--action); color: var(--on-action); }

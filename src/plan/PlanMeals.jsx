@@ -699,7 +699,7 @@ function WeekCheckBody({ observations, fillNotes, nothingToBuy, dayShort, hasMai
         <div key={"n" + k} className="wv-fix">
           <span className="wv-dot" aria-hidden="true" />
           <span className="wv-fix-text">{x.name} on {dayShort(x.day)}: nothing to buy</span>
-          {onOpenMeal && <PillButton inline secondary onClick={() => onOpenMeal(x.id)}>Open</PillButton>}
+          {onOpenMeal && <PillButton inline onClick={() => onOpenMeal(x.id)}>Open</PillButton>}
         </div>
       ))}
       {notes.length > 0 && (
