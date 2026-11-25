@@ -7,7 +7,7 @@ import React, { useEffect, useState } from "react";
 import { INVENTORY_LOCS } from "../app/globals.js";
 import { multiMealCounts } from "../app/pills.js";
 import { Check } from "../components/common.jsx";
-import { ItemEditPanel } from "../components/ItemEditPanel.jsx";
+import { ItemEditPanel, MoreButton } from "../components/ItemEditPanel.jsx";
 import { PickListSheet } from "../library/LibrarySheets.jsx";
 import { showToast } from "../ui/toast.js";
 import { Icon } from "../ui/kit.jsx";
@@ -101,7 +101,8 @@ function PlanInventory({ onOpenItem, loc, placed = {}, setPlaced, checkedIds, st
     const on    = buying(ing);
     const users = usedByMeal[ing.id] || [];
     const subs  = [multiMeal[ing.id] ? `×${multiMeal[ing.id]} meals` : users.length === 1 ? `for ${users[0]}` : null,
-      noPlace && placed[ing.id] ? `goes in ${placed[ing.id]}` : null].filter(Boolean);
+      noPlace && placed[ing.id] ? `goes in ${placed[ing.id]}` : null,
+      ing.nextBuy ? `${ing.nextBuy.toLowerCase()} from next week` : null].filter(Boolean);   // Buy changed this week (brief §5, 11/25)
     const open  = editId === ing.id;
     return (
       <div className="inv-item">
@@ -110,13 +111,14 @@ function PlanInventory({ onOpenItem, loc, placed = {}, setPlaced, checkedIds, st
           <span className="cf-text"><span className="cf-name">{ing.name}</span>{subs.length > 0 && <span className="cf-sub">{subs.join(" · ")}</span>}</span>
           <span className="cf-trail" onClick={e => e.stopPropagation()}>
             {on && <Amount ing={ing} />}
-            {onUpdateItem && <button type="button" className={open || placeFor === ing.id ? "cf-more is-open" : "cf-more"} aria-label={noPlace ? `Kept in, ${ing.name}` : `Edit ${ing.name}`}
-              onClick={() => (noPlace ? setPlaceFor(ing.id) : openPanel(ing.id))}>⋯</button>}
+            {onUpdateItem && (noPlace
+              ? <button type="button" className={placeFor === ing.id ? "cf-more is-open" : "cf-more"} aria-label={`Kept in, ${ing.name}`} onClick={() => setPlaceFor(ing.id)}>⋯</button>
+              : <MoreButton open={open} name={ing.name} onClick={() => openPanel(ing.id)} />)}
           </span>
         </div>
         {open && (
           <div className="cf-panel">
-            <ItemEditPanel ing={ing} thisWeek={quantities[ing.id]} onUpdate={patch => updateItem(ing, patch)} pending={pending} setPending={setPending}
+            <ItemEditPanel ing={ing.realBuy ? { ...ing, ...ing.realBuy } : ing} thisWeek={quantities[ing.id]} onUpdate={patch => updateItem(ing, patch)} pending={pending} setPending={setPending}
               onClose={extra => { applyPending(extra); setEditId(null); }} onDetails={onOpenItem ? extra => { applyPending(extra); onOpenItem(ing.id); } : null} />
           </div>
         )}

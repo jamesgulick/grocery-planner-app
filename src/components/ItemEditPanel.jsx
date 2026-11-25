@@ -52,3 +52,11 @@ function ItemEditPanel({ ing, thisWeek, onUpdate, onClose, onDetails, pending, s
 }
 
 export { ItemEditPanel };
+
+// The row's ⋯; while its panel is open, a green ✓ in a small pale-green circle in the same
+// place and tap area, which closes and saves like Done (brief "Inventory item panel", 11/25).
+export function MoreButton({ open, name, onClick }) {
+  return open
+    ? <button type="button" className="cf-more is-done" aria-label={`Done with ${name}`} onClick={onClick}><span className="cf-done-dot" aria-hidden="true">✓</span></button>
+    : <button type="button" className="cf-more" aria-label={`Edit ${name}`} onClick={onClick}>⋯</button>;
+}

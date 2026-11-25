@@ -14,6 +14,7 @@ import { Icon, PillButton, RowChevron, Segmented } from "../ui/kit.jsx";
 import { showToast } from "../ui/toast.js";
 import { latestDB } from "../app/latestDB.js";
 import { isExplicitNo, isOrdering, isRelevant } from "./ordering.js";
+import { MoreButton } from "../components/ItemEditPanel.jsx";
 
 function PlanConfirm({ headSlot, onOpenMeal, onOpenItem, registerHeld, inFlow, registerNext, mode = "confirm", onUpdateItem, keptIds = [], addedIds = [], onAddFromLibrary, checkedIds, setOrdering, addedOff = [], setAddedOff, addedItems, setAddedItems, stapleFlags, quantities = {}, setQuantities, mealPlan, meals, ingredients, onNext, onFinish, db, persistDB, days, daysFull }) {
   const [newItem, setNewItem]   = useState("");
@@ -274,8 +275,10 @@ function PlanConfirm({ headSlot, onOpenMeal, onOpenItem, registerHeld, inFlow, r
   // Subline: "×2 meals" for a shared item; in A–Z, "for <meal>" when one planned meal needs it.
   const usedBy = {};
   plannedMeals.forEach(m => (m.ingredients || []).forEach(id => { (usedBy[id] = usedBy[id] || []).push(m.name); }));
-  const subOf = (ing, flat) => (multiMeal[ing.id] ? `×${multiMeal[ing.id]} meals`
-    : flat && ing.tier === "specialty" && (usedBy[ing.id] || []).length === 1 ? `for ${usedBy[ing.id][0]}` : null);
+  // A Buy type changed this week adds "<type> from next week" (brief §5, 11/25).
+  const subOf = (ing, flat) => [multiMeal[ing.id] ? `×${multiMeal[ing.id]} meals`
+    : flat && ing.tier === "specialty" && (usedBy[ing.id] || []).length === 1 ? `for ${usedBy[ing.id][0]}` : null,
+    ing.nextBuy ? `${ing.nextBuy.toLowerCase()} from next week` : null].filter(Boolean).join(" · ") || null;
 
   // One row for every list (by meal, A–Z, skipped). Checked = ordering; an unchecked row stays
   // exactly where it is, dimmed, so it can be re-decided in context. The ⋯ panel belongs to
@@ -290,12 +293,12 @@ function PlanConfirm({ headSlot, onOpenMeal, onOpenItem, registerHeld, inFlow, r
           <span className="cf-text"><span className="cf-name">{ing.name}</span>{sub && <span className="cf-sub">{sub}</span>}</span>
           <span className="cf-trail" onClick={e => e.stopPropagation()}>
             <Amount ing={ing} />
-            <button type="button" className={editId === ing.id ? "cf-more is-open" : "cf-more"} onClick={() => openPanel(ing.id)} aria-label={`Edit ${ing.name}`}>⋯</button>
+            <MoreButton open={editId === ing.id} name={ing.name} onClick={() => openPanel(ing.id)} />
           </span>
         </div>
         {editId === ing.id && (
           <div className="cf-panel">
-            <ItemEditPanel ing={ing} thisWeek={quantities[ing.id]} onUpdate={patch => updateItem(ing.id, patch)} pending={pending} setPending={setPending}
+            <ItemEditPanel ing={ing.realBuy ? { ...ing, ...ing.realBuy } : ing} thisWeek={quantities[ing.id]} onUpdate={patch => updateItem(ing.id, patch)} pending={pending} setPending={setPending}
               onClose={extra => { applyPending(extra); setEditId(null); }} onDetails={onOpenItem ? extra => { applyPending(extra); onOpenItem(ing.id); } : null} />
           </div>
         )}
@@ -420,7 +423,7 @@ function PlanConfirm({ headSlot, onOpenMeal, onOpenItem, registerHeld, inFlow, r
                   return (
                     <button key={i.id} type="button" className="cf-match" disabled={on} onMouseDown={e => e.preventDefault()} onClick={() => addMatch(i)}>
                       <span className="cf-name">{i.name}</span>
-                      <span className="cf-sub">{on ? `Already on the list · ${placeOf(i)}` : `${placeOf(i)} · ${buyWord(i)}`}</span>
+                      <span className="cf-sub">{on ? `Already on the list · ${placeOf(i)}` : `${placeOf(i)} · ${i.nextBuy || buyWord(i)}`}</span>
                     </button>
                   );
                 })}

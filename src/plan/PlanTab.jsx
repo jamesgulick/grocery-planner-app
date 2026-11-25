@@ -11,6 +11,7 @@ import { inventoryLocs } from "./inventoryModel.js";
 import { PlanMeals } from "./PlanMeals.jsx";
 import { ItemPage } from "../library/ItemPage.jsx";
 import { orderingPatch } from "./ordering.js";
+import { buyOf, buyPatch, buyWord } from "../library/libraryModel.js";
 import { WeekStep } from "./WeekStep.jsx";
 import "./plan.css";
 import { latestDB } from "../app/latestDB.js";
@@ -98,53 +99,37 @@ function PlanTab({ db, persistDB, headerIcons, onDone, onOpenMeal }) {
     persistDB(writeActivePlan(db, next), opts);
   };
 
-  // RE-FILING AN ITEM ("⋯ edit" on Inventory and Confirm) never changes whether it's on
-  // this week's list. Each frequency has its own on-list rule (always: not skipped;
-  // staple: flagged; specialty: a planned meal needs it, or it's in keptIds), so a tier
-  // change carries the item's current on/off state across to the new tier's rule.
-  // keptIds holds specialty items chosen to buy that no planned meal needs. The item
-  // and the plan are written in ONE save, so neither write can clobber the other.
+  // RE-FILING AN ITEM ("⋯ edit" on Inventory and Confirm) never moves its row during the week
+  // (brief §5, 11/25): the item is saved with its new Buy type, but this plan keeps
+  // using the type it had (buyThisWeek: id → the earlier BUY_OPTIONS value), so its section,
+  // its checkbox and Confirm's grouping stay as they were and its subline reads "· <type> from
+  // next week". The next plan, built without it, uses the new type. Item and plan, ONE save.
+  // keptIds: As needed items added from Confirm's search that no planned meal needs.
   const keptIds = draft?.keptIds || [];
-  // addedIds: Library items in Confirm's "Added" group, in the order added (brief §5, "As needed,
-  // adding and reclassifying"): added from Confirm's search, or reclassified to As needed while
-  // checked with no meal needing them. Display only: whether each is bought is the usual
-  // decision (checkedIds / stapleFlags, and keptIds for As needed).
+  // addedIds: Library items in Confirm's "Added" group, in the order added from Confirm's
+  // search. Display only: whether each is bought is the usual decision (checkedIds /
+  // stapleFlags, and keptIds for As needed).
   const addedIds = draft?.addedIds || [];
+  const buyThisWeek = draft?.buyThisWeek || {};
+  // This plan's view of the items: a re-filed item keeps this week's type; nextBuy names the new one.
+  const planIngs = ingredients.map(i => buyThisWeek[i.id] && buyThisWeek[i.id] !== buyOf(i)
+    ? { ...i, ...buyPatch(buyThisWeek[i.id]), nextBuy: buyWord(i), realBuy: { tier: i.tier, stapleType: i.stapleType } } : i);
   // `draftExtra` / `opts`: plan fields (a step change) saved in the SAME write, for leaving
   // Confirm with a held panel choice; two saves in one tap would each start from this render's db.
   const updateItem = (id, patch, draftExtra = null, opts = {}) => {
     const ing = ingredients.find(i => i.id === id);
     if (!ing) return;
     const nextIngredients = ingredients.map(i => i.id === id ? { ...i, ...patch } : i);
-    if (!patch.tier || patch.tier === ing.tier) {
-      if (!draftExtra) { persistDB({ ...db, ingredients: nextIngredients }); return; }
-      persistDB(writeActivePlan({ ...db, ingredients: nextIngredients }, {
-        ...draft, step, maxStep, timeLevels, presence, mealPlan, plates, checkedIds, addedOff, addedItems, dayNotes, dayPills, stapleFlags, quantities, weather,
-        _stepsVer: PLAN_STEPS_VER, startedAt: draft?.startedAt || new Date().toISOString(), ...draftExtra,
-      }), opts);
-      return;
-    }
-    const planned = Object.values(mealPlan).flat();
-    const mealNeeds = meals.some(m => planned.includes(m.name) && (m.ingredients || []).includes(id));
-    const skipped = checkedIds.includes(id);
-    const wasOn = ing.tier === "always" ? !skipped
-      : ing.tier === "staple" ? (stapleFlags[id] === true || (mealNeeds && stapleFlags[id] !== false)) && !skipped
-      : (mealNeeds || keptIds.includes(id)) && !skipped;
-    let nChecked = checkedIds.filter(x => x !== id), nFlags = { ...stapleFlags }, nKept = keptIds.filter(x => x !== id), nAdded = addedIds;
-    delete nFlags[id];
-    if (patch.tier === "always" && !wasOn) nChecked.push(id);
-    if (patch.tier === "staple") { if (wasOn) nFlags[id] = true; else if (mealNeeds) nFlags[id] = false; }
-    if (patch.tier === "specialty") {
-      if (wasOn && !mealNeeds) { nKept.push(id); if (!nAdded.includes(id)) nAdded = [...nAdded, id]; }
-      if (!wasOn && mealNeeds) nChecked.push(id);
-    }
-    setCheckedIds(nChecked); setStapleFlags(nFlags);
-    const next = {
-      ...draft,
-      step, maxStep, timeLevels, presence, mealPlan, plates, checkedIds: nChecked, addedOff, addedItems, dayNotes, dayPills, stapleFlags: nFlags, quantities, weather,
-      keptIds: nKept, addedIds: nAdded, _stepsVer: PLAN_STEPS_VER, startedAt: draft?.startedAt || new Date().toISOString(), ...(draftExtra || {}),
-    };
-    persistDB(writeActivePlan({ ...db, ingredients: nextIngredients }, next), opts);
+    const was = buyThisWeek[id] || buyOf(ing), now = buyOf({ ...ing, ...patch });
+    const changed = now !== buyOf(ing);
+    if (!changed && !draftExtra) { persistDB({ ...db, ingredients: nextIngredients }); return; }
+    const nBuy = { ...buyThisWeek };
+    if (now === was) delete nBuy[id]; else nBuy[id] = was;
+    persistDB(writeActivePlan({ ...db, ingredients: nextIngredients }, {
+      ...draft, step, maxStep, timeLevels, presence, mealPlan, plates, checkedIds, addedOff, addedItems, dayNotes, dayPills, stapleFlags, quantities, weather,
+      ...(changed ? { buyThisWeek: nBuy } : {}),
+      _stepsVer: PLAN_STEPS_VER, startedAt: draft?.startedAt || new Date().toISOString(), ...(draftExtra || {}),
+    }), opts);
   };
 
   const clearDraft = () => persistDB(writeActivePlan(db, null));
@@ -316,7 +301,7 @@ function PlanTab({ db, persistDB, headerIcons, onDone, onOpenMeal }) {
 
   const dates = weekDates(draft.weekStartDate, extraDaysOf(draft));
   const SUBS = ["Calendar", "Who's home", "Time"];
-  const LOCS = inventoryLocs(ingredients, mealPlan, meals, placed);
+  const LOCS = inventoryLocs(planIngs, mealPlan, meals, placed);
   const locAt = Math.min(locIdx, LOCS.length - 1);
   const nav = (() => {
     if (step === 0) return {
@@ -354,9 +339,9 @@ function PlanTab({ db, persistDB, headerIcons, onDone, onOpenMeal }) {
           db={db} persistDB={persistDB} extraDays={extraDays} canExtend={canExtend} setExtraDays={setExtraDays} headSlot={headSlot}
           onOpenMeal={onOpenMeal} orderedMeals={draft.orderedAt ? draft.meals : null} />}
         <div className={step > 3 ? "shell-legacy-flow" : undefined}>
-          {step === 2 && <PlanInventory onOpenItem={openItem("Inventory")} loc={LOCS[locAt]} placed={placed} setPlaced={setPlaced} checkedIds={checkedIds} setCheckedIds={setCheckedIdsP} stapleFlags={stapleFlags} setOrdering={setOrdering} quantities={quantities} setQuantities={setQuantitiesP} mealPlan={mealPlan} meals={meals} ingredients={ingredients} onNext={() => goToStep(3)} days={days} onUpdateItem={updateItem} keptIds={keptIds} />}
-          {step === 3 && <PlanConfirm headSlot={headSlot} onOpenMeal={onOpenMeal} onOpenItem={openItem("Confirm")} registerHeld={fn => { heldItem.current = fn; }} inFlow registerNext={fn => { beforeNext.current = fn; }} mode="confirm" onUpdateItem={updateItem} keptIds={keptIds} addedIds={addedIds} onAddFromLibrary={addFromLibrary} checkedIds={checkedIds} setOrdering={setOrdering} addedOff={addedOff} setAddedOff={setAddedOffP} addedItems={addedItems} setAddedItems={setAddedItemsP} stapleFlags={stapleFlags} quantities={quantities} setQuantities={setQuantitiesP} mealPlan={mealPlan} meals={meals} ingredients={ingredients} onNext={() => goToStep(4)} db={db} persistDB={persistDB} days={days} daysFull={daysFull} />}
-          {step === 4 && <PlanConfirm inFlow registerNext={fn => { beforeNext.current = fn; }} mode="sparky" onUpdateItem={updateItem} keptIds={keptIds} addedIds={addedIds} checkedIds={checkedIds} setOrdering={setOrdering} addedOff={addedOff} setAddedOff={setAddedOffP} addedItems={addedItems} setAddedItems={setAddedItemsP} stapleFlags={stapleFlags} quantities={quantities} setQuantities={setQuantitiesP} mealPlan={mealPlan} meals={meals} ingredients={ingredients} onFinish={finishPlan} db={db} persistDB={persistDB} days={days} daysFull={daysFull} />}
+          {step === 2 && <PlanInventory onOpenItem={openItem("Inventory")} loc={LOCS[locAt]} placed={placed} setPlaced={setPlaced} checkedIds={checkedIds} setCheckedIds={setCheckedIdsP} stapleFlags={stapleFlags} setOrdering={setOrdering} quantities={quantities} setQuantities={setQuantitiesP} mealPlan={mealPlan} meals={meals} ingredients={planIngs} onNext={() => goToStep(3)} days={days} onUpdateItem={updateItem} keptIds={keptIds} />}
+          {step === 3 && <PlanConfirm headSlot={headSlot} onOpenMeal={onOpenMeal} onOpenItem={openItem("Confirm")} registerHeld={fn => { heldItem.current = fn; }} inFlow registerNext={fn => { beforeNext.current = fn; }} mode="confirm" onUpdateItem={updateItem} keptIds={keptIds} addedIds={addedIds} onAddFromLibrary={addFromLibrary} checkedIds={checkedIds} setOrdering={setOrdering} addedOff={addedOff} setAddedOff={setAddedOffP} addedItems={addedItems} setAddedItems={setAddedItemsP} stapleFlags={stapleFlags} quantities={quantities} setQuantities={setQuantitiesP} mealPlan={mealPlan} meals={meals} ingredients={planIngs} onNext={() => goToStep(4)} db={db} persistDB={persistDB} days={days} daysFull={daysFull} />}
+          {step === 4 && <PlanConfirm inFlow registerNext={fn => { beforeNext.current = fn; }} mode="sparky" onUpdateItem={updateItem} keptIds={keptIds} addedIds={addedIds} checkedIds={checkedIds} setOrdering={setOrdering} addedOff={addedOff} setAddedOff={setAddedOffP} addedItems={addedItems} setAddedItems={setAddedItemsP} stapleFlags={stapleFlags} quantities={quantities} setQuantities={setQuantitiesP} mealPlan={mealPlan} meals={meals} ingredients={planIngs} onFinish={finishPlan} db={db} persistDB={persistDB} days={days} daysFull={daysFull} />}
         </div>
       </div>
       <ActionBar>

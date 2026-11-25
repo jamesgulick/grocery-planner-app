@@ -23,6 +23,8 @@
 .cf-amount-input { width: var(--confirm-amount-w); min-height: var(--pill-height); box-sizing: border-box; padding: 0 var(--space-2); border: 1.5px solid var(--action); border-radius: var(--radius-control); font: inherit; font-size: var(--body-size); }
 .cf-more { width: var(--confirm-more-w); min-height: var(--touch); padding: 0; border: 0; background: none; font: inherit; font-size: var(--title-size); color: var(--text-muted); cursor: pointer; }
 .cf-more.is-open { color: var(--action); }
+.cf-more.is-done { display: inline-flex; align-items: center; justify-content: center; }
+.cf-done-dot { width: var(--done-dot); height: var(--done-dot); border-radius: 50%; background: var(--tint); color: var(--action); font-size: var(--meta-size); font-weight: 700; display: inline-flex; align-items: center; justify-content: center; }
 
 /* Order risk: one amber-outlined card, a row per dish with nothing to buy. */
 .cf-risk { background: var(--surface); border: var(--problem-outline) solid var(--problem); border-radius: var(--radius-group); overflow: hidden; }

@@ -260,12 +260,15 @@ Pre-migration DBs carry two older single-slot concepts (db.planDraft live-editin
   them** (the plan is "next", or no next week exists), so a week boundary never moves
   once a following week exists; a new next week starts after the extra days.
   `autoRetirePlans` keeps `extraDays` in `planTail` so history dates them.
-- `keptIds` — specialty items on this week's list that no planned meal needs. Re-filing an
-  item ("⋯ edit" on Inventory/Confirm → PlanTab's `updateItem`) never changes whether it's
-  on the list: its on/off state is carried to the new tier's rule (always: not skipped;
-  staple: `stapleFlags`; specialty: needed by a meal or in `keptIds`), and the item and
-  the plan are written in one save. `usualPromptDismissed` records the set of amount
-  changes the Confirm "keep as usual?" card was dismissed for.
+- `keptIds` — As needed (specialty) items added from Confirm's search that no planned meal
+  needs; `addedIds` — the Library items in Confirm's "Added" group (display only).
+- `buyThisWeek` — re-filing an item's Buy type ("⋯ edit" on Inventory/Confirm → PlanTab's
+  `updateItem`) saves the new type on the item but never moves its row this week: the plan
+  records the earlier type (id → `BUY_OPTIONS` value) and PlanTab hands the plan screens
+  `planIngs`, the items with this week's type (plus `nextBuy` for the subline "· <type> from
+  next week"). The next plan, built without it, uses the new type. Item and plan are written
+  in one save. `usualPromptDismissed` records the set of amount changes the Confirm "keep as
+  usual?" card was dismissed for.
 - The plan-inputs migration (easy pills → timeLevels, the Partner away map and the away-member toggle → presence / an open-ended away period) is stamped by `_planInputsVer`.
 - **Checked = buying** (polish Phase 1b). Each item has ONE buy-or-not decision for the
   week, read and written by both Inventory and Confirm through `src/plan/ordering.js`
