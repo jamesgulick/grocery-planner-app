@@ -378,7 +378,7 @@ function PlanMeals({ mealPlan, plates, setMealPlan, restoreMeals, commitMealToPl
         const dishes = dishesOf(day);
         const mains = dishes.filter(d => d.role === "main"), sides = dishes.filter(d => d.role === "side");
         const fc = forecastByDate[iso];
-        const wx = [forecastWords(fc), engineGrillOk(grillOpen, fc) && "grill ok"].filter(Boolean).join(" · ");
+        const wx = [forecastWords(fc), engineGrillOk(grillOpen, fc) && "grill ok"].filter(Boolean);
         const pills = (dayPills?.[day] || []).filter(p => p.label !== "grill");
         const note = (dayNotes?.[day] || "").trim();
         const level = (timeLevels || {})[day] || seedTimeLevel(iso ? abbrOfISO(iso) : day);
@@ -391,15 +391,15 @@ function PlanMeals({ mealPlan, plates, setMealPlan, restoreMeals, commitMealToPl
           <section key={day} data-day={day} className={["wv-day", past && "is-past", isDragged && "is-dragged", isTarget && "is-target"].filter(Boolean).join(" ")}
             style={isDragged ? { transform: `translateY(${drag.dy}px)` } : undefined}>
             <div className="wv-date">
-              <div className="wv-date-line">
-                <span className="wv-dow">{iso ? dayTitle(iso) : daysFull[days.indexOf(day)]}</span>
+              <div className="wv-date-line day-line">
+                <span className="day-dow">{iso ? dayTitle(iso) : daysFull[days.indexOf(day)]}</span>
                 <Clocks n={LEVEL_N[level] || 2} />
-                {!compact && wx && <span>{wx}</span>}
-                {outLines[day]?.length > 0 && <span className="wv-out">{outLines[day].join(" · ")}</span>}
+                {wx.map(w => <span key={w} className="day-wx">{w}</span>)}
+                {(outLines[day] || []).map(l => <span key={l} className="day-out">{l}</span>)}
                 {(compact ? pills.slice(0, 1) : pills).map(p => <span key={p.label} className="wv-label">{p.label}{compact && pills.length > 1 ? ` +${pills.length - 1}` : ""}</span>)}
-                {compact && note && <span className="wv-note-inline">{note}</span>}
+                {compact && note && <span className="wv-note-inline day-note">{note}</span>}
               </div>
-              {!compact && note && <div className="wv-note">{note}</div>}
+              {!compact && note && <div className="wv-note day-note">{note}</div>}
             </div>
             {dishes.length === 0 ? (
               <div className="wv-open">

@@ -26,9 +26,15 @@
 .wk-day { position: relative; display: flex; flex-direction: column; gap: var(--space-2); padding: 0 var(--space-4) var(--space-3); }
 /* Day headers (board "Week day headers", option C, 11/24): the header line is a grey strip across
    the card's full width; notes, chips and Little · Some · Lots follow on white. */
-.wk-day-head { display: flex; align-items: baseline; flex-wrap: wrap; gap: var(--space-2); margin: 0 calc(-1 * var(--space-4)); padding: var(--space-2) var(--space-4); background: var(--day-strip); }
-.wk-dow { font-size: var(--body-size); font-weight: 700; }
-.wk-out { font-size: var(--body-size); font-weight: 700; color: var(--text-muted); }
+.wk-day-head { margin: 0 calc(-1 * var(--space-4)); padding: var(--space-2) var(--space-4); background: var(--day-strip); }
+/* Plan day header text, the same on Calendar, Who's home, Time and Meals (11/24): day and date,
+   then clocks, weather, who's out and labels, and on Meals the note, 8px apart with no "·".
+   Only the container differs: a band in the card here, a rounded bar on Meals. */
+.day-line { display: flex; align-items: center; flex-wrap: wrap; gap: var(--space-1) var(--space-2); font-size: var(--label-size); line-height: var(--meta-line); color: var(--text); }
+.day-dow { font-size: var(--body-size); font-weight: 700; }
+.day-wx { color: var(--text-muted); }
+.day-out { font-weight: 600; }
+.day-note { color: var(--text-soft); }
 .wk-note { font: inherit; font-size: var(--body-size); line-height: var(--body-line); width: 100%; box-sizing: border-box; padding: var(--space-half) 0 var(--space-1); border: 0; border-bottom: 1px dashed var(--control-border); background: none; color: var(--text); resize: none; overflow: hidden; }
 .wk-note::placeholder { color: var(--text-muted); }
 .wk-note:focus { outline: none; border-bottom-style: solid; border-bottom-color: var(--action); }

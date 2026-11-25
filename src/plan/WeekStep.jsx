@@ -24,6 +24,7 @@ export const forecastWords = fc => (!fc ? null : fc.pop > 0 ? `${fc.hi}° · ${f
 export const TIME_OPTIONS = [
   { value: "none", label: "Little", n: 1 }, { value: "some", label: "Some", n: 2 }, { value: "much", label: "Lots", n: 3 },
 ];
+const TIME_N = Object.fromEntries(TIME_OPTIONS.map(o => [o.value, o.n]));
 
 // A day note, edited in place; saved when you leave the field.
 function NoteField({ value, onSave }) {
@@ -78,6 +79,7 @@ export function WeekStep({ sub, db, persistDB, days, dates, dayNotes, setDayNote
     setPresence(next);
   };
   const lines = absenceLines(days.map(d => ({ key: d, iso: dates[d] })), family, isOut, ranges);
+  const outs = day => lines[day].map(l => <span key={l} className="day-out">{l}</span>);
   const visiblePills = day => (dayPills?.[day] || []).filter(p => p.label !== "grill");
 
   if (sub === 0) return (
@@ -86,7 +88,7 @@ export function WeekStep({ sub, db, persistDB, days, dates, dayNotes, setDayNote
       <Group>
         {days.map(day => (
           <div key={day} className="wk-day">
-            <div className="wk-day-head"><span className="wk-dow">{dayTitle(dates[day])}</span>{forecastWords(forecast[dates[day]]) && <span className="ui-meta">{forecastWords(forecast[dates[day]])}</span>}</div>
+            <div className="wk-day-head day-line"><span className="day-dow">{dayTitle(dates[day])}</span>{forecastWords(forecast[dates[day]]) && <span className="day-wx">{forecastWords(forecast[dates[day]])}</span>}</div>
             <NoteField value={dayNotes?.[day]} onSave={t => setDayNotes(prev => ({ ...prev, [day]: t }))} />
             <Labels pills={visiblePills(day)} onChange={ps => setDayPills(prev => ({ ...prev, [day]: [...(prev?.[day] || []).filter(p => p.label === "grill"), ...ps] }))} />
           </div>
@@ -100,7 +102,7 @@ export function WeekStep({ sub, db, persistDB, days, dates, dayNotes, setDayNote
       <Group>
         {days.map(day => (
           <div key={day} className="wk-day">
-            <div className="wk-day-head"><span className="wk-dow">{dayTitle(dates[day])}</span>{lines[day].length > 0 && <span className="wk-out">{lines[day].join(" · ")}</span>}</div>
+            <div className="wk-day-head day-line"><span className="day-dow">{dayTitle(dates[day])}</span>{outs(day)}</div>
             {(dayNotes?.[day] || "").trim() && <div className="wk-note-read">{dayNotes[day]}</div>}
             <div className="wk-chips">
               {family.map(name => {
@@ -122,9 +124,10 @@ export function WeekStep({ sub, db, persistDB, days, dates, dayNotes, setDayNote
       <Group>
         {days.map(day => (
           <div key={day} className="wk-day">
-            <div className="wk-day-head">
-              <span className="wk-dow">{dayTitle(dates[day])}</span>
-              {lines[day].length > 0 && <span className="wk-out">{lines[day].join(" · ")}</span>}
+            <div className="wk-day-head day-line">
+              <span className="day-dow">{dayTitle(dates[day])}</span>
+              {TIME_N[timeLevels?.[day]] && <Clocks n={TIME_N[timeLevels[day]]} />}
+              {outs(day)}
             </div>
             {(dayNotes?.[day] || "").trim() && <div className="wk-note-read">{dayNotes[day]}</div>}
             <Segmented label="Time" tone="forest" value={timeLevels?.[day]} onChange={v => setTimeLevels(prev => ({ ...prev, [day]: v }))}

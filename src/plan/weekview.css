@@ -19,17 +19,18 @@
 
 /* ── Days ── */
 .wv { display: flex; flex-direction: column; gap: var(--day-gap-detailed); }
-.wv.is-compact { gap: var(--space-2); }
-.wv-day { display: flex; flex-direction: column; gap: var(--space-2); position: relative; }
-.wv.is-compact .wv-day { gap: var(--space-1); }
-.wv-date { display: flex; flex-direction: column; gap: var(--space-1); padding: 0 var(--space-1); }
-.wv-date-line { display: flex; align-items: center; flex-wrap: wrap; gap: var(--space-2); font-size: var(--label-size); line-height: var(--label-line); color: var(--text-muted); }
-.wv.is-compact .wv-date-line { flex-wrap: nowrap; white-space: nowrap; min-width: 0; }
-.wv-dow { font-size: var(--meta-size); font-weight: 700; color: var(--text); }
-.wv-out { font-weight: 600; }
+.wv.is-compact { gap: var(--day-gap-compact); }
+.wv-day { display: flex; flex-direction: column; gap: var(--day-bar-gap); position: relative; }
+.wv.is-compact .wv-day { gap: var(--day-bar-gap-compact); }
+/* The day's header is a rounded grey bar on the page (board "Meals day headers", option B, 11/24):
+   one line in Compact with the note cut off; in Detailed the note wraps below. */
+.wv-date { display: flex; flex-direction: column; gap: var(--space-1); padding: var(--day-bar-pad); border-radius: var(--day-bar-radius); background: var(--day-bar); }
+.wv.is-compact .wv-date { padding: var(--day-bar-pad-compact); }
+.wv.is-compact .wv-date-line { flex-wrap: nowrap; white-space: nowrap; min-width: 0; overflow: hidden; line-height: var(--label-line); }
+.wv-date-line > * { flex: none; }
 .wv-label { font-size: var(--label-size); font-weight: 700; color: var(--text); border: var(--pill-outline) solid var(--text); border-radius: var(--radius-pill); padding: 0 var(--space-2); }
-.wv-note { font-size: var(--label-size); line-height: var(--label-line); color: var(--text); }
-.wv-note-inline { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; color: var(--text); }
+.wv-note { font-size: var(--label-size); line-height: var(--meta-line); }
+.wv-date-line > .wv-note-inline { flex: 1 1 0; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 
 .wv-tile { display: flex; align-items: center; background: var(--surface); border-radius: var(--radius-control); border: var(--problem-outline) solid transparent; }
 .wv-tile.has-problem { border-color: var(--problem); }
