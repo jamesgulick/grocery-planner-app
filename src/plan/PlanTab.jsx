@@ -348,18 +348,47 @@ function PlanTab({ db, persistDB, headerIcons, onDone, onOpenMeal: openMealPage,
   })();
 
   if (weekView) {
-    const weeks = [["current", "This week"], ["next", "Next week"]].filter(([k]) => db.plans?.[k]?.weekStartDate).map(([value, label]) => ({ value, label }));
+    // Last week (brief §2): the latest archived week before this one, read-only; its past days
+    // carry the Rate pills. Tabs show only weeks that exist.
+    const thisStart = db.plans?.current?.weekStartDate || todayISO;
+    const last = (db.planTail || []).filter(w => w?.weekStartDate && w.weekStartDate < thisStart)
+      .reduce((a, w) => (!a || w.weekStartDate > a.weekStartDate ? w : a), null);
+    const weeks = [...(last ? [{ value: "last", label: "Last week" }] : []),
+      ...[["current", "This week"], ["next", "Next week"]].filter(([k]) => db.plans?.[k]?.weekStartDate).map(([value, label]) => ({ value, label }))];
+    const weekTabs = weeks.length > 1 && <Segmented label="Week" value={weekView.last && last ? "last" : (db.activePlan || "current")} onChange={onSwitchWeek} options={weeks} />;
+    if (weekView.last && last) {
+      const lastDays = planDays(last, db.settings?.shoppingDay);
+      const lastDates = weekDates(last.weekStartDate, extraDaysOf(last));
+      const noop = () => {};
+      return (
+        <div className="plan">
+          <header className="plan-head" ref={headRef}>
+            <button type="button" className="lib-back plan-back" onClick={onBack}><span aria-hidden="true">‹</span> Home</button>
+            <div className="plan-title-row"><h1 className="ui-screen-title">{weekLabel(last.weekStartDate)}</h1><HeaderButtons>{headerIcons}</HeaderButtons></div>
+            <div className="plan-span"><span className="plan-span-text">{dayTitle(last.weekStartDate)} – {dayTitle(planEndDate(last))} · {Object.keys(lastDates).length} days</span></div>
+            {weekTabs}
+          </header>
+          <div className="plan-body">
+            <PlanMeals key="last" mealPlan={last.mealPlan || {}} plates={last.plates || {}} setMealPlan={noop} restoreMeals={noop} commitMealToPlan={noop} timeLevels={last.timeLevels || {}} presence={last.presence || {}}
+              weekStartDate={last.weekStartDate} adventurousWeek={false} meals={meals} days={lastDays.days} daysFull={lastDays.daysFull} dayNotes={last.dayNotes || {}} dayPills={{}}
+              setDayNotes={noop} setDayPills={noop} setPresence={noop} setTimeLevels={noop}
+              db={db} persistDB={persistDB} extraDays={extraDaysOf(last)} canExtend={false} setExtraDays={noop} headSlot={null}
+              onOpenMeal={id => openMealPage?.(id, "Last week")} orderedMeals={null} pastWeek />
+          </div>
+        </div>
+      );
+    }
     return (
       <div className="plan">
         <header className="plan-head" ref={headRef}>
           <button type="button" className="lib-back plan-back" onClick={onBack}><span aria-hidden="true">‹</span> Home</button>
           <div className="plan-title-row"><h1 className="ui-screen-title">{weekLabel(draft.weekStartDate)}</h1><HeaderButtons>{headerIcons}</HeaderButtons></div>
           {spanRow}
-          {weeks.length > 1 && <Segmented label="Week" value={db.activePlan || "current"} onChange={onSwitchWeek} options={weeks} />}
+          {weekTabs}
           <div ref={setHeadSlot} />
         </header>
         <div className="plan-body">
-          <PlanMeals mealPlan={mealPlan} plates={plates} setMealPlan={setMealPlanP} restoreMeals={restoreMeals} commitMealToPlan={commitMealToPlan} timeLevels={timeLevels} presence={presence}
+          <PlanMeals key="plan" mealPlan={mealPlan} plates={plates} setMealPlan={setMealPlanP} restoreMeals={restoreMeals} commitMealToPlan={commitMealToPlan} timeLevels={timeLevels} presence={presence}
             weekStartDate={draft.weekStartDate} adventurousWeek={!!draft.adventurousWeek} meals={meals} days={days} daysFull={daysFull} dayNotes={dayNotes} dayPills={dayPills}
             setDayNotes={setDayNotesP} setDayPills={setDayPillsP} setPresence={setPresenceP} setTimeLevels={setTimeLevelsP}
             db={db} persistDB={persistDB} extraDays={extraDays} canExtend={canExtend} setExtraDays={setExtraDays} headSlot={headSlot}

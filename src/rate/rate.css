@@ -1,0 +1,21 @@
+/* The rate sheet (board "Graduation") and the Home banner "Meals to rate". */
+.rate { display: flex; flex-direction: column; gap: var(--space-4); }
+.rate-why { display: block; font-size: var(--label-size); color: var(--text-muted); }
+.rate-card { display: flex; flex-direction: column; gap: var(--space-2); padding: var(--space-2) var(--space-3); background: var(--surface); border-radius: var(--radius-group); }
+.rate-person { display: flex; align-items: center; gap: var(--space-2); min-height: var(--touch); }
+.rate-person .ui-seg { flex: 1; min-width: 0; }
+.rate-name { flex: none; width: var(--rate-name-w); font-size: var(--body-size); font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rate-name.is-unset, .rate-person.is-out .rate-name { color: var(--text-muted); font-weight: 400; }
+.rate-out { flex: 1; font-size: var(--meta-size); color: var(--text-muted); }
+.rate-details { align-self: flex-start; min-height: var(--touch); padding: 0 var(--space-1); border: 0; background: none; font: inherit; font-size: var(--body-size); font-weight: 600; color: var(--action); cursor: pointer; }
+.rate-actions { display: flex; flex-direction: column; gap: var(--space-2); }
+.rate-text-button { min-height: var(--touch); border: 0; background: none; font: inherit; font-size: var(--body-size); color: var(--text); cursor: pointer; }
+
+/* Home: "Meals to rate · N", the names, Rate, × (above Tonight). */
+.home-rate { display: flex; align-items: center; gap: var(--space-2); min-height: var(--rate-banner-h); padding: var(--space-1) var(--space-1) var(--space-1) var(--space-4); background: var(--surface); border-radius: var(--radius-group); }
+.home-rate-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: var(--space-half); }
+.home-rate-title { font-size: var(--label-size); font-weight: 600; color: var(--text-muted); }
+.home-rate-names { font-size: var(--body-size); font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* Week view: a past day to rate isn't dimmed; its Rate sits before the chevron. */
+.wv-tile .ui-row-action { align-self: center; }

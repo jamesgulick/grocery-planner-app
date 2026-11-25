@@ -225,12 +225,16 @@ export function MealPage({ db, persistDB, mealId, onBack, backLabel = "Library" 
   }
 
   // Short values (11/16: kept short so nothing wraps; the full detail is in each row's sheet).
-  const prefs = (meal.preferences || []).filter(p => p.pref === "likes" || p.pref === "dislikes");
-  const likeN = prefs.filter(p => p.pref === "likes").length;
-  const wont = family.map(f => f.name).filter(n => prefs.some(p => p.person === n && p.pref === "dislikes"));
-  const fineN = family.length - likeN - wont.length;
-  const whoShort = !prefs.length ? (isNew ? null : "Everyone fine")
-    : <>{[likeN ? `${likeN} like` : null, ...wont.map(n => <strong key={n}>{n} won't</strong>), fineN > 0 ? `${fineN} fine` : null]
+  // "1 like · Kid 2 won't · 1 fine · 2 not set" (brief §2, 11/25): fine is stored, so a person
+  // with no entry is "not set"; with nobody answered the row reads Not set. Never amber.
+  const prefOf = n => (meal.preferences || []).find(p => p.person === n && ["likes", "fine", "dislikes"].includes(p.pref))?.pref;
+  const people = family.map(f => f.name);
+  const likeN = people.filter(n => prefOf(n) === "likes").length;
+  const wont = people.filter(n => prefOf(n) === "dislikes");
+  const fineN = people.filter(n => prefOf(n) === "fine").length;
+  const notSetN = people.filter(n => !prefOf(n)).length;
+  const whoShort = notSetN === people.length ? null
+    : <>{[likeN ? `${likeN} like` : null, ...wont.map(n => <strong key={n}>{n} won't</strong>), fineN ? `${fineN} fine` : null, notSetN ? `${notSetN} not set` : null]
         .filter(Boolean).map((p, k) => <span key={k}>{k ? " · " : ""}{p}</span>)}</>;
   // How often: the choice only (the last-made date shows once, under Rotation); "Not used" on Hand-picked.
   const handPicked = meal.rotation === "manual";

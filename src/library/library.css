@@ -59,6 +59,7 @@
 /* ── Sheets ───────────────────────────────────────────────────────────── */
 .lib-info p { margin: 0 0 var(--space-3); font-size: var(--body-size); line-height: var(--body-line); }
 .lib-person-name { font-size: var(--body-size); font-weight: 600; }
+.lib-person-name.is-unset { color: var(--text-muted); }   /* never asked (brief §2, board "Who eats it: Fine vs Not set") */
 .lib-cant-undo { font-size: var(--meta-size); color: var(--text-muted); }
 .lib-open-link { align-self: flex-start; text-decoration: none; display: inline-flex; align-items: center; }
 

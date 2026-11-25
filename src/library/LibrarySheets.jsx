@@ -135,16 +135,14 @@ export function TimeCostSheet({ meal, onField, onClose, noCost }) {
 export function WhoEatsSheet({ meal, family, onChange, onClose }) {
   const [topic, setTopic] = useState(null);
   const info = topic && <InfoSheet topic={topic} onClose={() => setTopic(null)} />;
-  const prefOf = name => (meal.preferences || []).find(p => p.person === name)?.pref || "fine";
-  const set = (name, v) => {
-    const rest = (meal.preferences || []).filter(p => p.person !== name);
-    onChange(v === "fine" ? rest : [...rest, { person: name, pref: v }]);
-  };
+  // "fine" is stored (brief §2, 11/25), so a never-asked person (no entry) shows nothing selected.
+  const prefOf = name => (meal.preferences || []).find(p => p.person === name)?.pref;
+  const set = (name, v) => onChange([...(meal.preferences || []).filter(p => p.person !== name), { person: name, pref: v }]);
   return (
     <Sheet title="Who eats it" onClose={onClose} onInfo={() => setTopic("whoEats")}>
       {family.map(f => (
         <div key={f.name} className="ui-field lib-person">
-          <div className="lib-person-name">{f.name}</div>
+          <div className={prefOf(f.name) ? "lib-person-name" : "lib-person-name is-unset"}>{f.name}</div>
           <Segmented label={f.name} value={prefOf(f.name)} onChange={v => set(f.name, v)} options={PREF_OPTIONS} />
         </div>
       ))}

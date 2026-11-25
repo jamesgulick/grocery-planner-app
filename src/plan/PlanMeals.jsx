@@ -31,6 +31,9 @@ import { CheckRow, Clocks, Group, Icon, RowAction, RowChevron, SearchField, Shee
 import { showToast } from "../ui/toast.js";
 import { dayTitle, forecastWords } from "./WeekStep.jsx";
 import { DaySheet } from "./DaySheet.jsx";
+import { rateQueue } from "../rate/rating.js";
+import { RateSheet } from "../rate/RateSheet.jsx";
+import "../rate/rate.css";
 import "./weekview.css";
 
 // Carried-leftover notes arrive one per person ("Partner is covered by Chili carried from
@@ -53,7 +56,7 @@ const LONG_WD = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday
 const longTitle = iso => { const d = new Date(iso + "T12:00:00"); return `${LONG_WD[d.getDay()]} ${d.getDate()}`; };
 const SHORTLIST_SIZE = 3;
 
-function PlanMeals({ mealPlan, plates, setMealPlan, restoreMeals, commitMealToPlan, timeLevels, presence, weekStartDate, adventurousWeek, meals, days, daysFull, dayNotes, dayPills, setDayNotes, setDayPills, setPresence, setTimeLevels, db, persistDB, extraDays = 0, canExtend = false, setExtraDays, headSlot, onOpenMeal, orderedMeals, openDay = null, onPlateClose = null }) {
+function PlanMeals({ mealPlan, plates, setMealPlan, restoreMeals, commitMealToPlan, timeLevels, presence, weekStartDate, adventurousWeek, meals, days, daysFull, dayNotes, dayPills, setDayNotes, setDayPills, setPresence, setTimeLevels, db, persistDB, extraDays = 0, canExtend = false, setExtraDays, headSlot, onOpenMeal, orderedMeals, openDay = null, onPlateClose = null, pastWeek = false }) {
   const allMeals = meals.length > 0 ? meals : SEED_MEALS;
   const today = todayLocalISO();
   const roster = (db.settings?.familyContacts || []).map(f => f.name);
@@ -64,6 +67,11 @@ function PlanMeals({ mealPlan, plates, setMealPlan, restoreMeals, commitMealToPl
   const outLines = absenceLines(days.map(d => ({ key: d, iso: dateOfDay[d] })), roster, isOut, awayRanges);
   const dayShort = day => (dateOfDay[day] ? abbrOfISO(dateOfDay[day]) : day);
   const mealRec = name => (db.meals || []).find(m => m.name.trim() === String(name).trim());
+  // Rating (brief §2): a past day whose main is Just tried or Incomplete shows Rate; the plate
+  // sheet offers Rate on every past dish (Rate, any time). `pastWeek`: Last week, read-only.
+  const toRate = new Map(rateQueue(db, today, new Date().getHours()).map(q => [q.meal.id, q]));
+  const outOf = day => roster.filter(n => isOut(n, day, dateOfDay[day]));
+  const [rating, setRating] = useState(null);
 
   // Manual picks sort by when a meal was last on the table (Week 5): "last had 3 weeks ago".
   const recency = useMemo(() => mealRecency({ planTail: db.planTail || [], mealHistory: db.mealHistory || [], plans: db.plans || {}, today }), [db.planTail, db.mealHistory, db.plans, today]);
@@ -381,7 +389,7 @@ function PlanMeals({ mealPlan, plates, setMealPlan, restoreMeals, commitMealToPl
 
   return (
     <div className={compact ? "wv is-compact" : "wv"}>
-      {headSlot ? createPortal(header, headSlot) : header}
+      {!pastWeek && (headSlot ? createPortal(header, headSlot) : header)}
       {days.map(day => {
         const iso = dateOfDay[day];
         const dishes = dishesOf(day);
@@ -394,10 +402,11 @@ function PlanMeals({ mealPlan, plates, setMealPlan, restoreMeals, commitMealToPl
         const concerns = concernsByDay[day] || [];
         const leftovers = groupLeftoverNotes(weekCheck.leftovers?.[day]);
         const past = locked(day);
+        const rateMain = past ? mains.map(d => toRate.get(d.mealId)).find(Boolean) : null;
         const changed = !past && dishes.length > 0 && changedSinceOrder(day);
         const isDragged = drag?.from === day, isTarget = drag && drag.over === day && drag.from !== day;
         return (
-          <section key={day} data-day={day} className={["wv-day", past && "is-past", isDragged && "is-dragged", isTarget && "is-target"].filter(Boolean).join(" ")}>
+          <section key={day} data-day={day} className={["wv-day", past && !rateMain && "is-past", isDragged && "is-dragged", isTarget && "is-target"].filter(Boolean).join(" ")}>
             <DayBar onOpen={() => setDetail({ day, stacked: false })}>
               <div className="wv-date-line day-line">
                 <span className="day-dow">{iso ? dayTitle(iso) : daysFull[days.indexOf(day)]}</span>
@@ -430,6 +439,7 @@ function PlanMeals({ mealPlan, plates, setMealPlan, restoreMeals, commitMealToPl
                   {concerns.map((o, k) => <span key={k} className="wv-concern">{o.text}</span>)}
                   {changed && <span className="wv-concern">Check ingredients</span>}
                 </button>
+                {rateMain && <RowAction onClick={() => setRating([{ mealId: rateMain.meal.id, iso, out: outOf(day), why: rateMain.why }])}>Rate</RowAction>}
                 {compact ? (!past && <span className="wv-handle" role="button" tabIndex={-1} aria-label="Drag to another day"
                   onPointerDown={e => onHandleDown(e, day)} onPointerMove={onHandleMove} onPointerUp={onHandleUp} onPointerCancel={onHandleUp}><Icon name="handle" size={18} /></span>)
                   : <RowChevron />}
@@ -463,7 +473,8 @@ function PlanMeals({ mealPlan, plates, setMealPlan, restoreMeals, commitMealToPl
           onRemove={d => removeMeal(plateDay, d.idx)}
           onAdd={kind => setChoose({ day: plateDay, idx: null, kind, title: kind === "side" ? "Add a side" : "Add a main" })}
           onMove={() => setMoveFrom(plateDay)}
-          onClear={() => { clearDay(plateDay); setPlateDay(null); }} />
+          onClear={() => { clearDay(plateDay); setPlateDay(null); }}
+          onRate={d => setRating([{ mealId: d.mealId, iso: dateOfDay[plateDay], out: outOf(plateDay) }])} />
       )}
       {choose && (
         <ChooseSheet key={`${choose.day}-${choose.idx}-${choose.kind}`} choose={choose} allMeals={allMeals} recencyValue={recencyValue} recencyLabel={recencyLabel}
@@ -481,6 +492,7 @@ function PlanMeals({ mealPlan, plates, setMealPlan, restoreMeals, commitMealToPl
           onGo={(idxs, to, swap) => { moveDishes(moveFrom, idxs, to, swap); setMoveFrom(null); setPlateDay(null); }}
           onCancel={() => setMoveFrom(null)} />
       )}
+      {rating && <RateSheet db={db} persistDB={persistDB} items={rating} onClose={() => setRating(null)} onOpenMeal={onOpenMeal} />}
       {checkOpen && (
         <Sheet tall title="Week check" onClose={() => setCheckOpen(false)}>
           <WeekCheckBody observations={weekCheck.observations || []} fillNotes={fillNotes} nothingToBuy={nothingToBuy} dayShort={dayShort}
@@ -503,7 +515,7 @@ function DayBar({ onOpen, children }) {
   );
 }
 
-function PlateSheet({ iso, past, dishes, level, note, concerns, learnMode, setLearnMode, onClose, onEdit, stacked, onOpenMeal, onFix, onReplace, onRemove, onAdd, onMove, onClear }) {
+function PlateSheet({ iso, past, dishes, level, note, concerns, learnMode, setLearnMode, onClose, onEdit, stacked, onOpenMeal, onFix, onReplace, onRemove, onAdd, onMove, onClear, onRate }) {
   const hasMain = dishes.some(d => d.role === "main");
   const sub = (
     <div className="wv-plate-sub">
@@ -536,6 +548,7 @@ function PlateSheet({ iso, past, dishes, level, note, concerns, learnMode, setLe
                     : <span className={d.role === "main" ? "wv-dish-name is-main" : "wv-dish-name"}>{d.name.trim()}</span>}
                   {why.map((r, k) => <span key={k} className="ui-meta">{r.text}</span>)}
                 </div>
+                {past && d.mealId && onRate && <RowAction onClick={() => onRate(d)}>Rate</RowAction>}
                 {!past && <>
                   <button type="button" className="ui-icon-button wv-replace" aria-label={`Replace ${d.name.trim()}`} onClick={() => onReplace(d)}><Icon name="replace" size={20} strong /></button>
                   <button type="button" className="ui-icon-button wv-remove" aria-label={`Remove ${d.name.trim()}`} onClick={() => onRemove(d)}><Icon name="close" size={18} /></button>

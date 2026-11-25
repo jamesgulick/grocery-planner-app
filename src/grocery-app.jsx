@@ -348,11 +348,16 @@ export default function App() {
           onDismissPending={() => { clearPending(); setPendingAtStart(false); }}
           onPendingLoaded={() => setPendingAtStart(false)}
           onOpenPending={p => setGrab({ kind: "meal", name: p.job?.name || "", link: p.job?.link || "", text: p.job?.text || "", role: p.job?.role || "main" })}
-          persistDB={persistDB} />}
+          persistDB={persistDB} onOpenMeal={id => openLibraryPage({ kind: "meal", id }, { label: "Home", tab: "home", y: window.scrollY })} />}
         {tab==="plan" && <PlanTab key={(db.activePlan || "current") + (weekView ? "-week" + weekView.n : "")} db={db} persistDB={persistDB} headerIcons={headerIcons} onDone={() => setTab("home")}
-          onOpenMeal={(id, label) => openLibraryPage({ kind: "meal", id }, { label, tab: "plan", y: window.scrollY, weekView: weekView && { n: weekView.n } })}
+          onOpenMeal={(id, label) => openLibraryPage({ kind: "meal", id }, { label, tab: "plan", y: window.scrollY, weekView: weekView && { n: weekView.n, last: weekView.last } })}
           weekView={weekView} onBack={() => returnTo({ tab: "home", y: homeY.current })}
-          onSwitchWeek={k => { if (k !== db.activePlan) persistDB({ ...db, activePlan: k }, { background: true }); setWeekView(w => w && { n: w.n }); }} />}
+          onSwitchWeek={k => {
+            // Last week (brief §2) is history, not a plan slot: the active plan stays as it is.
+            if (k === "last") { setWeekView(w => w && { n: w.n, last: true }); return; }
+            if (k !== db.activePlan) persistDB({ ...db, activePlan: k }, { background: true });
+            setWeekView(w => w && { n: w.n });
+          }} />}
         {tab==="library" && <LibraryTab db={db} persistDB={persistDB} view={libraryView} setView={setLibraryView} headerIcons={headerIcons} resetKey={tabTaps} openRequest={libOpen} onReturn={returnTo} onGrab={init => setGrab(init)} />}
         <TabBarSpacer />
         <TabBar tabs={TABS} active={tab} onSelect={id => {

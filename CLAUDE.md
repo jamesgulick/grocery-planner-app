@@ -175,6 +175,7 @@ src/ui/tokens.css            ← design tokens (polish Phase 1.6): the only src/
 src/ui/kit.jsx, ui.css       ← primitives (v2): Icon, Section/Group/Row, PillButton, Switch, Segmented, Sheet, TabBar, TopBar
 src/home/HomeScreen.jsx      ← Home (v2 shell): date title, Tonight, rest of the week, Next week, share
 src/shell/                   ← v2 shell sheets: DataSheet, SettingsSheet; src/app/dataIO.js + shareText.js are shared helpers
+src/rate/                    ← rating (brief §2): rating.js (who to prompt: Just tried / Incomplete), RateSheet, rate.css
 src/engine/composeWeek.js    ← the engine: composeWeek + evaluateWeek (validated offline; see below)
 src/engine/assembleInputs.js ← app state → engine inputs, plates, week check, hardened call
 src/ingredientMatch.js       ← the one text→ingredient matcher (recipe paste); not engine
@@ -284,6 +285,11 @@ Pre-migration DBs carry two older single-slot concepts (db.planDraft live-editin
   staples are not skips). Items typed in on Confirm that are then unchecked go in
   `addedOff`. The old Confirm drop list `removedIds` is retired; the `_planOrderVer`
   migration folds any left on a plan into the decision.
+
+**Rating (brief §2).** `meal.ratedAt` (ISO date, app-side only, never passed to the engine) is set
+only by a finished rate sheet. `preferences` may hold `"fine"` as well as likes/dislikes; no entry =
+never asked. The engine reads only likes/dislikes. `planTail` entries now also keep `presence`
+and `dayNotes` (who was out each night; Last week's day sheets); history's engine reader ignores them.
 
 Settings added for the engine: `grillOpen` (grill season, Settings › Cooking), `awayRanges`, `learnMode`. `awayMemberHome` (who got family texts) lost its last consumer when polish Phase 1 cut the Tonight text queue; old DBs may carry it, and only the plan-inputs migration reads it.
 

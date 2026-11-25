@@ -352,6 +352,10 @@ const autoRetirePlans = db => {
         ...(outgoing.weekStartDate ? { endDate: endDateFor(outgoing.weekStartDate, extraDaysOf(outgoing)) } : {}),
         // Plate annotations (C1) carry the as-served leftovers snapshots history needs.
         ...(outgoing.plates ? { plates: outgoing.plates } : {}),
+        // Who was home each night and the day notes (rating, brief §2: people out that night
+        // aren't asked; Last week's day sheets). App-side only: history's engine reader ignores them.
+        ...(outgoing.presence && Object.keys(outgoing.presence).length ? { presence: outgoing.presence } : {}),
+        ...(outgoing.dayNotes && Object.keys(outgoing.dayNotes).length ? { dayNotes: outgoing.dayNotes } : {}),
       }
     : null;
   const prevTails = db.planTail || [];

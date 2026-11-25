@@ -20,6 +20,9 @@ import { homePlanText } from "../app/shareText.js";
 import { ActionBar, Group, HeaderButtons, Icon, IconButton, PillButton, RowChevron } from "../ui/kit.jsx";
 import { ReimportPill } from "../shell/ReimportPill.jsx";
 import { PickupSheet } from "./PickupSheet.jsx";
+import { rateQueue } from "../rate/rating.js";
+import { RateSheet } from "../rate/RateSheet.jsx";
+import "../rate/rate.css";
 import "./home.css";
 
 const ABBR = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
@@ -28,6 +31,9 @@ const abbrOf = iso => ABBR[new Date(iso + "T00:00:00").getDay()];
 // The five planning steps as Home's step bar names them. Index = the plan's step index
 // (PLAN_STEPS), where step 0 (today's Welcome) is where the Week setup step will live.
 const STEP_BAR = ["Week", "Meals", "Inventory", "Confirm", "Order"];
+
+// × on "Meals to rate" hides it until the app is next opened (brief §2): nothing is stored.
+let rateBannerHidden = false;
 
 const hasMeals = plan => Object.values(plan?.mealPlan || {}).some(m => (m || []).length);
 
@@ -151,8 +157,12 @@ function pendingWords(p) {
   return `Recipe sent ${clock(p.at)}`;
 }
 
-export function HomeScreen({ db, dataDot, onOpenData, onOpenSettings, onOpenPlan, onOpenWeekView, pending, onDismissPending, onPendingLoaded, onOpenPending, persistDB }) {
+export function HomeScreen({ db, dataDot, onOpenData, onOpenSettings, onOpenPlan, onOpenWeekView, pending, onDismissPending, onPendingLoaded, onOpenPending, persistDB, onOpenMeal }) {
   const today = todayLocalISO();
+  // Meals to rate (brief §2): Just tried or Incomplete, tonight's from 7pm. Rate steps through them.
+  const toRate = rateQueue(db, today, new Date().getHours());
+  const [rateHidden, setRateHidden] = useState(rateBannerHidden);
+  const [rating, setRating] = useState(null);
   const plans = db.plans || {};
   const shoppingDay = db.settings?.shoppingDay;
 
@@ -278,6 +288,17 @@ export function HomeScreen({ db, dataDot, onOpenData, onOpenSettings, onOpenPlan
           </Group>
         )}
 
+        {toRate.length > 0 && !rateHidden && (
+          <div className="home-rate">
+            <span className="home-rate-text">
+              <span className="home-rate-title">Meals to rate · {toRate.length}</span>
+              <span className="home-rate-names">{toRate.map(q => q.meal.name).join(", ")}</span>
+            </span>
+            <PillButton inline onClick={() => setRating(toRate.map(q => ({ mealId: q.meal.id, iso: q.iso, out: q.out, why: q.why })))}>Rate</PillButton>
+            <button type="button" className="home-pending-x" aria-label="Dismiss" onClick={() => { rateBannerHidden = true; setRateHidden(true); }}><Icon name="close" size={16} /></button>
+          </div>
+        )}
+
         {/* Tonight (board "Tonight band", option G, 11/17): a dark green band across the top of the
             card reads "Tonight", with the cart after it on pickup day; it stays when nothing is planned. */}
         <section className="home-tonight-card" aria-label="Tonight">
@@ -332,6 +353,7 @@ export function HomeScreen({ db, dataDot, onOpenData, onOpenSettings, onOpenPlan
         <div className="home-share-spacer" aria-hidden="true" />
       </main>
 
+      {rating && <RateSheet db={db} persistDB={persistDB} items={rating} onClose={() => setRating(null)} onOpenMeal={onOpenMeal} />}
       {pickupOpen && (
         <PickupSheet plan={upcoming.plan} shoppingDay={shoppingDay} onClose={() => setPickupOpen(false)}
           onPick={iso => {

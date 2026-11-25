@@ -58,7 +58,7 @@ function mealValue(m, f, ctx) {
     case "tempAffinity": return cap(v);
     case "grillable": case "soon": case "noSidesUnlessNeeded": case "substantial": return v ? "On" : "Off";
     case "carries": return `${Array.isArray(v.forWhom) ? v.forWhom.join(", ") || "Nobody" : v.forWhom === "all" ? "Everyone" : "Who likes it"} · lasts ${v.lastsDays} day${v.lastsDays === 1 ? "" : "s"}`;
-    case "preferences": return v.map(p => `${p.person} ${p.pref === "dislikes" ? "won't eat" : "likes"}`).join(" · ");
+    case "preferences": return v.map(p => `${p.person} ${p.pref === "dislikes" ? "won't eat" : p.pref === "fine" ? "fine" : "likes"}`).join(" · ");
     default: return String(v);
   }
 }

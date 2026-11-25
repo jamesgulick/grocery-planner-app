@@ -115,6 +115,8 @@
   --confirm-row-h: 60px;                  /* Confirm rows (board "Plan, confirm the order") */
   --confirm-amount-w: 88px;               /* Confirm: this week's amount while editing */
   --confirm-more-w: 40px;
+  --rate-name-w: 64px;                    /* the rate sheet: a person's name before their Likes · Fine · Won't eat */
+  --rate-banner-h: 60px;                  /* Home: "Meals to rate" (board "Graduation") */
   --done-dot: 28px;                       /* the open panel's ✓ in its pale-green circle (11/25) */                 /* Confirm: the ⋯ button */                    /* a card whose field has focus (day sheet note) */
   --text-soft: #3A3A3E;                   /* Plan day headers: the note (11/24) */
   --open-dash: #C9C9C4;                   /* week view: an open day's dashed tile */
