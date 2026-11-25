@@ -102,7 +102,7 @@ function weekState(w, today) {
 const pickupWords = (iso, today) => iso === today ? "pickup today"
   : `${iso < today ? "picked up" : "pickup"} ${abbrOf(iso)} ${new Date(iso + "T00:00:00").getDate()}`;
 
-function WeekRow({ week, state, today, pickup, onOpen, onContinue }) {
+function WeekRow({ week, state, today, pickup, planFrom, onOpen, onContinue }) {
   const withPickup = s => pickup ? `${s} · ${pickupWords(pickup, today)}` : s;
   const status = state.kind === "unplanned" ? withPickup("Not planned")
     : state.kind === "progress" ? `Up next: ${STEP_BAR[state.next]}`
@@ -115,7 +115,11 @@ function WeekRow({ week, state, today, pickup, onOpen, onContinue }) {
           <span className="home-week-title">{weekLabel(week.start)} <span className="home-week-chev" aria-hidden="true">›</span></span>
           {status && <span className="home-sub">{status}</span>}
         </button>
-        {state.kind === "unplanned" && <PillButton inline onClick={onOpen}>Plan</PillButton>}
+        {/* Both plan slots full (11/25): it can be started once the old week archives, so the
+            band says when instead of offering a Plan that can't start it. */}
+        {state.kind === "unplanned" && (planFrom
+          ? <span className="home-sub home-week-wait">Plan from {abbrOf(planFrom)} {new Date(planFrom + "T00:00:00").getDate()}</span>
+          : <PillButton inline onClick={onOpen}>Plan</PillButton>)}
         {state.kind === "progress" && <PillButton inline onClick={onContinue}>Continue</PillButton>}
       </div>
       {state.kind === "progress" && (
@@ -281,6 +285,7 @@ export function HomeScreen({ db, dataDot, onOpenData, onOpenSettings, onOpenPlan
               return (
                 <Group key={week.start}>
                   <WeekRow week={week} state={state} today={today}
+                    planFrom={!week.plan && plans.current && plans.next?.weekStartDate > today ? plans.next.weekStartDate : null}
                     pickup={week.plan ? pickupDateOf(week.plan) : !upcoming.key && week.start === upcoming.start ? upcoming.date : null}
                     onOpen={() => openWeek(week)} onContinue={() => continueWeek(week, state)} />
                   {showDays && rows.map(({ key, iso }) => {

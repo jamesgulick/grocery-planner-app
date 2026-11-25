@@ -25,6 +25,7 @@
 .home-week { background: var(--tint); display: flex; flex-direction: column; gap: var(--space-2); padding: var(--space-1) var(--space-2) var(--space-1) 0; }
 .home-week-top { display: flex; align-items: center; gap: var(--space-3); }
 .home-week-open { flex: 1; min-width: 0; min-height: var(--touch); font: inherit; text-align: left; background: none; border: 0; cursor: pointer; color: var(--text); display: flex; flex-direction: column; justify-content: center; gap: var(--space-half); padding: var(--space-1) 0 var(--space-1) var(--space-4); }
+.home-week-wait { flex: none; white-space: nowrap; padding-right: var(--space-2); font-size: var(--label-size); line-height: var(--label-line); }
 .home-week-title { font-size: var(--body-size); line-height: var(--body-line); font-weight: 700; }
 .home-week-chev { color: var(--control-border); font-weight: 400; }
 .home-steps { margin: 0; padding: 0 var(--space-2) var(--space-2) var(--space-4); list-style: none; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: var(--space-1); }
