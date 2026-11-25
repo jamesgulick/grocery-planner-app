@@ -24,8 +24,14 @@
 .wv.is-compact .wv-day { gap: var(--day-bar-gap-compact); }
 /* The day's header is a rounded grey bar on the page (board "Meals day headers", option B, 11/24):
    one line in Compact with the note cut off; in Detailed the note wraps below. */
-.wv-date { display: flex; flex-direction: column; gap: var(--space-1); padding: var(--day-bar-pad); border-radius: var(--day-bar-radius); background: var(--day-bar); }
+.wv-date { display: flex; align-items: center; gap: var(--space-2); width: 100%; box-sizing: border-box; padding: var(--day-bar-pad); border: 0; border-radius: var(--day-bar-radius); background: var(--day-bar); font: inherit; color: inherit; text-align: left; }
+.wv-date-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: var(--space-1); }
+.wv-date.is-tappable { cursor: pointer; }
+.wv-date.is-tappable:active { background: var(--day-bar-pressed); }
 .wv.is-compact .wv-date { padding: var(--day-bar-pad-compact); }
+/* Compact: the text fades out before the ›, never under it (11/24). */
+.wv.is-compact .wv-date.is-tappable .wv-date-line { -webkit-mask-image: linear-gradient(to right, black calc(100% - var(--day-bar-fade)), transparent); mask-image: linear-gradient(to right, black calc(100% - var(--day-bar-fade)), transparent); }
+.wv.is-compact .wv-date.is-tappable .wv-note-inline { text-overflow: clip; }
 .wv.is-compact .wv-date-line { flex-wrap: nowrap; white-space: nowrap; min-width: 0; overflow: hidden; line-height: var(--label-line); }
 .wv-date-line > * { flex: none; }
 .wv-label { font-size: var(--label-size); font-weight: 700; color: var(--text); border: var(--pill-outline) solid var(--text); border-radius: var(--radius-pill); padding: 0 var(--space-2); }

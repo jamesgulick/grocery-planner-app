@@ -27,7 +27,7 @@ export const TIME_OPTIONS = [
 const TIME_N = Object.fromEntries(TIME_OPTIONS.map(o => [o.value, o.n]));
 
 // A day note, edited in place; saved when you leave the field.
-function NoteField({ value, onSave }) {
+export function NoteField({ value, onSave }) {
   const [text, setText] = useState(value || "");
   const ref = useRef(null);
   useEffect(() => { setText(value || ""); }, [value]);
@@ -38,7 +38,7 @@ function NoteField({ value, onSave }) {
   );
 }
 
-function Labels({ pills, onChange }) {
+export function Labels({ pills, onChange }) {
   const [adding, setAdding] = useState(false);
   const [text, setText] = useState("");
   const add = () => { const l = text.trim(); if (l && !pills.some(p => p.label === l)) onChange([...pills, { label: l, source: "manual" }]); setText(""); setAdding(false); };
@@ -57,14 +57,9 @@ function Labels({ pills, onChange }) {
   );
 }
 
-export function WeekStep({ sub, db, persistDB, days, dates, dayNotes, setDayNotes, dayPills, setDayPills, presence, setPresence, timeLevels, setTimeLevels, adventurous, setAdventurous }) {
-  const family = (db.settings?.familyContacts || []).map(f => f.name);
-  const ranges = db.settings?.awayRanges || [];
-  const [forecast, setForecast] = useState({});
-  const datesKey = days.map(d => dates[d]).join(",");
-  useEffect(() => { let off = false; fetchLiveForecast(days.map(d => dates[d])).then(f => { if (!off) setForecast(f); }); return () => { off = true; }; }, [datesKey]);
-
-  // Who's home: an override for that night, else Away dates.
+// Who's home for one plan: an override for that night, else Away dates. Shared by the Week step
+// and the day details sheet, so both read and write the same `presence`.
+export function whoModel({ presence, setPresence, ranges, dates }) {
   const override = (day, name) => presence?.[day]?.[name];
   const away = (name, iso) => inAwayRange(ranges, name, iso);
   const isOut = (name, day, iso) => { const o = day ? override(day, name) : undefined; return typeof o === "boolean" ? !o : away(name, iso); };
@@ -78,9 +73,38 @@ export function WeekStep({ sub, db, persistDB, days, dates, dayNotes, setDayNote
     if (Object.keys(dayMap).length) next[day] = dayMap; else delete next[day];
     setPresence(next);
   };
-  const lines = absenceLines(days.map(d => ({ key: d, iso: dates[d] })), family, isOut, ranges);
+  return { override, away, isOut, toggle };
+}
+
+// One night's chips (option D): home green; out this night solid grey, struck; out from Away
+// dates dashed grey, struck; home despite Away dates green with a dashed edge.
+export function WhoChips({ day, iso, family, who }) {
+  return (
+    <div className="wk-chips">
+      {family.map(name => {
+        const o = who.override(day, name), byAway = who.away(name, iso);
+        const home = typeof o === "boolean" ? o : !byAway;
+        const cls = home ? (byAway ? "wk-chip is-home is-despite" : "wk-chip is-home") : (byAway && typeof o !== "boolean" ? "wk-chip is-out is-away" : "wk-chip is-out");
+        return <button key={name} type="button" className={cls} aria-pressed={home} onClick={() => who.toggle(day, name)}>{name}</button>;
+      })}
+    </div>
+  );
+}
+
+// A day's labels change without touching the hidden "grill" pill.
+export const setVisiblePills = (setDayPills, day, ps) => setDayPills(prev => ({ ...prev, [day]: [...(prev?.[day] || []).filter(p => p.label === "grill"), ...ps] }));
+export const visiblePillsOf = (dayPills, day) => (dayPills?.[day] || []).filter(p => p.label !== "grill");
+
+export function WeekStep({ sub, db, persistDB, days, dates, dayNotes, setDayNotes, dayPills, setDayPills, presence, setPresence, timeLevels, setTimeLevels, adventurous, setAdventurous }) {
+  const family = (db.settings?.familyContacts || []).map(f => f.name);
+  const ranges = db.settings?.awayRanges || [];
+  const [forecast, setForecast] = useState({});
+  const datesKey = days.map(d => dates[d]).join(",");
+  useEffect(() => { let off = false; fetchLiveForecast(days.map(d => dates[d])).then(f => { if (!off) setForecast(f); }); return () => { off = true; }; }, [datesKey]);
+
+  const who = whoModel({ presence, setPresence, ranges, dates });
+  const lines = absenceLines(days.map(d => ({ key: d, iso: dates[d] })), family, who.isOut, ranges);
   const outs = day => lines[day].map(l => <span key={l} className="day-out">{l}</span>);
-  const visiblePills = day => (dayPills?.[day] || []).filter(p => p.label !== "grill");
 
   if (sub === 0) return (
     <div className="wk">
@@ -90,7 +114,7 @@ export function WeekStep({ sub, db, persistDB, days, dates, dayNotes, setDayNote
           <div key={day} className="wk-day">
             <div className="wk-day-head day-line"><span className="day-dow">{dayTitle(dates[day])}</span>{forecastWords(forecast[dates[day]]) && <span className="day-wx">{forecastWords(forecast[dates[day]])}</span>}</div>
             <NoteField value={dayNotes?.[day]} onSave={t => setDayNotes(prev => ({ ...prev, [day]: t }))} />
-            <Labels pills={visiblePills(day)} onChange={ps => setDayPills(prev => ({ ...prev, [day]: [...(prev?.[day] || []).filter(p => p.label === "grill"), ...ps] }))} />
+            <Labels pills={visiblePillsOf(dayPills, day)} onChange={ps => setVisiblePills(setDayPills, day, ps)} />
           </div>
         ))}
       </Group>
@@ -104,14 +128,7 @@ export function WeekStep({ sub, db, persistDB, days, dates, dayNotes, setDayNote
           <div key={day} className="wk-day">
             <div className="wk-day-head day-line"><span className="day-dow">{dayTitle(dates[day])}</span>{outs(day)}</div>
             {(dayNotes?.[day] || "").trim() && <div className="wk-note-read">{dayNotes[day]}</div>}
-            <div className="wk-chips">
-              {family.map(name => {
-                const o = override(day, name), byAway = away(name, dates[day]);
-                const home = typeof o === "boolean" ? o : !byAway;
-                const cls = home ? (byAway ? "wk-chip is-home is-despite" : "wk-chip is-home") : (byAway && typeof o !== "boolean" ? "wk-chip is-out is-away" : "wk-chip is-out");
-                return <button key={name} type="button" className={cls} aria-pressed={home} onClick={() => toggle(day, name)}>{name}</button>;
-              })}
-            </div>
+            <WhoChips day={day} iso={dates[day]} family={family} who={who} />
           </div>
         ))}
       </Group>

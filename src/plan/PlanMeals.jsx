@@ -30,6 +30,7 @@ import { notHomeCooked } from "../library/libraryModel.js";
 import { CheckRow, Clocks, Group, Icon, PillButton, RowChevron, SearchField, Sheet, Switch } from "../ui/kit.jsx";
 import { showToast } from "../ui/toast.js";
 import { dayTitle, forecastWords } from "./WeekStep.jsx";
+import { DaySheet } from "./DaySheet.jsx";
 import "./weekview.css";
 
 // Carried-leftover notes arrive one per person ("Partner is covered by Chili carried from
@@ -52,7 +53,7 @@ const LONG_WD = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday
 const longTitle = iso => { const d = new Date(iso + "T12:00:00"); return `${LONG_WD[d.getDay()]} ${d.getDate()}`; };
 const SHORTLIST_SIZE = 3;
 
-function PlanMeals({ mealPlan, plates, setMealPlan, restoreMeals, commitMealToPlan, timeLevels, presence, weekStartDate, adventurousWeek, meals, days, daysFull, dayNotes, dayPills, db, persistDB, extraDays = 0, canExtend = false, setExtraDays, headSlot, onOpenMeal, onEditDay, orderedMeals }) {
+function PlanMeals({ mealPlan, plates, setMealPlan, restoreMeals, commitMealToPlan, timeLevels, presence, weekStartDate, adventurousWeek, meals, days, daysFull, dayNotes, dayPills, setDayNotes, setDayPills, setPresence, setTimeLevels, db, persistDB, extraDays = 0, canExtend = false, setExtraDays, headSlot, onOpenMeal, orderedMeals }) {
   const allMeals = meals.length > 0 ? meals : SEED_MEALS;
   const today = todayLocalISO();
   const roster = (db.settings?.familyContacts || []).map(f => f.name);
@@ -323,6 +324,12 @@ function PlanMeals({ mealPlan, plates, setMealPlan, restoreMeals, commitMealToPl
 
   // ── Sheets ─────────────────────────────────────────────────────────────────────
   const [plateDay, setPlateDay] = useState(null);
+  const [detail, setDetail] = useState(null);     // { day, stacked }: the day details sheet, alone or on the meals sheet
+  const daySheet = detail && (
+    <DaySheet day={detail.day} days={days} dates={dateOfDay} family={roster} ranges={awayRanges} forecast={forecastByDate}
+      dayNotes={dayNotes} setDayNotes={setDayNotes} dayPills={dayPills} setDayPills={setDayPills} presence={presence} setPresence={setPresence}
+      timeLevels={timeLevels} setTimeLevels={setTimeLevels} onClose={() => setDetail(null)} />
+  );
   const [choose, setChoose] = useState(null);     // { day, idx|null, kind: "main"|"side", title }
   const [moveFrom, setMoveFrom] = useState(null);
   const [checkOpen, setCheckOpen] = useState(false);
@@ -390,7 +397,7 @@ function PlanMeals({ mealPlan, plates, setMealPlan, restoreMeals, commitMealToPl
         return (
           <section key={day} data-day={day} className={["wv-day", past && "is-past", isDragged && "is-dragged", isTarget && "is-target"].filter(Boolean).join(" ")}
             style={isDragged ? { transform: `translateY(${drag.dy}px)` } : undefined}>
-            <div className="wv-date">
+            <DayBar past={past} onOpen={() => setDetail({ day, stacked: false })}>
               <div className="wv-date-line day-line">
                 <span className="day-dow">{iso ? dayTitle(iso) : daysFull[days.indexOf(day)]}</span>
                 <Clocks n={LEVEL_N[level] || 2} />
@@ -400,7 +407,7 @@ function PlanMeals({ mealPlan, plates, setMealPlan, restoreMeals, commitMealToPl
                 {compact && note && <span className="wv-note-inline day-note">{note}</span>}
               </div>
               {!compact && note && <div className="wv-note day-note">{note}</div>}
-            </div>
+            </DayBar>
             {dishes.length === 0 ? (
               <div className="wv-open">
                 {past ? <span className="wv-open-label">—</span> : <>
@@ -441,10 +448,12 @@ function PlanMeals({ mealPlan, plates, setMealPlan, restoreMeals, commitMealToPl
         </div>
       )}
 
+      {detail && !detail.stacked && daySheet}
       {plateDay && (
         <PlateSheet day={plateDay} iso={dateOfDay[plateDay]} past={locked(plateDay)} dishes={dishesOf(plateDay)} level={(timeLevels || {})[plateDay] || seedTimeLevel(abbrOfISO(dateOfDay[plateDay]))}
           note={(dayNotes?.[plateDay] || "").trim()} concerns={concernsByDay[plateDay] || []} learnMode={learnMode} setLearnMode={setLearnMode}
-          onClose={() => setPlateDay(null)} onEdit={onEditDay ? () => { setPlateDay(null); onEditDay(plateDay); } : null} onOpenMeal={onOpenMeal}
+          onClose={() => setPlateDay(null)} onEdit={() => setDetail({ day: plateDay, stacked: true })} onOpenMeal={onOpenMeal}
+          stacked={detail?.stacked && detail.day === plateDay ? daySheet : null}
           onFix={() => suggestSides(plateDay)}
           onReplace={d => setChoose({ day: plateDay, idx: d.idx, kind: d.role, title: `Replace ${d.name.trim()}` })}
           onRemove={d => removeMeal(plateDay, d.idx)}
@@ -479,7 +488,19 @@ function PlanMeals({ mealPlan, plates, setMealPlan, restoreMeals, commitMealToPl
 }
 
 // ── Plate sheet (board "Plate sheet"): everything about one night ─────────────────────────
-function PlateSheet({ iso, past, dishes, level, note, concerns, learnMode, setLearnMode, onClose, onEdit, onOpenMeal, onFix, onReplace, onRemove, onAdd, onMove, onClear }) {
+// The Meals day bar: the whole bar opens the day details sheet, with a › at its right edge.
+// Locked past days have no details sheet, like Replace and Move.
+function DayBar({ past, onOpen, children }) {
+  if (past) return <div className="wv-date"><div className="wv-date-body">{children}</div></div>;
+  return (
+    <button type="button" className="wv-date is-tappable" onClick={onOpen}>
+      <span className="wv-date-body">{children}</span>
+      <RowChevron />
+    </button>
+  );
+}
+
+function PlateSheet({ iso, past, dishes, level, note, concerns, learnMode, setLearnMode, onClose, onEdit, stacked, onOpenMeal, onFix, onReplace, onRemove, onAdd, onMove, onClear }) {
   const hasMain = dishes.some(d => d.role === "main");
   const sub = (
     <div className="wv-plate-sub">
@@ -533,6 +554,7 @@ function PlateSheet({ iso, past, dishes, level, note, concerns, learnMode, setLe
           </Group>
         )}
       </div>
+      {stacked}
     </Sheet>
   );
 }

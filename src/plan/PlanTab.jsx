@@ -285,8 +285,9 @@ function PlanTab({ db, persistDB, headerIcons, onDone, onOpenMeal }) {
           adventurous={!!draft.adventurousWeek} setAdventurous={v => saveDraft({ adventurousWeek: v })} />}
         {step === 1 && <PlanMeals mealPlan={mealPlan} plates={plates} setMealPlan={setMealPlanP} restoreMeals={restoreMeals} commitMealToPlan={commitMealToPlan} timeLevels={timeLevels} presence={presence}
           weekStartDate={draft.weekStartDate} adventurousWeek={!!draft.adventurousWeek} meals={meals} days={days} daysFull={daysFull} dayNotes={dayNotes} dayPills={dayPills}
+          setDayNotes={setDayNotesP} setDayPills={setDayPillsP} setPresence={setPresenceP} setTimeLevels={setTimeLevelsP}
           db={db} persistDB={persistDB} extraDays={extraDays} canExtend={canExtend} setExtraDays={setExtraDays} headSlot={headSlot}
-          onOpenMeal={onOpenMeal} onEditDay={() => goSub(0)} orderedMeals={draft.orderedAt ? draft.meals : null} />}
+          onOpenMeal={onOpenMeal} orderedMeals={draft.orderedAt ? draft.meals : null} />}
         <div className={step > 1 ? "shell-legacy-flow" : undefined}>
           {step === 2 && <PlanInventory inFlow locIdx={locIdx} setLocIdx={setLocIdx} checkedIds={checkedIds} setCheckedIds={setCheckedIdsP} stapleFlags={stapleFlags} setOrdering={setOrdering} quantities={quantities} setQuantities={setQuantitiesP} mealPlan={mealPlan} meals={meals} ingredients={ingredients} onNext={() => goToStep(3)} days={days} onUpdateItem={updateItem} keptIds={keptIds} />}
           {step === 3 && <PlanConfirm inFlow registerNext={fn => { beforeNext.current = fn; }} mode="confirm" onUpdateItem={updateItem} keptIds={keptIds} checkedIds={checkedIds} setOrdering={setOrdering} addedOff={addedOff} setAddedOff={setAddedOffP} addedItems={addedItems} setAddedItems={setAddedItemsP} stapleFlags={stapleFlags} quantities={quantities} setQuantities={setQuantitiesP} mealPlan={mealPlan} meals={meals} ingredients={ingredients} onNext={() => goToStep(4)} db={db} persistDB={persistDB} days={days} daysFull={daysFull} />}
