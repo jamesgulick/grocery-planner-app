@@ -438,62 +438,65 @@ function PlanConfirm({ headSlot, onOpenMeal, onOpenItem, registerHeld, inFlow, r
       </>}
 
       {mode === "sparky" && <>
-      {/* ORDER (canvas 11/12; board "Send to Sparky", 11/17): Intro + Batch rows in one list. Tap a
-          row to share it (11/16). The next row is tinted with a filled "Share" pill; sent rows grey
-          with "✓ Sent"; later rows show a grey share icon and can still be sent out of order. Lines
-          between rows run the card's full width. The careful-matching rules are always in the intro
-          (no toggle). No helper copy. */}
-      <div style={{ ...S.card, padding:0, overflow:"hidden" }}>
-        <div style={{ ...S.sectionLabel, padding:"12px 16px 6px", marginBottom:0 }}>Send to Sparky · {listLines.length} item{listLines.length === 1 ? "" : "s"}</div>
-        {orderRows.map((row, k) => {
-          const done   = isSent(row.text);
-          const isNext = row.key === nextRow;
-          return (
-            <button key={row.key} type="button" aria-label={`Share ${row.label}`} onClick={() => sendText(row.text)}
-              style={{ display:"flex", alignItems:"center", gap:10, width:"100%", minHeight:56, padding:"8px 16px", background: isNext ? C.primaryLight : "none", border:"none", borderTop:`1px solid ${C.border}`, cursor:"pointer", textAlign:"left" }}>
-              <span style={{ flex:1, minWidth:0 }}>
-                <span style={{ display:"block", fontSize:15, fontWeight:700, color: done ? C.faint : C.text }}>{row.label}</span>
-                {row.meta && <span style={{ display:"block", fontSize:12, color: done ? C.faint : C.muted }}>{row.meta}</span>}
-              </span>
-              {done
-                ? <span style={{ fontSize:13, fontWeight:600, color:C.faint, whiteSpace:"nowrap" }}>✓ Sent</span>
-                : isNext
-                  ? <span style={{ display:"inline-flex", alignItems:"center", gap:6, height:32, padding:"0 14px", borderRadius:16, color:"#fff", background:C.primary, fontSize:14, fontWeight:700 }}><Icon name="share" size={16} />Share</span>
-                  : <span style={{ display:"inline-flex", alignItems:"center", justifyContent:"center", height:32, minWidth:48, color:C.faint }}><Icon name="share" size={18} /></span>}
-            </button>
-          );
-        })}
-      </div>
+      {/* ORDER (stage 4c; boards "Plan, order" and "Send to Sparky", decisions 11/12, 11/16, 11/17;
+          brief §12). Intro + batch rows under "Send to Sparky · N items": tap a row to share it.
+          The next row is tinted with a filled "Share" pill; sent rows grey with "✓ Sent"; later
+          rows a grey share icon (still tappable). Shared items: × drops one from the cart check
+          (Undo on the bar), then "Share cart check" → "Sent ✓". Full-width lines. No helper copy. */}
+      <div className="cf">
+        <section className="cf-group">
+          <div className="ui-section-label">Send to Sparky · {listLines.length} item{listLines.length === 1 ? "" : "s"}</div>
+          <div className="cf-card">
+            {orderRows.map(row => {
+              const done   = isSent(row.text);
+              const isNext = row.key === nextRow;
+              return (
+                <button key={row.key} type="button" aria-label={`Share ${row.label}`} onClick={() => sendText(row.text)}
+                  className={done ? "ord-row is-sent" : isNext ? "ord-row is-next" : "ord-row"}>
+                  <span className="cf-text">
+                    <span className="ord-label">{row.label}</span>
+                    {row.meta && <span className="cf-sub">{row.meta}</span>}
+                  </span>
+                  {done
+                    ? <span className="ord-sent">✓ Sent</span>
+                    : isNext
+                      ? <span className="ord-share"><Icon name="share" size={18} />Share</span>
+                      : <span className="ord-later"><Icon name="share" size={20} /></span>}
+                </button>
+              );
+            })}
+          </div>
+        </section>
 
-      {sharedItems.length > 0 && (
-        <div style={{ ...S.card, padding:0, overflow:"hidden" }}>
-          <div style={{ ...S.sectionLabel, padding:"12px 16px 6px", marginBottom:0 }}>Shared items</div>
-          {activeShared.map(s => (
-            <div key={s.id} style={{ display:"flex", alignItems:"center", gap:10, minHeight:44, padding:"0 4px 0 16px", borderTop:`1px solid ${C.border}`, fontSize:14 }}>
-              <span style={{ flex:1, minWidth:0 }}>{s.name}</span>
-              <span style={{ fontWeight:700, color:C.muted }}>×{s.n}</span>
-              {/* × drops it from the cart check only; it stays in the order (Confirm removes from the order). */}
-              <button type="button" aria-label={`Drop ${s.name} from the cart check`} onClick={() => dropShared(s)}
-                style={{ width:44, height:44, flexShrink:0, background:"none", border:"none", cursor:"pointer", color:C.muted, fontSize:16 }}>✕</button>
-            </div>
-          ))}
-          {activeShared.length > 0 && (
-            <div style={{ padding:"8px 16px 12px", borderTop:`1px solid ${C.border}` }}>
-              <button type="button" style={{ ...S.btn, ...(isSent(sharedSparkyText) ? S.btnS : S.btnP), marginBottom:0, display:"flex", alignItems:"center", justifyContent:"center", gap:8 }} onClick={() => sendText(sharedSparkyText)}>
-                {isSent(sharedSparkyText) ? "Sent ✓" : <><Icon name="share" size={18} />Share cart check</>}
+        {activeShared.length > 0 && (
+          <section className="cf-group">
+            <div className="ui-section-label">Shared items</div>
+            <div className="cf-card ord-shared">
+              <div className="ord-shared-list">
+                {activeShared.map(s => (
+                  <div key={s.id} className="ord-shared-row">
+                    <span className="ord-shared-name">{s.name}</span>
+                    <span className="ord-shared-n">{s.n} meals</span>
+                    {/* × drops it from the cart check only; it stays in the order (Confirm removes from the order). */}
+                    <button type="button" className="ord-x" aria-label={`Remove ${s.name} from the cart check`} onClick={() => dropShared(s)}>×</button>
+                  </div>
+                ))}
+              </div>
+              <button type="button" className={isSent(sharedSparkyText) ? "ord-check is-sent" : "ord-check"} onClick={() => sendText(sharedSparkyText)}>
+                {isSent(sharedSparkyText) ? <span>Sent ✓</span> : <><span>Share cart check</span><Icon name="share" size={20} /></>}
               </button>
             </div>
-          )}
-        </div>
-      )}
+          </section>
+        )}
 
-      {manualBatch && (
-        <div style={{ ...S.card, border:`1px solid ${C.warning}`, background:C.warningLight }}>
-          <div style={{ fontSize:13, color:C.warning, fontWeight:600, marginBottom:8 }}>Copy was blocked. Select the text and copy it.</div>
-          <textarea readOnly value={manualBatch.text} onFocus={e => e.target.select()} style={{ ...S.input, height:130, fontSize:13, fontFamily:"monospace", resize:"none", marginBottom:8 }} />
-          <button style={{ ...S.btn, ...S.btnS, marginBottom:0 }} onClick={() => setManualBatch(null)}>Done</button>
-        </div>
-      )}
+        {manualBatch && (
+          <section className="ord-manual">
+            <div className="ord-manual-title">Copy was blocked. Select the text and copy it.</div>
+            <textarea readOnly className="ord-manual-text" value={manualBatch.text} onFocus={e => e.target.select()} />
+            <PillButton inline onClick={() => setManualBatch(null)}>Done</PillButton>
+          </section>
+        )}
+      </div>
       {!inFlow && <button style={{ ...S.btn, ...S.btnP }} onClick={() => onFinish && onFinish(orderSnapshot())}>Finish plan</button>}
       </>}
     </div>

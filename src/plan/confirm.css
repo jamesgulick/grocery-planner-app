@@ -65,3 +65,25 @@
 .cf-match:disabled { cursor: default; }
 .cf-match:disabled .cf-name { color: var(--text-muted); }
 .cf-match-free { font-size: var(--body-size); font-weight: 600; color: var(--action); }
+
+/* Plan › Order (boards "Plan, order", "Send to Sparky"; 11/17): one row per Sparky text. */
+.ord-row { box-sizing: border-box; width: 100%; min-height: var(--ord-row-h); display: flex; align-items: center; gap: var(--space-3); padding: var(--space-2) var(--space-3) var(--space-2) var(--space-4); border: 0; background: none; font: inherit; text-align: left; color: var(--text); cursor: pointer; }
+.ord-row:active { background-color: var(--pressed); }
+.ord-row.is-next { background: var(--tint); }
+.ord-label { font-size: var(--card-title-size); line-height: var(--card-title-line); font-weight: 700; }
+.ord-row.is-sent .ord-label, .ord-row.is-sent .cf-sub { color: var(--text-muted); font-weight: 600; }
+.ord-sent { flex: none; font-size: var(--meta-size); font-weight: 600; color: var(--text-muted); white-space: nowrap; }
+.ord-share { flex: none; display: inline-flex; align-items: center; gap: var(--space-2); min-height: var(--wv-action-h); padding: 0 var(--space-4); border-radius: var(--radius-pill); background: var(--action); color: var(--on-action); font-size: var(--meta-size); font-weight: 700; }
+.ord-later { flex: none; display: inline-flex; align-items: center; justify-content: center; min-width: var(--touch); color: var(--text-muted); }
+.ord-shared-list { display: flex; flex-direction: column; padding: var(--space-2) 0; }
+.ord-shared-row { display: flex; align-items: center; gap: var(--space-2); min-height: var(--ord-shared-h); padding: 0 var(--space-1) 0 var(--space-4); font-size: var(--body-size); }
+.ord-shared-name { flex: 1; min-width: 0; }
+.ord-shared-n { flex: none; color: var(--text-muted); }
+.ord-x { flex: none; width: var(--touch); height: var(--touch); border: 0; background: none; font: inherit; font-size: var(--title-size); color: var(--text-muted); cursor: pointer; }
+.cf-card.ord-shared > * + * { border-top: 0; }
+.ord-check { box-sizing: border-box; width: 100%; min-height: var(--block-button); display: flex; align-items: center; justify-content: space-between; padding: 0 var(--space-4); border: 0; background: none; font: inherit; font-size: var(--card-title-size); font-weight: 700; color: var(--action); cursor: pointer; }
+.ord-check:active { background-color: var(--pressed); }
+.ord-check.is-sent { color: var(--text-muted); font-weight: 600; }
+.ord-manual { display: flex; flex-direction: column; gap: var(--space-2); align-items: flex-start; padding: var(--space-3) var(--space-4); background: var(--surface); border: var(--problem-outline) solid var(--problem); border-radius: var(--radius-group); }
+.ord-manual-title { font-size: var(--meta-size); font-weight: 600; color: var(--problem); }
+.ord-manual-text { box-sizing: border-box; width: 100%; height: var(--ord-manual-h); padding: var(--space-2); border: 1px solid var(--control-border); border-radius: var(--radius-control); font-family: monospace; font-size: var(--label-size); resize: none; }

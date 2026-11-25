@@ -109,6 +109,9 @@
   --loc-tab-w: 96px;                      /* Inventory place tabs */
   --loc-chev-w: 30px;                     /* their ‹ › */
   --loc-fade: 40px;                       /* Inventory tabs: the fade where more places scroll in */
+  --ord-row-h: 56px;                      /* Order's Sparky rows (board "Send to Sparky") */
+  --ord-shared-h: 40px;                   /* Order's shared-item rows */
+  --ord-manual-h: 130px;                  /* Order: the text box when copying is blocked */
   --confirm-row-h: 60px;                  /* Confirm rows (board "Plan, confirm the order") */
   --confirm-amount-w: 88px;               /* Confirm: this week's amount while editing */
   --confirm-more-w: 40px;
