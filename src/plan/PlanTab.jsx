@@ -314,7 +314,7 @@ function PlanTab({ db, persistDB, headerIcons, onDone, onOpenMeal: openMealPage,
   const spanRow = (
     <div className="plan-span">
       <span className="plan-span-text">{dayTitle(draft.weekStartDate)} – {dayTitle(spanEnd)} · {spanDays} days</span>
-      <button type="button" className="plan-pickup" onClick={() => setPickupOpen(true)}><Icon name="cart" size={16} />{pickupText}</button>
+      <button type="button" className="plan-pickup" onClick={() => setPickupOpen(true)}><Icon name="cart" size={14} />{pickupText}</button>
     </div>
   );
   const pickupSheet = pickupOpen && (
