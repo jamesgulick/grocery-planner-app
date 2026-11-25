@@ -1,6 +1,6 @@
 // Split verbatim from grocery-app.jsx in polish Phase 1.5; see CLAUDE.md's file map.
 import { PLAN_TAIL_KEEP, endDateFor, extraDaysOf, seedTimeLevel } from "../engine/assembleInputs.js";
-import { DAYS_ALL, addDaysISO, todayLocalISO } from "./globals.js";
+import { DAYS_ALL, DAYS_FULL, addDaysISO, todayLocalISO } from "./globals.js";
 import { foldRemovedIds } from "../plan/ordering.js";
 import { pickupForNewPlan } from "./pickup.js";
 
@@ -382,12 +382,22 @@ const autoRetirePlans = db => {
 
 // ── Starting a week (phase 2: Welcome is gone; Home's week rows and the empty Plan tab start
 // plans). A fresh plan opens on the Week step. No day notes are seeded: the app never writes
-// notes on its own (spec §3.2, decided 11/16). Length: 7 days for now; the 5–9 day rule comes
-// with pickup day (spec §5).
+// notes on its own (spec §3.2, decided 11/16).
 export const PLAN_STEPS_VER = 5;
-export function newPlan(weekStartDate) {
+// A new plan's length (RULING 15, spec §5): from its start to the day before the next usual
+// shopping day, kept within 5–9 days. When that day can't be reached, cap at 9 and let the
+// plan after land it. Only new plans: changing the usual day never resizes one with meals.
+export function planEndFor(weekStartDate, shoppingDay = "Wednesday") {
+  const usual = DAYS_FULL.indexOf(shoppingDay);
+  if (usual < 0) return endDateFor(weekStartDate);
+  for (let len = 5; len <= 9; len++) {
+    if (new Date(addDaysISO(weekStartDate, len) + "T00:00:00").getDay() === usual) return addDaysISO(weekStartDate, len - 1);
+  }
+  return addDaysISO(weekStartDate, 8);
+}
+export function newPlan(weekStartDate, shoppingDay) {
   return {
-    weekStartDate, endDate: endDateFor(weekStartDate), notes: "", meals: {}, items: [], dismissedShared: [],
+    weekStartDate, endDate: planEndFor(weekStartDate, shoppingDay), notes: "", meals: {}, items: [], dismissedShared: [],
     step: 0, maxStep: 0, weekSub: 0, timeLevels: Object.fromEntries(DAYS_ALL.map(d => [d, seedTimeLevel(d)])), presence: {},
     mealPlan: Object.fromEntries(DAYS_ALL.map(d => [d, []])), plates: {}, checkedIds: [], addedOff: [], addedItems: [],
     dayNotes: {}, dayPills: {}, stapleFlags: {}, quantities: {}, _stepsVer: PLAN_STEPS_VER, startedAt: new Date().toISOString(),
@@ -399,7 +409,7 @@ export function startPlan(db, weekStartDate) {
   const slot = !plans.current ? "current" : !plans.next ? "next" : null;
   if (!slot) return null;
   // The new plan takes the pickup Home showed for it: an early pick, else the usual shopping day (11/18).
-  const plan = { ...newPlan(weekStartDate), ...pickupForNewPlan(db, weekStartDate, todayLocalISO()) };
+  const plan = { ...newPlan(weekStartDate, db.settings?.shoppingDay), ...pickupForNewPlan(db, weekStartDate, todayLocalISO()) };
   const { pendingPickup: _used, ...rest } = db;
   return { ...rest, plans: { ...plans, [slot]: plan }, activePlan: slot };
 }

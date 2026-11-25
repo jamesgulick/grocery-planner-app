@@ -22,12 +22,16 @@ const parseISO = (iso) => { const [y, m, d] = iso.split('-').map(Number); return
 export const addDaysISO = (iso, n) => new Date(parseISO(iso) + n * 86400000).toISOString().slice(0, 10);
 export const abbrOfISO = (iso) => DAY_ABBRS[new Date(parseISO(iso)).getUTCDay()];
 
-/** The 7 dates of a plan's week, keyed by day abbr. A week runs from its weekStartDate. */
+/** The dates of a plan's week (5–9), keyed by day abbr (then X1, X2). It runs from its weekStartDate. */
 // A week is its seven weekday-keyed days plus up to MAX_EXTRA_DAYS "extra" days after
 // them (shopping a day or two later than usual). Extra days are keyed X1, X2, never by a
 // weekday name, so an 8th day can't overwrite the first one with the same name; each
 // still has its own real date (weekStartDate + 7, + 8).
 export const MAX_EXTRA_DAYS = 2;
+// Plans run 5–9 days (RULING 15). A shorter plan is stored the same way, as endDate; read
+// here as a negative extra count (-1 = 6 days, -2 = 5), it drops the week's last weekday
+// keys. 7–9 day plans are unchanged.
+export const MIN_EXTRA_DAYS = -2;
 // History keeps the last PLAN_TAIL_KEEP plans (planTail and mealHistory), not weeks. At the
 // shortest plan (5 days) that is ~30 days, past the 14-day longest anti-repeat block
 // (RULING 15; asserted in engine/golden/plan-length.test.mjs).
@@ -39,7 +43,7 @@ const daysBetweenISO = (a, b) => Math.round((Date.parse(b + "T00:00:00Z") - Date
 export const extraDaysOf = (plan) => {
   if (!plan) return 0;
   const n = plan.endDate && plan.weekStartDate ? daysBetweenISO(plan.weekStartDate, plan.endDate) - 6 : Number(plan.extraDays) || 0;
-  return Math.max(0, Math.min(MAX_EXTRA_DAYS, n || 0));
+  return Math.max(MIN_EXTRA_DAYS, Math.min(MAX_EXTRA_DAYS, n || 0));
 };
 /** A plan's last date, from endDate (or, on older records, weekStartDate + 6 + extraDays). */
 export const planEndDate = (plan) => (plan && plan.weekStartDate ? addDaysISO(plan.weekStartDate, 6 + extraDaysOf(plan)) : null);
@@ -50,7 +54,7 @@ export const pickupDateOf = (plan) => (plan && (plan.pickupDate || plan.weekStar
 
 export function weekDates(weekStartDate, extraDays = 0) {
   const out = {};
-  for (let i = 0; i < 7; i++) { const iso = addDaysISO(weekStartDate, i); out[abbrOfISO(iso)] = iso; }
+  for (let i = 0; i < 7 + Math.min(0, extraDays); i++) { const iso = addDaysISO(weekStartDate, i); out[abbrOfISO(iso)] = iso; }
   for (let n = 1; n <= extraDays; n++) out[`X${n}`] = addDaysISO(weekStartDate, 6 + n);
   return out;
 }

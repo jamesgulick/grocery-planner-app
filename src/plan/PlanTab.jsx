@@ -1,5 +1,5 @@
 // Split verbatim from grocery-app.jsx in polish Phase 1.5; see CLAUDE.md's file map.
-import { MAX_EXTRA_DAYS, endDateFor, extraDaysOf, reconcilePlates, weekDates } from "../engine/assembleInputs.js";
+import { MAX_EXTRA_DAYS, MIN_EXTRA_DAYS, endDateFor, extraDaysOf, reconcilePlates, weekDates } from "../engine/assembleInputs.js";
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { PLAN_STEPS, nextDateForShoppingDay, planDays, seedTimeLevels, weekLabel } from "../app/globals.js";
 import { PLAN_STEPS_VER, getActivePlan, startPlan, writeActivePlan } from "../app/plans.js";
@@ -199,11 +199,13 @@ function PlanTab({ db, persistDB, headerIcons, onDone, onOpenMeal: openMealPage,
   const extraDays    = extraDaysOf(draft);
   const canExtend    = !!draft?.weekStartDate && ((db.activePlan || "current") === "next" || !db.plans?.next?.weekStartDate);
   const setExtraDays = n => {
-    const target = Math.max(0, Math.min(MAX_EXTRA_DAYS, n));
+    const target = Math.max(MIN_EXTRA_DAYS, Math.min(MAX_EXTRA_DAYS, n));   // 5–9 days (RULING 15)
     if (!canExtend || target === extraDays) return;
     const endDate = endDateFor(draft.weekStartDate, target);
     if (target > extraDays) { saveDraft({ endDate }); return; }
-    const gone = []; for (let k = target + 1; k <= extraDays; k++) gone.push(`X${k}`);
+    // The days that go: extra days (X2, X1) first, then the week's last weekdays.
+    const keep = weekDates(draft.weekStartDate, target);
+    const gone = Object.keys(weekDates(draft.weekStartDate, extraDays)).filter(k => !(k in keep));
     const drop = o => { const c = { ...(o || {}) }; gone.forEach(k => delete c[k]); return c; };
     const nm = drop(mealPlan), np = reconcilePlates(mealPlan, nm, plates, db.meals || []);
     const nn = drop(dayNotes), nt = drop(timeLevels), npr = drop(presence), nd = drop(dayPills);

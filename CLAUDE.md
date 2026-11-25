@@ -251,7 +251,10 @@ Pre-migration DBs carry two older single-slot concepts (db.planDraft live-editin
 - `plates` — annotates `mealPlan` per day: each dish's meal id, role, `source` (engine / floor-fill / accompaniment / manual), the engine's reasons (`why`), and a **leftovers (`carries`) snapshot taken when the dish was placed**. Never edit it directly: `reconcilePlates` rebuilds it from every `mealPlan` change (unchanged days keep their plate; a day untouched since before plates existed stays unplated). `autoRetirePlans` keeps `plates` in `planTail`, because history reads leftovers ONLY from these snapshots — an unplated past day counts for recency but carries no leftovers.
 - `timeLevels` — day abbr → none/some/much. `presence` — per-night overrides only, `{day: {name: bool}}`; the rest comes from `settings.awayRanges` (date-range away periods, open ends allowed, edited in Settings › Away dates), else present. `presentOn` resolves it.
 - `adventurousWeek` — per-plan switch.
-- `extraDays` — 0–2 EXTRA days after the week's seven (shopping a day or two later than
+- Plan length (RULING 15, stage 4d) — 5–9 days, stored once as `endDate`; `extraDaysOf` reads
+  it as -2..2 (negative drops the week's last weekdays). New plans run to the day before the
+  next usual shopping day (`planEndFor`, capped at 9); Remove/Add a day goes 5–9.
+- `extraDays` (older records) — 0–2 EXTRA days after the week's seven (shopping a day or two later than
   usual). Stored under keys `X1`/`X2`, never a weekday name, so an 8th day can't overwrite
   the first one with the same name; each is dated `weekStartDate + 6 + n`. Every surface
   walks a plan's days through `planDays(plan)` (app) and `weekDates(start, extraDays)` /

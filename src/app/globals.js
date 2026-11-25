@@ -138,7 +138,8 @@ function getWeekFromDate(weekStartDate) {
 function planDays(plan, shoppingDay) {
   if (!plan?.weekStartDate) return getWeekFromDay(shoppingDay || "Wednesday");
   const { days, daysFull } = getWeekFromDate(plan.weekStartDate);
-  const out = { days: [...days], daysFull: [...daysFull] };
+  const n = extraDaysOf(plan);
+  const out = { days: days.slice(0, 7 + Math.min(0, n)), daysFull: daysFull.slice(0, 7 + Math.min(0, n)) };   // 5–6 day plans (RULING 15)
   for (let n = 1; n <= extraDaysOf(plan); n++) {
     const iso = addDaysISO(plan.weekStartDate, 6 + n);
     out.days.push(`X${n}`);

@@ -14,7 +14,7 @@
 // Engine calls are the ones the Meals step always made (compose one day, fill empty days,
 // suggest sides, the ranked shortlist, reconcilePlates, checkWeek); only the screens are new.
 // Engine text is shown verbatim (11/15). `seenThisSession` stays component-local by design.
-import { MAX_EXTRA_DAYS, abbrOfISO, assembleComposeInputs, checkWeek, isExtraDay, mealRecency, platesFromCompose, presentOn, reasonsOf, runComposeWeek, seedTimeLevel } from "../engine/assembleInputs.js";
+import { MAX_EXTRA_DAYS, MIN_EXTRA_DAYS, abbrOfISO, assembleComposeInputs, checkWeek, isExtraDay, mealRecency, platesFromCompose, presentOn, reasonsOf, runComposeWeek, seedTimeLevel } from "../engine/assembleInputs.js";
 import { composeWeek, evaluateWeek } from "../engine/composeWeek.js";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
@@ -438,12 +438,12 @@ function PlanMeals({ mealPlan, plates, setMealPlan, restoreMeals, commitMealToPl
           </section>
         );
       })}
-      {canExtend && weekStartDate && (extraDays < MAX_EXTRA_DAYS || extraDays > 0) && (
+      {canExtend && weekStartDate && (extraDays < MAX_EXTRA_DAYS || extraDays > MIN_EXTRA_DAYS) && (
         // In date order (11/24): Remove <last day> on the left, the dashed + Add <next day> filling
         // the rest on the right, on the thumb side like Next. Each shows only when allowed.
         <div className="wv-extend">
-          {extraDays > 0 && (() => {
-            const last = `X${extraDays}`;
+          {extraDays > MIN_EXTRA_DAYS && (() => {
+            const last = days[days.length - 1];   // 5–9 days (RULING 15): down to the 5th day
             return <button type="button" className="wv-remove-day" onClick={() => { if (!(mealPlan[last] || []).length || window.confirm(`Remove ${dayTitle(dateOfDay[last])}? Its meals and notes go with it.`)) setExtraDays(extraDays - 1); }}>Remove {dayTitle(dateOfDay[last])}</button>;
           })()}
           {extraDays < MAX_EXTRA_DAYS && <button type="button" className="wv-add-day" onClick={() => setExtraDays(extraDays + 1)}>+ Add {dayTitle(addDaysISO(weekStartDate, 7 + extraDays))}</button>}
