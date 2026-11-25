@@ -105,6 +105,10 @@
   --day-bar-pressed: #DCDCD6;             /* the bar while pressed */
   --day-bar-fade: 24px;                   /* Compact: the text fades out over this before the › */
   --focus-edge: 1.5px;
+  --inv-row-h: 52px;                      /* Inventory rows (board "Plan, inventory") */
+  --loc-tab-w: 96px;                      /* Inventory place tabs */
+  --loc-chev-w: 30px;                     /* their ‹ › */
+  --loc-fade: 40px;                       /* Inventory tabs: the fade where more places scroll in */
   --confirm-row-h: 60px;                  /* Confirm rows (board "Plan, confirm the order") */
   --confirm-amount-w: 88px;               /* Confirm: this week's amount while editing */
   --confirm-more-w: 40px;                 /* Confirm: the ⋯ button */                    /* a card whose field has focus (day sheet note) */

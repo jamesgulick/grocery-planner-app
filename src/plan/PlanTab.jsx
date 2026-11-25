@@ -1,11 +1,13 @@
 // Split verbatim from grocery-app.jsx in polish Phase 1.5; see CLAUDE.md's file map.
 import { MAX_EXTRA_DAYS, endDateFor, extraDaysOf, reconcilePlates, weekDates } from "../engine/assembleInputs.js";
-import { useCallback, useLayoutEffect, useRef, useState } from "react";
-import { INVENTORY_LOCS, PLAN_STEPS, nextDateForShoppingDay, planDays, seedTimeLevels, weekLabel } from "../app/globals.js";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { PLAN_STEPS, nextDateForShoppingDay, planDays, seedTimeLevels, weekLabel } from "../app/globals.js";
 import { PLAN_STEPS_VER, getActivePlan, startPlan, writeActivePlan } from "../app/plans.js";
 import { ActionBar, BlockButton, HeaderButtons, Segmented } from "../ui/kit.jsx";
 import { PlanConfirm } from "./PlanConfirm.jsx";
 import { PlanInventory } from "./PlanInventory.jsx";
+import { LocTabs } from "./LocTabs.jsx";
+import { inventoryLocs } from "./inventoryModel.js";
 import { PlanMeals } from "./PlanMeals.jsx";
 import { ItemPage } from "../library/ItemPage.jsx";
 import { orderingPatch } from "./ordering.js";
@@ -240,8 +242,14 @@ function PlanTab({ db, persistDB, headerIcons, onDone, onOpenMeal }) {
     if (held) { updateItem(held.id, held.patch, { step: 0, weekSub: s, weekSubMax: m }, { background: true }); return; }
     saveDraft({ step: 0, weekSub: s, weekSubMax: m }, { background: true });
   };
-  // Inventory walks the storage places; the footer drives it (the header tabs come in 4c).
+  // Inventory walks the storage places: the header's tabs and the footer drive it. locMax: the
+  // furthest place reached (done places get a ✓). placed: items given a place on the No place
+  // tab during this pass; they stay there until you leave Inventory (brief §5).
   const [locIdx, setLocIdx] = useState(0);
+  const [locMax, setLocMax] = useState(maxStep > 2 ? 99 : 0);
+  const goLoc = i => { setLocIdx(i); setLocMax(m => Math.max(m, i)); };
+  const [placed, setPlaced] = useState({});
+  useEffect(() => { if (step !== 2) setPlaced({}); }, [step]);
   // Scroll position (11/24): anything that changes what's shown starts at the top: opening Plan,
   // switching week (this component remounts), Calendar / Who's home / Time, steps, Inventory's
   // places. Edits on the same screen never move it.
@@ -294,7 +302,8 @@ function PlanTab({ db, persistDB, headerIcons, onDone, onOpenMeal }) {
 
   const dates = weekDates(draft.weekStartDate, extraDaysOf(draft));
   const SUBS = ["Calendar", "Who's home", "Time"];
-  const LOCS = INVENTORY_LOCS;
+  const LOCS = inventoryLocs(ingredients, mealPlan, meals, keptIds, placed);
+  const locAt = Math.min(locIdx, LOCS.length - 1);
   const nav = (() => {
     if (step === 0) return {
       prev: weekSub > 0 ? { label: `‹ ${SUBS[weekSub - 1]}`, go: () => goSub(weekSub - 1) } : null,
@@ -302,10 +311,10 @@ function PlanTab({ db, persistDB, headerIcons, onDone, onOpenMeal }) {
     };
     if (step === 1) return { prev: { label: "‹ Week", go: () => goToStep(0) }, next: { label: "Next: Inventory ›", go: () => { setLocIdx(0); goToStep(2); } } };
     if (step === 2) return {
-      prev: locIdx > 0 ? { label: `‹ ${LOCS[locIdx - 1]}`, go: () => setLocIdx(locIdx - 1) } : { label: "‹ Meals", go: () => goToStep(1) },
-      next: locIdx < LOCS.length - 1 ? { label: `Next: ${LOCS[locIdx + 1]} ›`, go: () => setLocIdx(locIdx + 1) } : { label: "Next: Confirm ›", go: () => goToStep(3) },
+      prev: locAt > 0 ? { label: `‹ ${LOCS[locAt - 1]}`, go: () => goLoc(locAt - 1) } : { label: "‹ Meals", go: () => goToStep(1) },
+      next: locAt < LOCS.length - 1 ? { label: `Next: ${LOCS[locAt + 1]} ›`, go: () => goLoc(locAt + 1) } : { label: "Next: Confirm ›", go: () => goToStep(3) },
     };
-    if (step === 3) return { prev: { label: "‹ Inventory", go: () => { setLocIdx(LOCS.length - 1); goToStep(2); } }, next: { label: "Next: Order ›", go: () => goToStep(4, beforeNext.current?.() || {}) } };
+    if (step === 3) return { prev: { label: "‹ Inventory", go: () => { goLoc(LOCS.length - 1); goToStep(2); } }, next: { label: "Next: Order ›", go: () => goToStep(4, beforeNext.current?.() || {}) } };
     return { prev: { label: "‹ Confirm", go: () => goToStep(3) }, next: { label: "Finish plan", go: () => finishPlan(beforeNext.current?.() || {}) } };
   })();
 
@@ -318,6 +327,7 @@ function PlanTab({ db, persistDB, headerIcons, onDone, onOpenMeal }) {
           <Segmented label="Week setup" value={weekSub} onChange={goSub}
             options={SUBS.map((l, i) => ({ value: i, label: <span className="plan-sub">{i <= weekSubMax && i !== weekSub && <span className="plan-sub-done" aria-label="done">✓</span>}{l}</span> }))} />
         )}
+        {step === 2 && <LocTabs locs={LOCS} value={locAt} doneUpTo={locMax} onChange={goLoc} />}
         {(step === 1 || step === 3) && <div ref={setHeadSlot} />}
       </header>
       <div className="plan-body">
@@ -329,8 +339,8 @@ function PlanTab({ db, persistDB, headerIcons, onDone, onOpenMeal }) {
           setDayNotes={setDayNotesP} setDayPills={setDayPillsP} setPresence={setPresenceP} setTimeLevels={setTimeLevelsP}
           db={db} persistDB={persistDB} extraDays={extraDays} canExtend={canExtend} setExtraDays={setExtraDays} headSlot={headSlot}
           onOpenMeal={onOpenMeal} orderedMeals={draft.orderedAt ? draft.meals : null} />}
-        <div className={step > 1 ? "shell-legacy-flow" : undefined}>
-          {step === 2 && <PlanInventory onOpenItem={openItem("Inventory")} inFlow locIdx={locIdx} setLocIdx={setLocIdx} checkedIds={checkedIds} setCheckedIds={setCheckedIdsP} stapleFlags={stapleFlags} setOrdering={setOrdering} quantities={quantities} setQuantities={setQuantitiesP} mealPlan={mealPlan} meals={meals} ingredients={ingredients} onNext={() => goToStep(3)} days={days} onUpdateItem={updateItem} keptIds={keptIds} />}
+        <div className={step > 3 ? "shell-legacy-flow" : undefined}>
+          {step === 2 && <PlanInventory onOpenItem={openItem("Inventory")} loc={LOCS[locAt]} placed={placed} setPlaced={setPlaced} checkedIds={checkedIds} setCheckedIds={setCheckedIdsP} stapleFlags={stapleFlags} setOrdering={setOrdering} quantities={quantities} setQuantities={setQuantitiesP} mealPlan={mealPlan} meals={meals} ingredients={ingredients} onNext={() => goToStep(3)} days={days} onUpdateItem={updateItem} keptIds={keptIds} />}
           {step === 3 && <PlanConfirm headSlot={headSlot} onOpenMeal={onOpenMeal} onOpenItem={openItem("Confirm")} registerHeld={fn => { heldItem.current = fn; }} inFlow registerNext={fn => { beforeNext.current = fn; }} mode="confirm" onUpdateItem={updateItem} keptIds={keptIds} checkedIds={checkedIds} setOrdering={setOrdering} addedOff={addedOff} setAddedOff={setAddedOffP} addedItems={addedItems} setAddedItems={setAddedItemsP} stapleFlags={stapleFlags} quantities={quantities} setQuantities={setQuantitiesP} mealPlan={mealPlan} meals={meals} ingredients={ingredients} onNext={() => goToStep(4)} db={db} persistDB={persistDB} days={days} daysFull={daysFull} />}
           {step === 4 && <PlanConfirm inFlow registerNext={fn => { beforeNext.current = fn; }} mode="sparky" onUpdateItem={updateItem} keptIds={keptIds} checkedIds={checkedIds} setOrdering={setOrdering} addedOff={addedOff} setAddedOff={setAddedOffP} addedItems={addedItems} setAddedItems={setAddedItemsP} stapleFlags={stapleFlags} quantities={quantities} setQuantities={setQuantitiesP} mealPlan={mealPlan} meals={meals} ingredients={ingredients} onFinish={finishPlan} db={db} persistDB={persistDB} days={days} daysFull={daysFull} />}
         </div>

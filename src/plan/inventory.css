@@ -1,0 +1,21 @@
+/* Plan › Inventory (stage 4c; board "Plan, inventory"). Groups, labels and cards are Confirm's
+   (confirm.css): sticky grey labels over white cards with full-width lines. Tokens only. */
+
+.inv-row { box-sizing: border-box; display: flex; align-items: center; gap: var(--space-3); min-height: var(--inv-row-h); padding: var(--space-1) var(--space-1) var(--space-1) var(--space-4); cursor: pointer; transition: opacity 0.2s; }
+.inv-row.is-off { opacity: 0.5; }
+.inv-amount { min-height: var(--pill-height); padding: 0 var(--space-3); border: 1px solid var(--tab-capsule-border); border-radius: var(--radius-seg); background: var(--surface); font: inherit; font-size: var(--label-size); color: var(--text); white-space: nowrap; cursor: pointer; }
+.inv-amount.is-changed { border-color: var(--action); background: var(--tint); color: var(--action); font-weight: 600; }
+.inv-amount-input { width: var(--confirm-amount-w); min-height: var(--pill-height); box-sizing: border-box; padding: 0 var(--space-2); border: 1.5px solid var(--action); border-radius: var(--radius-seg); font: inherit; font-size: var(--label-size); }
+.inv-empty { padding: var(--space-5) 0; text-align: center; font-size: var(--body-size); color: var(--text-muted); }
+
+/* Place tabs: the segmented look, scrolling inside its track, ‹ › at the ends. */
+.loc-tabs { display: flex; align-items: center; background: var(--track); border-radius: calc(var(--radius-seg) + var(--seg-pad)); padding: var(--seg-pad) 0; }
+.loc-tabs.fits { padding: var(--seg-pad); }
+.loc-scroll { flex: 1; min-width: 0; display: flex; gap: var(--seg-gap); overflow-x: auto; scrollbar-width: none; }
+.loc-scroll::-webkit-scrollbar { display: none; }
+.loc-scroll.is-more { -webkit-mask-image: linear-gradient(to right, black calc(100% - var(--loc-fade)), transparent); mask-image: linear-gradient(to right, black calc(100% - var(--loc-fade)), transparent); }
+.loc-tabs.fits .loc-tab { flex: 1; }
+.loc-tab { flex: none; min-width: var(--loc-tab-w); min-height: var(--seg-height); padding: 0 var(--space-2); display: inline-flex; align-items: center; justify-content: center; gap: var(--space-1); border: 0; border-radius: var(--radius-seg); background: none; font: inherit; font-size: var(--meta-size); font-weight: 600; color: var(--text-muted); white-space: nowrap; cursor: pointer; }
+.loc-tab[aria-selected="true"] { background: var(--surface); color: var(--text); font-weight: 700; box-shadow: 0 1px 2px var(--seg-shadow); }
+.loc-chev { flex: none; width: var(--loc-chev-w); min-height: var(--seg-height); border: 0; background: none; font: inherit; font-size: var(--title-size); font-weight: 700; color: var(--action); cursor: pointer; }
+.loc-chev:disabled { color: var(--control-border); opacity: 0.5; cursor: default; font-weight: 400; }
