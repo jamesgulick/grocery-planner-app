@@ -1,5 +1,5 @@
 // Split verbatim from grocery-app.jsx in polish Phase 1.5; see CLAUDE.md's file map.
-import { extraDaysOf, isExtraDay, weekDates } from "../engine/assembleInputs.js";
+import { extraDaysOf, isExtraDay, pickupDateOf, weekDates } from "../engine/assembleInputs.js";
 import { planDays } from "./globals.js";
 import { getActivePlan } from "./plans.js";
 
@@ -161,7 +161,9 @@ function buildFridgeReportHTML(db) {
     '</section>';
 
   const weekOf = printedPlan?.weekStartDate || "";
-  const weekOfHTML = weekOf ? "Week of " + fridgeReportFmtDate(weekOf) : "";
+  // The pickup reads from the plan's pickupDate (RULING 15), absent = its first day.
+  const pickup = pickupDateOf(printedPlan);
+  const weekOfHTML = weekOf ? "Week of " + fridgeReportFmtDate(weekOf) + (pickup ? " · Pickup " + new Date(pickup + "T00:00:00").toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" }) : "") : "";
 
   // Only tease "next week" when the printed plan IS current and a next plan
   // exists beyond it — if the printed plan is already next, there's nothing

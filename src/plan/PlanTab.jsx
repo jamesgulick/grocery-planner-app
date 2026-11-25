@@ -1,9 +1,11 @@
 // Split verbatim from grocery-app.jsx in polish Phase 1.5; see CLAUDE.md's file map.
-import { MAX_EXTRA_DAYS, MIN_EXTRA_DAYS, endDateFor, extraDaysOf, reconcilePlates, weekDates } from "../engine/assembleInputs.js";
+import { MAX_EXTRA_DAYS, MIN_EXTRA_DAYS, endDateFor, extraDaysOf, pickupDateOf, planEndDate, reconcilePlates, weekDates } from "../engine/assembleInputs.js";
+import { PickupSheet } from "../home/PickupSheet.jsx";
+import { todayLocalISO } from "../app/globals.js";
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { PLAN_STEPS, nextDateForShoppingDay, planDays, seedTimeLevels, weekLabel } from "../app/globals.js";
 import { PLAN_STEPS_VER, getActivePlan, startPlan, writeActivePlan } from "../app/plans.js";
-import { ActionBar, BlockButton, HeaderButtons, Segmented } from "../ui/kit.jsx";
+import { ActionBar, BlockButton, HeaderButtons, Icon, Segmented } from "../ui/kit.jsx";
 import { PlanConfirm } from "./PlanConfirm.jsx";
 import { PlanInventory } from "./PlanInventory.jsx";
 import { LocTabs } from "./LocTabs.jsx";
@@ -12,7 +14,7 @@ import { PlanMeals } from "./PlanMeals.jsx";
 import { ItemPage } from "../library/ItemPage.jsx";
 import { orderingPatch } from "./ordering.js";
 import { buyOf, buyPatch, buyWord } from "../library/libraryModel.js";
-import { WeekStep } from "./WeekStep.jsx";
+import { WeekStep, dayTitle } from "./WeekStep.jsx";
 import "./plan.css";
 import { latestDB } from "../app/latestDB.js";
 import { showToast } from "../ui/toast.js";
@@ -275,6 +277,7 @@ function PlanTab({ db, persistDB, headerIcons, onDone, onOpenMeal: openMealPage,
   const heldItem = useRef(null);
   // The week view puts its controls (Week check, Suggest all, Compact) in the sticky header.
   const [headSlot, setHeadSlot] = useState(null);
+  const [pickupOpen, setPickupOpen] = useState(false);
   // The sticky header's height, for group labels that stick under it (Confirm, 11/16 pattern).
   const headObs = useRef(null);
   const headRef = useCallback(el => {
@@ -300,6 +303,24 @@ function PlanTab({ db, persistDB, headerIcons, onDone, onOpenMeal: openMealPage,
       </div>
     );
   }
+
+  // The plan's span and pickup (board "Pickup day", RULING 15): "Thu 19 – Tue 24 · 6 days" and a
+  // "Pickup Tue 17" pill that opens the Pickup sheet. Pickup stays editable after the plan starts
+  // and never changes which days the plan covers.
+  const spanEnd = planEndDate(draft);
+  const spanDays = Object.keys(weekDates(draft.weekStartDate, extraDaysOf(draft))).length;
+  const pickup = pickupDateOf(draft), todayISO = todayLocalISO();
+  const pickupText = pickup === todayISO ? "Pickup today" : `${pickup < todayISO ? "Picked up" : "Pickup"} ${dayTitle(pickup)}`;
+  const spanRow = (
+    <div className="plan-span">
+      <span className="plan-span-text">{dayTitle(draft.weekStartDate)} – {dayTitle(spanEnd)} · {spanDays} days</span>
+      <button type="button" className="plan-pickup" onClick={() => setPickupOpen(true)}><Icon name="cart" size={16} />{pickupText}</button>
+    </div>
+  );
+  const pickupSheet = pickupOpen && (
+    <PickupSheet plan={draft} shoppingDay={db.settings?.shoppingDay} onClose={() => setPickupOpen(false)}
+      onPick={iso => saveDraft({ pickupDate: iso === draft.weekStartDate ? undefined : iso })} />   // absent = the first day
+  );
 
   // A meal page opened from here comes back here: "‹ <this screen>" (brief, Back link 11/16).
   const onOpenMeal = id => openMealPage?.(id, weekView ? weekLabel(draft.weekStartDate) : PLAN_STEPS[step]);
@@ -333,6 +354,7 @@ function PlanTab({ db, persistDB, headerIcons, onDone, onOpenMeal: openMealPage,
         <header className="plan-head" ref={headRef}>
           <button type="button" className="lib-back plan-back" onClick={onBack}><span aria-hidden="true">‹</span> Home</button>
           <div className="plan-title-row"><h1 className="ui-screen-title">{weekLabel(draft.weekStartDate)}</h1><HeaderButtons>{headerIcons}</HeaderButtons></div>
+          {spanRow}
           {weeks.length > 1 && <Segmented label="Week" value={db.activePlan || "current"} onChange={onSwitchWeek} options={weeks} />}
           <div ref={setHeadSlot} />
         </header>
@@ -344,6 +366,7 @@ function PlanTab({ db, persistDB, headerIcons, onDone, onOpenMeal: openMealPage,
             onOpenMeal={onOpenMeal} orderedMeals={draft.orderedAt ? draft.meals : null}
             openDay={weekView.day} onPlateClose={weekView.fromHome ? onBack : null} />
         </div>
+        {pickupSheet}
       </div>
     );
   }
@@ -352,6 +375,7 @@ function PlanTab({ db, persistDB, headerIcons, onDone, onOpenMeal: openMealPage,
     <div className="plan">
       <header className="plan-head" ref={headRef}>
         <div className="plan-title-row"><h1 className="ui-screen-title">{weekLabel(draft.weekStartDate)}</h1><HeaderButtons>{headerIcons}</HeaderButtons></div>
+        {spanRow}
         <StepBar step={step} maxStep={maxStep} onGo={i => (i === 0 ? goSub(weekSub) : goToStep(i))} />
         {step === 0 && (
           <Segmented label="Week setup" value={weekSub} onChange={goSub}
@@ -375,6 +399,7 @@ function PlanTab({ db, persistDB, headerIcons, onDone, onOpenMeal: openMealPage,
           {step === 4 && <PlanConfirm inFlow registerNext={fn => { beforeNext.current = fn; }} mode="sparky" onUpdateItem={updateItem} keptIds={keptIds} addedIds={addedIds} checkedIds={checkedIds} setOrdering={setOrdering} addedOff={addedOff} setAddedOff={setAddedOffP} addedItems={addedItems} setAddedItems={setAddedItemsP} stapleFlags={stapleFlags} quantities={quantities} setQuantities={setQuantitiesP} mealPlan={mealPlan} meals={meals} ingredients={planIngs} onFinish={finishPlan} db={db} persistDB={persistDB} days={days} daysFull={daysFull} />}
         </div>
       </div>
+      {pickupSheet}
       <ActionBar>
         <div className="plan-nav">
           {nav.prev && <button type="button" className="plan-prev" onClick={nav.prev.go}>{nav.prev.label}</button>}

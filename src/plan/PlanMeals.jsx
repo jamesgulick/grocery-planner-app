@@ -20,7 +20,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { copyToClipboard } from "../app/clipboard.js";
 import { draftPlanText } from "../app/shareText.js";
-import { addDaysISO, todayLocalISO } from "../app/globals.js";
+import { addDaysISO, todayLocalISO, weekLabel } from "../app/globals.js";
 import { engineGrillOk } from "../app/pills.js";
 import { SEED_MEALS } from "../app/seed.js";
 import { fetchLiveForecast } from "../app/weather.js";
@@ -449,6 +449,8 @@ function PlanMeals({ mealPlan, plates, setMealPlan, restoreMeals, commitMealToPl
           {extraDays < MAX_EXTRA_DAYS && <button type="button" className="wv-add-day" onClick={() => setExtraDays(extraDays + 1)}>+ Add {dayTitle(addDaysISO(weekStartDate, 7 + extraDays))}</button>}
         </div>
       )}
+      {/* Where the next plan starts (board "Pickup day"): "Next: Week of Nov 25 · Wed 25". */}
+      {canExtend && weekStartDate && <div className="wv-next-week">Next: {weekLabel(addDaysISO(weekStartDate, 7 + extraDays))} · {dayTitle(addDaysISO(weekStartDate, 7 + extraDays))}</div>}
 
       {detail && !detail.stacked && daySheet}
       {plateDay && (

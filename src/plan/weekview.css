@@ -95,3 +95,6 @@
 .wv-mini { min-height: var(--pill-height); padding: 0 var(--space-3); border: 1px solid var(--control-border); border-radius: var(--radius-pill); background: var(--surface); color: var(--action); font: inherit; font-size: var(--label-size); font-weight: 700; white-space: nowrap; cursor: pointer; }
 .wv-mini:active { background: var(--pressed); }
 .wv-mini:disabled { opacity: 0.45; cursor: default; }
+
+/* Where the next plan starts, under the last day (board "Pickup day"). */
+.wv-next-week { padding: var(--space-2) var(--space-1) 0; font-size: var(--meta-size); line-height: var(--meta-line); color: var(--text-muted); }
