@@ -10,7 +10,7 @@ import { getActivePlan, writeActivePlan } from "../app/plans.js";
 import { C, S } from "../app/styles.js";
 import { Check } from "../components/common.jsx";
 import { ItemEditPanel } from "../components/ItemEditPanel.jsx";
-import { Icon, PillButton, RowChevron, Segmented } from "../ui/kit.jsx";
+import { Icon, PillButton, RowAction, RowChevron, Segmented } from "../ui/kit.jsx";
 import { showToast } from "../ui/toast.js";
 import { latestDB } from "../app/latestDB.js";
 import { isExplicitNo, isOrdering, isRelevant } from "./ordering.js";
@@ -372,7 +372,7 @@ function PlanConfirm({ headSlot, onOpenMeal, onOpenItem, registerHeld, inFlow, r
             {changedAmounts.map(i => (
               <div key={i.id} className="cf-keep-row">
                 <span className="cf-keep-name">{i.name} <span className="cf-keep-change">· {i.defaultQuantity || "none"} → {quantities[i.id] || "none"}</span></span>
-                <button type="button" className="cf-keep-btn" onClick={() => keepAsUsual([i.id])}>Keep as usual</button>
+                <RowAction onClick={() => keepAsUsual([i.id])}>Keep as usual</RowAction>
               </div>
             ))}
             <div className="cf-keep-foot">

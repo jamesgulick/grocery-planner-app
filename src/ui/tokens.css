@@ -94,7 +94,7 @@
   --switch-h: 31px;
   --switch-sm-w: 40px;                    /* header switch (Compact, Reasons) */
   --switch-sm-h: 24px;
-  --day-gap-detailed: 18px;               /* Meals: between days, Detailed (board "Meals day headers" B, 11/24) */
+  --day-gap-detailed: 16px;               /* Meals: between days, Detailed (board "Meals day headers" B, 11/24) */
   --day-gap-compact: 10px;                /* Meals: between days, Compact */
   --day-bar: #E8E8E3;                     /* Meals: the day's header bar, a shade darker than the page */
   --day-bar-radius: 8px;
@@ -120,7 +120,10 @@
   --open-dash: #C9C9C4;                   /* week view: an open day's dashed tile */
   --pill-outline-soft: #D6D6D1;           /* Week check pill (11/14) */
   --wv-action-h: 36px;                    /* week view: Suggest all and share (board "Week view") */
-  --wv-share-w: 40px;
+  --wv-share-w: 32px;                     /* Meals: the plain share icon's box (11/25) */
+  --row-action-outline: #B9C4BE;          /* per-row action outline (three weights, 11/25) */
+  --view-seg-w: 34px;                     /* Meals: detailed / compact toggle segment */
+  --view-seg-h: 28px;
   --handle-w: 32px;                       /* Compact: the drag handle column */
   --seg-height: 34px;                     /* in a 40px track: 3px padding */
   --seg-pad: 3px;

@@ -74,6 +74,11 @@ export function Row({ title, sub, value, onClick, trailing, dim, strong, problem
 }
 
 // ── Buttons ───────────────────────────────────────────────────────────────────
+// Three weights (brief, Buttons, 11/25): an action repeated on every row is outline only
+// (1px soft green-grey, green text, 32px, 14px semibold), never a dark fill.
+export const RowAction = ({ children, onClick, disabled, label }) => (
+  <button type="button" className="ui-row-action" disabled={disabled} onClick={onClick} aria-label={label}>{children}</button>
+);
 export const PillButton = ({ children, onClick, secondary, inline, disabled }) => (
   <button type="button" disabled={disabled} onClick={onClick}
     className={`ui-pill ${secondary ? "ui-pill-secondary" : "ui-pill-primary"}${inline ? " ui-pill-inline" : ""}`}>{children}</button>

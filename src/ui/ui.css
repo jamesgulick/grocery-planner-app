@@ -43,6 +43,12 @@ button.ui-row:active { background: var(--pressed); }
    top and bottom borders are the transparent tap margin. */
 .ui-pill-secondary.ui-pill-inline { border-left: 0; border-right: 0; box-shadow: inset 0 0 0 1px var(--control-border); }
 .ui-pill:active { opacity: 0.8; }
+/* Per-row action (three weights, 11/25): drawn 32 tall, tap area 44. */
+.ui-row-action { position: relative; flex: none; box-sizing: border-box; height: var(--pill-height); padding: 0 calc(var(--space-3) + var(--space-half)); border: 1px solid var(--row-action-outline); border-radius: var(--radius-pill); background: transparent; color: var(--action); font: inherit; font-size: var(--meta-size); font-weight: 600; white-space: nowrap; cursor: pointer; }
+.ui-row-action::after { content: ""; position: absolute; left: 0; right: 0; top: calc((var(--pill-height) - var(--touch)) / 2); bottom: calc((var(--pill-height) - var(--touch)) / 2); }
+.ui-row-action:active { background: var(--pressed); }
+.ui-row-action:disabled { opacity: 0.45; cursor: default; }
+.ui-row-action:focus-visible { outline: 2px solid var(--action); outline-offset: 2px; }
 .ui-pill:disabled { opacity: 0.45; cursor: default; }
 .ui-block-button { font: inherit; font-size: var(--body-size); font-weight: 700; width: 100%; min-height: var(--block-button); border-radius: var(--radius-pill); border: 0; cursor: pointer; background: var(--action); color: var(--on-action); }
 .ui-tile-button { font: inherit; font-size: var(--body-size); font-weight: 600; min-height: var(--touch); border-radius: var(--radius-pill); border: 0; cursor: pointer; background: var(--surface); color: var(--action); display: flex; align-items: center; justify-content: center; gap: var(--space-2); }

@@ -40,8 +40,6 @@
 .cf-keep-row { box-sizing: border-box; display: flex; align-items: center; gap: var(--space-3); min-height: var(--confirm-row-h); padding: var(--space-1) var(--space-2) var(--space-1) var(--space-4); }
 .cf-keep-name { flex: 1; min-width: 0; font-size: var(--body-size); line-height: var(--body-line); }
 .cf-keep-change { color: var(--text-muted); }
-.cf-keep-btn { flex: none; min-height: var(--wv-action-h); padding: 0 var(--space-4); border: var(--problem-outline) solid var(--action); border-radius: var(--radius-pill); background: none; font: inherit; font-size: var(--meta-size); font-weight: 700; color: var(--action); white-space: nowrap; cursor: pointer; }
-.cf-keep-btn:active { background: var(--pressed); }
 .cf-keep-foot { display: flex; justify-content: space-between; border-top: 1px solid var(--divider); padding: 0 var(--space-2); }
 .cf-text-btn { min-height: var(--touch); padding: 0 var(--space-2); border: 0; background: none; font: inherit; font-size: var(--body-size); font-weight: 600; color: var(--text-muted); cursor: pointer; }
 .cf-text-btn.is-strong { font-weight: 700; color: var(--action); }

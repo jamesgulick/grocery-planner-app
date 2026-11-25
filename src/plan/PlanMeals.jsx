@@ -27,7 +27,7 @@ import { fetchLiveForecast } from "../app/weather.js";
 import { absenceLines } from "../app/absence.js";
 import { mealMatches } from "../manage/MealEditor.jsx";
 import { notHomeCooked } from "../library/libraryModel.js";
-import { CheckRow, Clocks, Group, Icon, PillButton, RowChevron, SearchField, Sheet, Switch } from "../ui/kit.jsx";
+import { CheckRow, Clocks, Group, Icon, RowAction, RowChevron, SearchField, Sheet, Switch } from "../ui/kit.jsx";
 import { showToast } from "../ui/toast.js";
 import { dayTitle, forecastWords } from "./WeekStep.jsx";
 import { DaySheet } from "./DaySheet.jsx";
@@ -373,8 +373,8 @@ function PlanMeals({ mealPlan, plates, setMealPlan, restoreMeals, commitMealToPl
       </button>
       <div className="wv-actions">
         <button type="button" className="wv-suggest-all" onClick={suggestAll}>Suggest all</button>
-        <button type="button" className="wv-share" aria-label="Share draft plan with family" onClick={share}><Icon name="share" size={18} /></button>
-        <label className="wv-compact">Compact<Switch small checked={compact} onChange={setCompact} label="Compact" /></label>
+        <button type="button" className="wv-share" aria-label="Share draft plan with family" onClick={share}><Icon name="share" size={20} /></button>
+        <ViewToggle compact={compact} onChange={setCompact} />
       </div>
     </div>
   );
@@ -413,7 +413,7 @@ function PlanMeals({ mealPlan, plates, setMealPlan, restoreMeals, commitMealToPl
               <div className="wv-open">
                 {past ? <span className="wv-open-label">—</span> : <>
                   <button type="button" className="wv-open-label" onClick={() => setChoose({ day, idx: null, kind: "main", title: `Pick for ${dayTitle(iso)}` })}>Open</button>
-                  <PillButton inline onClick={() => fillDay(day)}>Suggest</PillButton>
+                  <RowAction onClick={() => fillDay(day)}>Suggest</RowAction>
                 </>}
               </div>
             ) : (
@@ -522,7 +522,7 @@ function PlateSheet({ iso, past, dishes, level, note, concerns, learnMode, setLe
           <div key={k} className="wv-fix is-plate">
             <span className="wv-dot" aria-hidden="true" />
             <span className="wv-fix-text">{o.text}</span>
-            {!past && o.property === "floor" && <PillButton inline onClick={onFix}>{hasMain ? "Add side" : "Suggest"}</PillButton>}
+            {!past && o.property === "floor" && <RowAction onClick={onFix}>{hasMain ? "Add side" : "Suggest"}</RowAction>}
           </div>
         ))}
         <Group>
@@ -694,14 +694,14 @@ function WeekCheckBody({ observations, fillNotes, nothingToBuy, dayShort, hasMai
         <div key={"c" + k} className="wv-fix">
           <span className="wv-dot" aria-hidden="true" />
           <span className="wv-fix-text">{o.text}</span>
-          {o.day && o.property === "floor" && <PillButton inline onClick={() => onFix(o.day)}>{hasMain(o.day) ? "Add side" : "Suggest"}</PillButton>}
+          {o.day && o.property === "floor" && <RowAction onClick={() => onFix(o.day)}>{hasMain(o.day) ? "Add side" : "Suggest"}</RowAction>}
         </div>
       ))}
       {nothingToBuy.map((x, k) => (
         <div key={"n" + k} className="wv-fix">
           <span className="wv-dot" aria-hidden="true" />
           <span className="wv-fix-text">{x.name} on {dayShort(x.day)}: nothing to buy</span>
-          {onOpenMeal && <PillButton inline onClick={() => onOpenMeal(x.id)}>Open</PillButton>}
+          {onOpenMeal && <RowAction onClick={() => onOpenMeal(x.id)}>Open</RowAction>}
         </div>
       ))}
       {notes.length > 0 && (
@@ -716,3 +716,17 @@ function WeekCheckBody({ observations, fillNotes, nothingToBuy, dayShort, hasMai
 }
 
 export { PlanMeals };
+
+// Detailed · Compact as a two-icon toggle in the segmented style (board "Plan › Meals button
+// weights", option D, 11/25): white thumb on the grey track.
+function ViewToggle({ compact, onChange }) {
+  const seg = (on, label, icon, v) => (
+    <button type="button" className="wv-view-seg" aria-pressed={on} aria-label={label} onClick={() => onChange(v)}>{icon}</button>
+  );
+  return (
+    <span className="wv-view" role="group" aria-label="View">
+      {seg(!compact, "Detailed", <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" aria-hidden="true"><rect x="2" y="2" width="12" height="5" rx="1.5" /><rect x="2" y="9" width="12" height="5" rx="1.5" /></svg>, false)}
+      {seg(compact, "Compact", <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" aria-hidden="true"><path d="M2 3.5h12M2 8h12M2 12.5h12" /></svg>, true)}
+    </span>
+  );
+}
