@@ -79,9 +79,10 @@ export function Row({ title, sub, value, onClick, trailing, dim, strong, problem
 export const RowAction = ({ children, onClick, disabled, label }) => (
   <button type="button" className="ui-row-action" disabled={disabled} onClick={onClick} aria-label={label}>{children}</button>
 );
-export const PillButton = ({ children, onClick, secondary, inline, disabled }) => (
+// `outline`: the screen-level secondary weight (three weights, 11/25): white fill, 1.5px green outline.
+export const PillButton = ({ children, onClick, secondary, outline, inline, disabled }) => (
   <button type="button" disabled={disabled} onClick={onClick}
-    className={`ui-pill ${secondary ? "ui-pill-secondary" : "ui-pill-primary"}${inline ? " ui-pill-inline" : ""}`}>{children}</button>
+    className={`ui-pill ${outline ? "ui-pill-outline" : secondary ? "ui-pill-secondary" : "ui-pill-primary"}${inline ? " ui-pill-inline" : ""}`}>{children}</button>
 );
 // A disabled filled button is grey (buttons rule, 11/15).
 export const BlockButton = ({ children, onClick, disabled }) => <button type="button" className="ui-block-button" disabled={disabled} onClick={onClick}>{children}</button>;

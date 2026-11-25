@@ -101,7 +101,9 @@ function weekState(w, today) {
 const pickupWords = (iso, today) => iso === today ? "pickup today"
   : `${iso < today ? "picked up" : "pickup"} ${abbrOf(iso)} ${new Date(iso + "T00:00:00").getDate()}`;
 
-function WeekRow({ week, state, today, pickup, planFrom, onOpen, onContinue }) {
+// `main`: this week's Plan / Continue is Home's one main action (dark fill); otherwise the white
+// secondary weight (brief §7 "Plan / Continue button weight", 11/25).
+function WeekRow({ week, state, today, pickup, planFrom, main, onOpen, onContinue }) {
   const withPickup = s => pickup ? `${s} · ${pickupWords(pickup, today)}` : s;
   const status = state.kind === "unplanned" ? withPickup("Not planned")
     : state.kind === "progress" ? `Up next: ${STEP_BAR[state.next]}`
@@ -126,8 +128,8 @@ function WeekRow({ week, state, today, pickup, planFrom, onOpen, onContinue }) {
             band says when instead of offering a Plan that can't start it. */}
         {state.kind === "unplanned" && (planFrom
           ? <span className="home-sub home-week-wait">Plan from {abbrOf(planFrom)} {new Date(planFrom + "T00:00:00").getDate()}</span>
-          : <PillButton inline onClick={onOpen}>Plan</PillButton>)}
-        {state.kind === "progress" && <PillButton inline onClick={onContinue}>Continue</PillButton>}
+          : <PillButton inline outline={!main} onClick={onOpen}>Plan</PillButton>)}
+        {state.kind === "progress" && <PillButton inline outline={!main} onClick={onContinue}>Continue</PillButton>}
       </div>
       {state.kind === "progress" && (
         <ol className="home-steps" aria-label={`Step ${state.next + 1} of ${STEP_BAR.length}`}>
@@ -218,6 +220,8 @@ export function HomeScreen({ db, dataDot, onOpenData, onOpenSettings, onOpenPlan
   const tonightConcerns = todayKey ? (concerns[tonightWeek.key]?.[todayKey] || []) : [];
   const dateTitle = new Date(today + "T00:00:00").toLocaleDateString(undefined, { weekday: "long", month: "short", day: "numeric" });
 
+  // The earliest week that still needs you (unplanned or in progress) gets the dark Plan / Continue.
+  const mainWeek = groups.findIndex(({ week }) => ["unplanned", "progress"].includes(weekState(week, today).kind));
   // Share with family sends what Home shows: tonight onward, every planned week, by week.
   const shareWeeks = [];
   [...(tPlan ? [{ week: tonightWeek, iso: today, key: todayKey }] : []), ...groups.flatMap(g => g.rows.map(r => ({ week: g.week, ...r })))]
@@ -293,7 +297,7 @@ export function HomeScreen({ db, dataDot, onOpenData, onOpenSettings, onOpenPlan
         {/* No "Coming up" heading (11/18): the Tonight band and each green week row say what they are.
             One card per week, each headed by its green band (board "Week cards", 11/24). */}
         <section aria-label="Coming up" className="home-weeks">
-            {groups.map(({ week, rows }) => {
+            {groups.map(({ week, rows }, gi) => {
               const state = weekState(week, today);
               const showDays = state.kind !== "unplanned";
               const away = showDays ? awayLines(rows, week.plan, db) : {};
@@ -302,6 +306,7 @@ export function HomeScreen({ db, dataDot, onOpenData, onOpenSettings, onOpenPlan
                   <WeekRow week={week} state={state} today={today}
                     planFrom={!week.plan && plans.current && plans.next?.weekStartDate > today ? plans.next.weekStartDate : null}
                     pickup={week.plan ? pickupDateOf(week.plan) : !upcoming.key && week.start === upcoming.start ? upcoming.date : null}
+                    main={gi === mainWeek}
                     onOpen={() => openWeek(week)} onContinue={() => continueWeek(week, state)} />
                   {showDays && rows.map(({ key, iso }) => {
                     const d = dishesFor(week.plan, key);

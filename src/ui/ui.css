@@ -33,6 +33,9 @@ button.ui-row:active { background: var(--pressed); }
 .ui-pill { font: inherit; font-size: var(--meta-size); font-weight: 700; border-radius: var(--radius-pill); min-height: var(--touch); padding: 0 var(--space-4); cursor: pointer; display: inline-flex; align-items: center; justify-content: center; gap: var(--space-2); flex: none; }
 .ui-pill-primary { background: var(--action); color: var(--on-action); border: 0; }
 .ui-pill-secondary { background: var(--surface); color: var(--action); border: 1px solid var(--control-border); }
+/* The screen-level secondary weight: white, 1.5px green outline drawn on the face (an inset ring,
+   so the inline pill's transparent tap margins stay transparent). */
+.ui-pill-outline { background: var(--surface); color: var(--action); border: 0; box-shadow: inset 0 0 0 var(--pill-outline) var(--action); }
 /* 36px visual, 44px tap target on the button itself: transparent top/bottom borders are
    part of the button's box, and the background stops at them. */
 .ui-pill-inline { min-height: var(--touch); border-top: var(--pill-inset) solid transparent; border-bottom: var(--pill-inset) solid transparent; background-clip: padding-box;
