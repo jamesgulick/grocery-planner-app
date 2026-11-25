@@ -132,6 +132,7 @@ export function ImportCheck({ device, prepared, onLoad, onCancel, fromClipboard 
           </div>
         ))}
       </div>
+      {legacy.empty && <div className="imp-empty">This device is empty</div>}
       {records && <>
         {group(r.newMeals.length > 1 ? "New meals" : "New meal", r.newMeals, true, r.newMeals.length > 1)}
         {group("Filled in", r.filledIn, true)}
@@ -154,7 +155,7 @@ export function ImportCheck({ device, prepared, onLoad, onCancel, fromClipboard 
       )}
       {r && group("Missing links", r.dangling.map(d => ({ ...d, problem: true })), false, false)}
       {r?.notes?.length > 0 && <Section label="Notes"><Group>{r.notes.map((n, k) => <Row key={k} title={n} />)}</Group></Section>}
-      <div className="ui-meta imp-replaces">{stale ? "Loading drops the changes made here" : "Replaces what's on this device"}{fromClipboard && " · Saves a copy"}</div>
+      {!legacy.empty && <div className="ui-meta imp-replaces">{stale ? "Loading drops the changes made here" : "Replaces what's on this device"}{fromClipboard && " · Saves a copy"}</div>}
       {open && (open.peek ? <PeekSheet row={open} onClose={() => setOpen(null)} /> : <PreviewSheet meal={open.meal} db={prepared.db} onClose={() => setOpen(null)} />)}
     </Sheet>
   );

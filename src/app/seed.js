@@ -228,4 +228,7 @@ const DEFAULT_SETTINGS = {
 
 const DEFAULT_DB = { settings:DEFAULT_SETTINGS, meals:SEED_MEALS, ingredients:SEED_INGREDIENTS, plans:{ current:null, next:null }, activePlan:"current", _planModelVer:1, _schemaVer:1, outbox:null, published:null, mealHistory:[], _isSeed:true, dataChangedAt:null, lastExportedAt:null };
 
-export { DEFAULT_DB, DEFAULT_SETTINGS, SEED_MEALS, SEED_TS };
+// An empty device (first run, brief §8; also what Erase leaves): no meals, items or plans.
+// Home shows the "This device" card; "Start with example data" loads DEFAULT_DB.
+const EMPTY_DB = { ...DEFAULT_DB, meals: [], ingredients: [], _isSeed: false };
+export { DEFAULT_DB, DEFAULT_SETTINGS, EMPTY_DB, SEED_MEALS, SEED_TS };

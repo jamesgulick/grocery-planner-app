@@ -6,7 +6,7 @@ import { IS_PREVIEW, PREVIEW_SLOT, extractJSON, formatSavedAt, todayLocalISO } f
 import { pruneEnded } from "./app/awayDates.js";
 import { autoRetirePlans, landingPlanKey, migrateDB, planCount, startPlan } from "./app/plans.js";
 import { prepareImport } from "./app/dataIO.js";
-import { DEFAULT_DB } from "./app/seed.js";
+import { EMPTY_DB } from "./app/seed.js";
 import { clearRecovery, getStorageHealth, loadDB, loadRecovery, saveDB, saveRecovery, seedPreviewFromLive } from "./app/storage.js";
 import { C, S } from "./app/styles.js";
 import { formatAsOf } from "./manage/ManageConfig.jsx";
@@ -148,7 +148,7 @@ export default function App() {
       }
       setLoading(false);
       setSaveOk(getStorageHealth() !== "unavailable");
-      const restoredReal = getStorageHealth() === "ok" && loaded !== DEFAULT_DB;
+      const restoredReal = getStorageHealth() === "ok" && loaded !== EMPTY_DB;
 
       // Check for a recovery snapshot newer than what loaded. If found, offer a
       // one-tap restore instead of prompting for a re-import.
@@ -157,10 +157,9 @@ export default function App() {
       const snapHasMore = snap && (!restoredReal || snap.db.ingredients.length !== loaded.ingredients.length || snap.db.meals.length !== loaded.meals.length);
       if (snap && snapNewer && snapHasMore) {
         setRecovery(snap);
-      } else if (!restoredReal) {
-        // Nothing to recover and no real local data — fall back to import prompt.
-        setShowOpenSession(true);
       }
+      // No real local data: Home's first-run card (brief §8) offers Load a file / Paste data,
+      // replacing the old "Start session" paste prompt.
     })();
   }, []);
 
@@ -208,8 +207,6 @@ export default function App() {
   const dismissRecovery = () => {
     clearRecovery();
     setRecovery(null);
-    const restoredReal = getStorageHealth() === "ok" && dbRef.current && dbRef.current !== DEFAULT_DB;
-    if (!restoredReal) setShowOpenSession(true);
   };
 
   const acceptSessionImport = () => {

@@ -74,10 +74,12 @@ function recordChanges(cur = [], inc = [], noun) {
  * savedAt is the file's own save time (shown); asOf is when its data last changed.
  */
 export function compareImport(device, incoming, { savedAt = null, asOf = null } = {}) {
-  const fresh = !device || device._isSeed;
+  // First run (brief §8): nothing on this device, so the counts read "new".
+  const empty = !device || (!(device.meals || []).length && !(device.ingredients || []).length && !device.plans?.current?.weekStartDate && !device.plans?.next?.weekStartDate);
+  const fresh = empty || device._isSeed;
   const incWeeks = weeksOf(incoming);
   const countChange = (a, b) => {
-    if (fresh) return { change: null, problem: false };
+    if (fresh) return { change: empty ? "new" : null, problem: false };
     const d = b - a;
     return { change: d === 0 ? "same" : d < 0 ? `${-d} fewer` : `${d} more`, problem: d < 0 };
   };
@@ -87,7 +89,7 @@ export function compareImport(device, incoming, { savedAt = null, asOf = null } 
     { label: "Items", n: (incoming.ingredients || []).length, ...countChange((device?.ingredients || []).length, (incoming.ingredients || []).length) },
     { label: "Plans", n: incWeeks.length, change: incWeeks.map(w => rangeLabel(w.start, w.end)), problem: !fresh && incWeeks.length < devPlans },
   ];
-  if (fresh) return { savedAt, counts, rows: [], fresh };
+  if (fresh) return { savedAt, counts, rows: [], fresh, empty };
 
   const di = dayIndex(device), ni = dayIndex(incoming);
   const dates = [...new Set([...Object.keys(di), ...Object.keys(ni)])].sort();

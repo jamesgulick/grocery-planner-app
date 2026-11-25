@@ -9,7 +9,7 @@ import { prepareImport, readFileText } from "../app/dataIO.js";
 import { downloadBackup, exportFileName } from "../app/exportData.js";
 import { showToast } from "../ui/toast.js";
 import { extractJSON } from "../app/globals.js";
-import { DEFAULT_DB } from "../app/seed.js";
+import { EMPTY_DB } from "../app/seed.js";
 import { endDateFor, extraDaysOf } from "../engine/assembleInputs.js";
 import { DeleteButton, Group, Icon, PillButton, Row, Sheet } from "../ui/kit.jsx";
 import { ImportCheck } from "./ImportCheck.jsx";
@@ -107,8 +107,8 @@ export function DataSheet({ db, persistDB, overdue, onClose }) {
         <Row icon="down" title="Paste data" sub="From the clipboard" onClick={pasteData} chevron={false} />
       </Group>
       <DeleteButton onClick={() => setPage("erase")}>Erase this device</DeleteButton>
-      {/* Erase this device: a fit sheet over this one listing what goes. The device then shows the
-          example data with "Import your file" (Home), as on a first visit. */}
+      {/* Erase this device: a fit sheet over this one listing what goes. The device is then empty
+          and Home shows the first-run card, as on a first visit (brief §8). */}
       {page === "erase" && (
         <Sheet title="Erase this device?" onClose={() => setPage("main")} noDone>
           <Group>
@@ -120,7 +120,7 @@ export function DataSheet({ db, persistDB, overdue, onClose }) {
           <div className="lib-cant-undo">Can't be undone</div>
           <div className="data-pair data-erase">
             <button type="button" className="ui-block-button ui-block-plain" onClick={() => setPage("main")}>Cancel</button>
-            <button type="button" className="ui-block-button ui-block-delete ui-block-delete-filled" onClick={() => { persistDB(DEFAULT_DB); onClose(); showToast("Erased"); }}><Icon name="trash" size={20} />Erase</button>
+            <button type="button" className="ui-block-button ui-block-delete ui-block-delete-filled" onClick={() => { persistDB(EMPTY_DB); onClose(); showToast("Erased"); }}><Icon name="trash" size={20} />Erase</button>
           </div>
         </Sheet>
       )}

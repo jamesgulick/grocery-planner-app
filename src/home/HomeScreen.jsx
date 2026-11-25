@@ -20,6 +20,7 @@ import { homePlanText } from "../app/shareText.js";
 import { ActionBar, Group, HeaderButtons, Icon, IconButton, PillButton, RowChevron } from "../ui/kit.jsx";
 import { ReimportPill } from "../shell/ReimportPill.jsx";
 import { PickupSheet } from "./PickupSheet.jsx";
+import { FirstRunCard, isEmptyDevice } from "../shell/FirstRun.jsx";
 import { rateQueue } from "../rate/rating.js";
 import { RateSheet } from "../rate/RateSheet.jsx";
 import "../rate/rate.css";
@@ -161,6 +162,7 @@ export function HomeScreen({ db, dataDot, onOpenData, onOpenSettings, onOpenPlan
   const today = todayLocalISO();
   // Meals to rate (brief §2): Just tried or Incomplete, tonight's from 7pm. Rate steps through them.
   const toRate = rateQueue(db, today, new Date().getHours());
+  const empty = isEmptyDevice(db);   // first run (brief §8): Tonight, then the "This device" card only
   const [rateHidden, setRateHidden] = useState(rateBannerHidden);
   const [rating, setRating] = useState(null);
   const plans = db.plans || {};
@@ -317,7 +319,8 @@ export function HomeScreen({ db, dataDot, onOpenData, onOpenSettings, onOpenPlan
 
         {/* No "Coming up" heading (11/18): the Tonight band and each green week row say what they are.
             One card per week, each headed by its green band (board "Week cards", 11/24). */}
-        <section aria-label="Coming up" className="home-weeks">
+        {empty && <FirstRunCard db={db} persistDB={persistDB} />}
+        {!empty && <section aria-label="Coming up" className="home-weeks">
             {groups.map(({ week, rows }, gi) => {
               const state = weekState(week, today);
               const showDays = state.kind !== "unplanned";
@@ -348,7 +351,7 @@ export function HomeScreen({ db, dataDot, onOpenData, onOpenSettings, onOpenPlan
                 </Group>
               );
             })}
-        </section>
+        </section>}
 
         <div className="home-share-spacer" aria-hidden="true" />
       </main>
@@ -367,12 +370,12 @@ export function HomeScreen({ db, dataDot, onOpenData, onOpenSettings, onOpenPlan
           }} />
       )}
 
-      <ActionBar>
+      {!empty && <ActionBar>
         <div className="home-share">
           <button type="button" className="ui-tile-button ui-float-pill" onClick={openFridgeReport}><Icon name="print" size={18} />Fridge report</button>
           <button type="button" className="ui-tile-button ui-float-pill" onClick={shareWithFamily} disabled={!sharePlan}><Icon name="share" size={18} />{shared ? "Copied" : "Share with family"}</button>
         </div>
-      </ActionBar>
+      </ActionBar>}
     </div>
   );
 }

@@ -1,7 +1,7 @@
 // Split verbatim from grocery-app.jsx in polish Phase 1.5; see CLAUDE.md's file map.
 import { DB_KEY, IS_PREVIEW, LIVE_DB_KEY, RECOVERY_KEY } from "./globals.js";
 import { migrateDB } from "./plans.js";
-import { DEFAULT_DB } from "./seed.js";
+import { EMPTY_DB } from "./seed.js";
 
 // ── Storage ────────────────────────────────────────────────────────────────────
 //
@@ -44,7 +44,7 @@ async function loadDB() {
     storageHealth = "unavailable";
     console.log("[DB] Load failed:", e.message);
   }
-  return DEFAULT_DB;
+  return EMPTY_DB;   // first run (brief §8): an empty device, not the example data
 }
 
 async function saveDB(db) {

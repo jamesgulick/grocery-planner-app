@@ -13,6 +13,7 @@
 .shell-app { background: var(--bg); min-height: 100vh; padding-top: var(--safe-top); }
 
 /* Import check (board "Import check", decided 11/14). */
+.imp-empty { padding: 0 var(--space-1); font-size: var(--meta-size); color: var(--text-muted); }   /* first run (brief §8) */
 .imp-counts { background: var(--tint); border-radius: var(--radius-group); padding: var(--space-3) var(--space-2); display: flex; }
 .imp-count { flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: center; gap: var(--space-half); text-align: center; }
 .imp-count-n { font-size: var(--count-size); line-height: var(--tonight-line); font-weight: 800; color: var(--action); font-variant-numeric: tabular-nums; }
@@ -93,3 +94,8 @@
 .grab-ai { display: flex; align-items: center; gap: var(--space-2); flex-wrap: wrap; }
 
 .grab-ai .reimport-error { flex-basis: 100%; text-align: center; }
+
+/* First run (brief §8, board "Data and first run"): the "This device" card on an empty device. */
+.firstrun-card { display: flex; flex-direction: column; gap: var(--space-3); padding: var(--space-4); background: var(--surface); border-radius: var(--radius-group); }
+.firstrun-counts { font-size: var(--body-size); color: var(--text); }
+.firstrun-example { min-height: var(--touch); border: 0; background: none; font: inherit; font-size: var(--body-size); font-weight: 600; color: var(--action); cursor: pointer; }
