@@ -10,6 +10,8 @@ import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { todayLocalISO, toSentenceCase } from "../app/globals.js";
 import { Chip, Group, HeaderButtons, Row, SearchField, Segmented, SortMenu, TopBar } from "../ui/kit.jsx";
 import { sendToAI } from "../app/sendToAI.js";
+import { TripTitle, sentLabel, useTrip } from "../shell/AiSteps.jsx";
+import { ReimportPill } from "../shell/ReimportPill.jsx";
 import { ItemPage } from "./ItemPage.jsx";
 import { MealPage } from "./MealPage.jsx";
 import {
@@ -95,11 +97,9 @@ export function LibraryTab({ db, persistDB, view, setView, headerIcons, resetKey
       {groups.map(g => (
         <section key={g.key} className="lib-list-group">
           <div className="ui-section-label lib-sticky lib-sticky-row" style={{ top: headH }}>
-            <span>{`${g.label} · ${g.rows.length}`}</span>
-            {/* To finish › Send to AI: fills in every meal in the group in one round trip (11/15). */}
-            {view === "meals" && g.key === "finish" && (
-              <button type="button" className="lib-ai-pill" onClick={() => sendToAI(db, persistDB, { purpose: "enrich", meals: g.rows.map(r => r.meal.id) })}>Send to AI</button>
-            )}
+            {view === "meals" && g.key === "finish"
+              ? <FinishTrip db={db} persistDB={persistDB} label={`${g.label} · ${g.rows.length}`} meals={mealGroups(meals, hist, { ...s, q: "", filter: null }).find(x => x.key === "finish")?.rows.map(r => r.meal.id) || []} />
+              : <span>{`${g.label} · ${g.rows.length}`}</span>}
           </div>
           <Group>
             {g.rows.map(r => view === "meals"
@@ -112,5 +112,26 @@ export function LibraryTab({ db, persistDB, view, setView, headerIcons, resetKey
         <Group><Row title={`Add “${s.q.trim()}”`} onClick={addNew} /></Group>
       )}
     </div>
+  );
+}
+
+// Library › Meals › To finish (brief, standing rules, AI round trips, 11/25): "To finish · 3 ⓘ",
+// a single pill that sends every To finish meal in one trip, then reads Re-import (the file
+// picker, then "Load this file?") with "Sent 5:41pm" by the label. The sent state is kept on
+// the device by the exact list sent: loading any file, or a change to the list, brings back
+// Send to AI. Items' To finish has no AI trip.
+function FinishTrip({ db, persistDB, label, meals }) {
+  const key = "finish:" + [...meals].sort().join(",");
+  const sentAt = useTrip(key);
+  return (
+    <>
+      <span className="lib-trip-head">
+        <TripTitle title="To finish" label={label} className="" />
+        {sentAt && <span className="trip-status">{sentLabel(sentAt)}</span>}
+      </span>
+      {sentAt
+        ? <ReimportPill db={db} persistDB={persistDB} className="lib-ai-pill" />
+        : <button type="button" className="lib-ai-pill" onClick={() => sendToAI(db, persistDB, { purpose: "enrich", meals }, { tripKey: key })}>Send to AI</button>}
+    </>
   );
 }

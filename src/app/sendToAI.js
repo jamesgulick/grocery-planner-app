@@ -37,7 +37,8 @@ function savePending(record) {
 
 // AI round trips (standing rules, 11/23): each trip shows ① Send to AI › ② Re-import, and
 // step 2 stays lit after a restart. The device keeps when each trip was sent, by key:
-// "calendar", "recipe", "enrich:<meal id>". Any file loaded settles them all (as it settles
+// "calendar", "recipe", "enrich:<meal id>", and Library's "finish:<the To finish meal ids>"
+// (a different To finish list is a different key, so the pill goes back to Send to AI). Any file loaded settles them all (as it settles
 // the pending request). Surfaces listen for TRIPS_EVENT to stay in step with each other.
 const TRIPS_KEY = "grocery_trips" + KEY_SUFFIX;
 export const TRIPS_EVENT = "grocery-trips";
@@ -53,8 +54,8 @@ export function tripSentAt(key) { return loadTrips()[key] || null; }
 /** A file was loaded: every trip is back to step 1. */
 export function settleTrips() { if (Object.keys(loadTrips()).length) saveTrips({}); }
 const tripKeys = job => !job ? [] : job.purpose === "enrich" ? (job.meals || []).map(id => `enrich:${id}`) : [job.purpose];
-function markTrips(job, at) {
-  const keys = tripKeys(job);
+function markTrips(job, at, extraKey) {
+  const keys = [...tripKeys(job), ...(extraKey ? [extraKey] : [])];
   if (keys.length) saveTrips({ ...loadTrips(), ...Object.fromEntries(keys.map(k => [k, at])) });
 }
 
@@ -72,7 +73,7 @@ function saveSentCopy(record) {
  * opens the share sheet with the file (or downloads it where sharing a file isn't possible).
  * Returns "shared" | "cancelled" | "downloaded". Call straight from a tap.
  */
-export async function sendToAI(db, persistDB, job = null) {
+export async function sendToAI(db, persistDB, job = null, { tripKey } = {}) {
   copyToClipboard(SEND_PROMPT);
   showToast("Prompt copied");   // the confirmation bar, as the share sheet opens (11/17)
   const request = job ? { purpose: job.purpose, instructions: db.settings?.aiInstructions?.[job.purpose] || "", ...withoutPurpose(job) } : null;
@@ -86,14 +87,14 @@ export async function sendToAI(db, persistDB, job = null) {
   if (navigator.canShare?.({ files: [file] })) {
     try {
       await navigator.share({ files: [file], text: SEND_PROMPT });
-      markTrips(job, at);
+      markTrips(job, at, tripKey);
       return "shared";
     } catch (e) {
       if (e?.name === "AbortError") return "cancelled";
     }
   }
   downloadPayload(payload, db, persistDB);
-  markTrips(job, at);
+  markTrips(job, at, tripKey);
   return "downloaded";
 }
 const withoutPurpose = ({ purpose, ...rest }) => rest;
