@@ -1,6 +1,6 @@
 // Split verbatim from grocery-app.jsx in polish Phase 1.5; see CLAUDE.md's file map.
 import { MAX_EXTRA_DAYS, endDateFor, extraDaysOf, reconcilePlates, weekDates } from "../engine/assembleInputs.js";
-import { useLayoutEffect, useRef, useState } from "react";
+import { useCallback, useLayoutEffect, useRef, useState } from "react";
 import { INVENTORY_LOCS, PLAN_STEPS, nextDateForShoppingDay, planDays, seedTimeLevels, weekLabel } from "../app/globals.js";
 import { PLAN_STEPS_VER, getActivePlan, startPlan, writeActivePlan } from "../app/plans.js";
 import { ActionBar, BlockButton, HeaderButtons, Segmented } from "../ui/kit.jsx";
@@ -262,6 +262,16 @@ function PlanTab({ db, persistDB, headerIcons, onDone, onOpenMeal }) {
   const heldItem = useRef(null);
   // The week view puts its controls (Week check, Suggest all, Compact) in the sticky header.
   const [headSlot, setHeadSlot] = useState(null);
+  // The sticky header's height, for group labels that stick under it (Confirm, 11/16 pattern).
+  const headObs = useRef(null);
+  const headRef = useCallback(el => {
+    headObs.current?.disconnect(); headObs.current = null;
+    if (!el || typeof ResizeObserver === "undefined") return;
+    const set = () => document.documentElement.style.setProperty("--plan-head-h", el.offsetHeight + "px");
+    set();
+    headObs.current = new ResizeObserver(set);
+    headObs.current.observe(el);
+  }, []);
 
   // ── The frame (spec §2): title, step bar, the step's own header control; the step;
   // a Prev / Next bar fixed above the tab bar. ──────────────────────────────────────
@@ -301,14 +311,14 @@ function PlanTab({ db, persistDB, headerIcons, onDone, onOpenMeal }) {
 
   return (
     <div className="plan">
-      <header className="plan-head">
+      <header className="plan-head" ref={headRef}>
         <div className="plan-title-row"><h1 className="ui-screen-title">{weekLabel(draft.weekStartDate)}</h1><HeaderButtons>{headerIcons}</HeaderButtons></div>
         <StepBar step={step} maxStep={maxStep} onGo={i => (i === 0 ? goSub(weekSub) : goToStep(i))} />
         {step === 0 && (
           <Segmented label="Week setup" value={weekSub} onChange={goSub}
             options={SUBS.map((l, i) => ({ value: i, label: <span className="plan-sub">{i <= weekSubMax && i !== weekSub && <span className="plan-sub-done" aria-label="done">✓</span>}{l}</span> }))} />
         )}
-        {step === 1 && <div ref={setHeadSlot} />}
+        {(step === 1 || step === 3) && <div ref={setHeadSlot} />}
       </header>
       <div className="plan-body">
         {step === 0 && <WeekStep sub={weekSub} db={db} persistDB={persistDB} days={days} dates={dates} dayNotes={dayNotes} setDayNotes={setDayNotesP}
@@ -321,7 +331,7 @@ function PlanTab({ db, persistDB, headerIcons, onDone, onOpenMeal }) {
           onOpenMeal={onOpenMeal} orderedMeals={draft.orderedAt ? draft.meals : null} />}
         <div className={step > 1 ? "shell-legacy-flow" : undefined}>
           {step === 2 && <PlanInventory onOpenItem={openItem("Inventory")} inFlow locIdx={locIdx} setLocIdx={setLocIdx} checkedIds={checkedIds} setCheckedIds={setCheckedIdsP} stapleFlags={stapleFlags} setOrdering={setOrdering} quantities={quantities} setQuantities={setQuantitiesP} mealPlan={mealPlan} meals={meals} ingredients={ingredients} onNext={() => goToStep(3)} days={days} onUpdateItem={updateItem} keptIds={keptIds} />}
-          {step === 3 && <PlanConfirm onOpenItem={openItem("Confirm")} registerHeld={fn => { heldItem.current = fn; }} inFlow registerNext={fn => { beforeNext.current = fn; }} mode="confirm" onUpdateItem={updateItem} keptIds={keptIds} checkedIds={checkedIds} setOrdering={setOrdering} addedOff={addedOff} setAddedOff={setAddedOffP} addedItems={addedItems} setAddedItems={setAddedItemsP} stapleFlags={stapleFlags} quantities={quantities} setQuantities={setQuantitiesP} mealPlan={mealPlan} meals={meals} ingredients={ingredients} onNext={() => goToStep(4)} db={db} persistDB={persistDB} days={days} daysFull={daysFull} />}
+          {step === 3 && <PlanConfirm headSlot={headSlot} onOpenMeal={onOpenMeal} onOpenItem={openItem("Confirm")} registerHeld={fn => { heldItem.current = fn; }} inFlow registerNext={fn => { beforeNext.current = fn; }} mode="confirm" onUpdateItem={updateItem} keptIds={keptIds} checkedIds={checkedIds} setOrdering={setOrdering} addedOff={addedOff} setAddedOff={setAddedOffP} addedItems={addedItems} setAddedItems={setAddedItemsP} stapleFlags={stapleFlags} quantities={quantities} setQuantities={setQuantitiesP} mealPlan={mealPlan} meals={meals} ingredients={ingredients} onNext={() => goToStep(4)} db={db} persistDB={persistDB} days={days} daysFull={daysFull} />}
           {step === 4 && <PlanConfirm inFlow registerNext={fn => { beforeNext.current = fn; }} mode="sparky" onUpdateItem={updateItem} keptIds={keptIds} checkedIds={checkedIds} setOrdering={setOrdering} addedOff={addedOff} setAddedOff={setAddedOffP} addedItems={addedItems} setAddedItems={setAddedItemsP} stapleFlags={stapleFlags} quantities={quantities} setQuantities={setQuantitiesP} mealPlan={mealPlan} meals={meals} ingredients={ingredients} onFinish={finishPlan} db={db} persistDB={persistDB} days={days} daysFull={daysFull} />}
         </div>
       </div>

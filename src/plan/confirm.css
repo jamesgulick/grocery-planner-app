@@ -1,0 +1,57 @@
+/* Plan › Confirm (stage 4c; board "Plan, confirm the order", "Order risks" Confirm card;
+   Decisions 11/12, 11/15, 11/16). Tokens only. */
+
+.cf { display: flex; flex-direction: column; gap: var(--space-5); }
+
+/* Groups: a sticky grey label (under the Plan header) over a white card, 12 between them. */
+.cf-group { display: flex; flex-direction: column; gap: var(--space-3); }
+.cf-label { position: sticky; top: calc(var(--safe-top) + var(--plan-head-h, 0px)); z-index: 40; background: var(--bg); padding: var(--space-2) 0; margin: calc(-1 * var(--space-2)) 0; }
+.cf-card { background: var(--surface); border-radius: var(--radius-group); overflow: hidden; }
+/* Full-width lines between items; an open ⋯ panel is part of its item. */
+.cf-card > * + * { border-top: 1px solid var(--divider); }
+.cf-panel { padding: 0 var(--space-4); }
+.cf-panel .item-panel { border-bottom: 0 !important; }
+
+.cf-row { box-sizing: border-box; display: flex; align-items: center; gap: var(--space-3); min-height: var(--confirm-row-h); padding: var(--space-2) var(--space-1) var(--space-2) var(--space-4); cursor: pointer; transition: opacity 0.2s; }
+.cf-row.is-off { opacity: 0.5; }
+.cf-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: var(--space-half); text-align: left; }
+.cf-name { font-size: var(--card-title-size); line-height: var(--card-title-line); }
+.cf-sub { font-size: var(--label-size); line-height: var(--label-line); color: var(--text-muted); }
+.cf-trail { flex: none; display: flex; align-items: center; gap: var(--space-1); }
+.cf-amount { min-height: var(--touch); padding: 0 var(--space-2); border: 0; background: none; font: inherit; font-size: var(--body-size); color: var(--text-muted); white-space: nowrap; cursor: pointer; }
+.cf-amount.is-changed { color: var(--action); font-weight: 600; }
+.cf-amount-input { width: var(--confirm-amount-w); min-height: var(--pill-height); box-sizing: border-box; padding: 0 var(--space-2); border: 1.5px solid var(--action); border-radius: var(--radius-control); font: inherit; font-size: var(--body-size); }
+.cf-more { width: var(--confirm-more-w); min-height: var(--touch); padding: 0; border: 0; background: none; font: inherit; font-size: var(--title-size); color: var(--text-muted); cursor: pointer; }
+.cf-more.is-open { color: var(--action); }
+
+/* Order risk: one amber-outlined card, a row per dish with nothing to buy. */
+.cf-risk { background: var(--surface); border: var(--problem-outline) solid var(--problem); border-radius: var(--radius-group); overflow: hidden; }
+.cf-risk-row { box-sizing: border-box; width: 100%; display: flex; align-items: center; gap: var(--space-3); min-height: var(--confirm-row-h); padding: var(--space-3) var(--space-4); border: 0; background: none; font: inherit; color: var(--text); cursor: pointer; }
+.cf-risk-row + .cf-risk-row { border-top: 1px solid var(--divider); }
+.cf-risk-row:active { background: var(--pressed); }
+.cf-risk-name { font-size: var(--card-title-size); line-height: var(--card-title-line); font-weight: 600; }
+.cf-risk-sub { font-size: var(--body-size); line-height: var(--body-line); font-weight: 600; color: var(--problem); }
+
+/* Amounts changed this week. */
+.cf-keep { background: var(--surface); border-radius: var(--radius-group); display: flex; flex-direction: column; }
+.cf-keep-title { padding: var(--space-3) var(--space-4) var(--space-1); font-size: var(--card-title-size); line-height: var(--card-title-line); font-weight: 600; }
+.cf-keep-row { box-sizing: border-box; display: flex; align-items: center; gap: var(--space-3); min-height: var(--confirm-row-h); padding: var(--space-1) var(--space-2) var(--space-1) var(--space-4); }
+.cf-keep-name { flex: 1; min-width: 0; font-size: var(--body-size); line-height: var(--body-line); }
+.cf-keep-change { color: var(--text-muted); }
+.cf-keep-btn { flex: none; min-height: var(--wv-action-h); padding: 0 var(--space-4); border: var(--problem-outline) solid var(--action); border-radius: var(--radius-pill); background: none; font: inherit; font-size: var(--meta-size); font-weight: 700; color: var(--action); white-space: nowrap; cursor: pointer; }
+.cf-keep-btn:active { background: var(--pressed); }
+.cf-keep-foot { display: flex; justify-content: space-between; border-top: 1px solid var(--divider); padding: 0 var(--space-2); }
+.cf-text-btn { min-height: var(--touch); padding: 0 var(--space-2); border: 0; background: none; font: inherit; font-size: var(--body-size); font-weight: 600; color: var(--text-muted); cursor: pointer; }
+.cf-text-btn.is-strong { font-weight: 700; color: var(--action); }
+
+/* Skipped in Inventory: collapsed to one line of names. */
+.cf-skipped { box-sizing: border-box; width: 100%; display: flex; align-items: center; gap: var(--space-3); min-height: var(--confirm-row-h); padding: var(--space-2) var(--space-4); border: 0; background: none; font: inherit; text-align: left; color: inherit; cursor: pointer; }
+.cf-skipped-names { flex: 1; min-width: 0; font-size: var(--body-size); line-height: var(--body-line); color: var(--text-soft); }
+.cf-skipped-chev { flex: none; display: flex; color: var(--text-muted); transform: rotate(90deg); transition: transform 0.15s; }
+.cf-skipped-chev.is-open { transform: rotate(-90deg); }
+
+/* + Add an item: a dashed slot; tapping it turns it into a field. */
+.cf-add { box-sizing: border-box; min-height: var(--block-button); padding: 0 var(--space-4); border: var(--pill-outline) dashed var(--open-dash); border-radius: var(--radius-group); background: none; font: inherit; font-size: var(--body-size); font-weight: 600; color: var(--action); text-align: left; cursor: pointer; }
+.cf-add-field { box-sizing: border-box; display: flex; align-items: center; gap: var(--space-2); min-height: var(--block-button); padding: 0 var(--space-2) 0 var(--space-4); background: var(--surface); border-radius: var(--radius-group); }
+.cf-add-input { flex: 1; min-width: 0; min-height: var(--touch); border: 0; background: none; font: inherit; font-size: var(--body-size); color: var(--text); }
+.cf-add-input:focus { outline: none; }

@@ -104,7 +104,10 @@
   --day-bar-gap-compact: 6px;
   --day-bar-pressed: #DCDCD6;             /* the bar while pressed */
   --day-bar-fade: 24px;                   /* Compact: the text fades out over this before the › */
-  --focus-edge: 1.5px;                    /* a card whose field has focus (day sheet note) */
+  --focus-edge: 1.5px;
+  --confirm-row-h: 60px;                  /* Confirm rows (board "Plan, confirm the order") */
+  --confirm-amount-w: 88px;               /* Confirm: this week's amount while editing */
+  --confirm-more-w: 40px;                 /* Confirm: the ⋯ button */                    /* a card whose field has focus (day sheet note) */
   --text-soft: #3A3A3E;                   /* Plan day headers: the note (11/24) */
   --open-dash: #C9C9C4;                   /* week view: an open day's dashed tile */
   --pill-outline-soft: #D6D6D1;           /* Week check pill (11/14) */

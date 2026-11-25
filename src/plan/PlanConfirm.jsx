@@ -1,17 +1,23 @@
 // Split verbatim from grocery-app.jsx in polish Phase 1.5; see CLAUDE.md's file map.
 import React, { useState } from "react";
+import { createPortal } from "react-dom";
+import { addDaysISO } from "../app/globals.js";
+import { notHomeCooked } from "../library/libraryModel.js";
+import { dayTitle } from "./WeekStep.jsx";
+import "./confirm.css";
 import { multiMealCounts } from "../app/pills.js";
 import { getActivePlan, writeActivePlan } from "../app/plans.js";
-import { C, S, TIER_COLORS } from "../app/styles.js";
+import { C, S } from "../app/styles.js";
 import { Check } from "../components/common.jsx";
 import { ItemEditPanel } from "../components/ItemEditPanel.jsx";
-import { Icon } from "../ui/kit.jsx";
+import { Icon, PillButton, RowChevron, Segmented } from "../ui/kit.jsx";
 import { showToast } from "../ui/toast.js";
 import { latestDB } from "../app/latestDB.js";
 import { isExplicitNo, isOrdering, isRelevant } from "./ordering.js";
 
-function PlanConfirm({ onOpenItem, registerHeld, inFlow, registerNext, mode = "confirm", onUpdateItem, keptIds = [], checkedIds, setOrdering, addedOff = [], setAddedOff, addedItems, setAddedItems, stapleFlags, quantities = {}, setQuantities, mealPlan, meals, ingredients, onNext, onFinish, db, persistDB, days, daysFull }) {
+function PlanConfirm({ headSlot, onOpenMeal, onOpenItem, registerHeld, inFlow, registerNext, mode = "confirm", onUpdateItem, keptIds = [], checkedIds, setOrdering, addedOff = [], setAddedOff, addedItems, setAddedItems, stapleFlags, quantities = {}, setQuantities, mealPlan, meals, ingredients, onNext, onFinish, db, persistDB, days, daysFull }) {
   const [newItem, setNewItem]   = useState("");
+  const [adding, setAdding]     = useState(false);
   const [view, setView]         = useState("meal");
   const [copied, setCopied]     = useState(false);
   const [manualBatch, setManualBatch] = useState(null); // { text } when clipboard fails
@@ -236,7 +242,9 @@ function PlanConfirm({ onOpenItem, registerHeld, inFlow, registerNext, mode = "c
   // Leaving the step with a panel open (Prev / Next) saves its held choice with the step change.
   registerHeld?.(() => (editId && Object.keys(pending).length ? { id: editId, patch: pending } : null));
 
-  const QtyChip = ({ ing }) => {
+  // This week's amount (board "Plan, confirm the order"): plain text at the row's right, green
+  // when it differs from the usual; tap to change it for this week only.
+  const Amount = ({ ing }) => {
     const override = quantities[ing.id];
     const effective = override !== undefined ? override : (ing.defaultQuantity || "");
     const [editing, setEditing] = useState(false);
@@ -249,147 +257,144 @@ function PlanConfirm({ onOpenItem, registerHeld, inFlow, registerNext, mode = "c
         setEditing(false);
       };
       return (
-        <input autoFocus value={val} onChange={e => setVal(e.target.value)} onBlur={commit}
+        <input autoFocus className="cf-amount-input" aria-label={`Amount of ${ing.name}`} value={val} onChange={e => setVal(e.target.value)} onBlur={commit}
           onKeyDown={e => { if (e.key === "Enter") commit(); if (e.key === "Escape") setEditing(false); }}
-          placeholder={ing.defaultQuantity || "qty"}
-          style={{ width:72, fontSize:12, padding:"3px 6px", borderRadius:6, border:`1.5px solid ${C.primary}`, outline:"none" }} />
+          placeholder={ing.defaultQuantity || "Amount"} />
       );
     }
-    return (
-      <button onClick={() => { setVal(effective); setEditing(true); }}
-        style={{ background:isCustom?C.primaryLight:"#fff", border:`1px solid ${isCustom?C.primary:C.border}`, borderRadius:6, padding:"3px 8px", fontSize:12, cursor:"pointer", color:isCustom?C.primary:C.muted, fontWeight:isCustom?700:500, whiteSpace:"nowrap" }}>
-        {effective ? `${effective} ✎` : "+ qty"}
-      </button>
-    );
+    return <button type="button" className={isCustom ? "cf-amount is-changed" : "cf-amount"} onClick={() => { setVal(effective); setEditing(true); }}>{effective || "+ amount"}</button>;
   };
 
-  // One row for every list (by meal, flat, skipped group). Checked = ordering; an
-  // unchecked row stays exactly where it is, dimmed, so it can be re-decided in context.
+  // Subline: "×2 meals" for a shared item; in A–Z, "for <meal>" when one planned meal needs it.
+  const usedBy = {};
+  plannedMeals.forEach(m => (m.ingredients || []).forEach(id => { (usedBy[id] = usedBy[id] || []).push(m.name); }));
+  const subOf = (ing, flat) => (multiMeal[ing.id] ? `×${multiMeal[ing.id]} meals`
+    : flat && ing.tier === "specialty" && (usedBy[ing.id] || []).length === 1 ? `for ${usedBy[ing.id][0]}` : null);
+
+  // One row for every list (by meal, A–Z, skipped). Checked = ordering; an unchecked row stays
+  // exactly where it is, dimmed, so it can be re-decided in context. The ⋯ panel belongs to
+  // its row: the line between items runs under the panel.
   const ItemRow = ({ ing, flat }) => {
-    const on     = buying(ing);
-    const custom = quantities[ing.id] !== undefined && quantities[ing.id] !== (ing.defaultQuantity || "");
-    const tc     = TIER_COLORS[ing.tier] || {};
+    const on  = buying(ing);
+    const sub = subOf(ing, flat);
     return (
-      <>
-      <div style={{ display:"flex", alignItems:"center", gap:10, padding:"11px 0", borderBottom:editId === ing.id ? "none" : `1px solid ${C.border}`, opacity:on?1:0.45, cursor:"pointer", transition:"opacity 0.2s" }} onClick={() => setOrdering(ing, !on)}>
-        <Check checked={on} onChange={v => setOrdering(ing, v)} label={`Order ${ing.name}`} />
-        <div style={{ flex:1, minWidth:0 }}>
-          <div style={{ fontSize:14 }}>{ing.name}</div>
-          {flat && <span style={S.badge(tc.color, tc.bg)}>{ing.tier}</span>}
-          {flat && multiMeal[ing.id] && <span style={{ fontSize:11, fontWeight:700, color:"#B45309", background:"#FEF3C7", borderRadius:5, padding:"1px 5px", marginLeft:4 }}>×{multiMeal[ing.id]} meals</span>}
-          {custom && on && <div style={{ fontSize:11, color:C.faint }}>this week {quantities[ing.id] || "none"} · usual {ing.defaultQuantity || "none"}</div>}
+      <div className="cf-item">
+        <div className={on ? "cf-row" : "cf-row is-off"} onClick={() => setOrdering(ing, !on)}>
+          <Check checked={on} onChange={v => setOrdering(ing, v)} label={`Order ${ing.name}`} />
+          <span className="cf-text"><span className="cf-name">{ing.name}</span>{sub && <span className="cf-sub">{sub}</span>}</span>
+          <span className="cf-trail" onClick={e => e.stopPropagation()}>
+            <Amount ing={ing} />
+            <button type="button" className={editId === ing.id ? "cf-more is-open" : "cf-more"} onClick={() => openPanel(ing.id)} aria-label={`Edit ${ing.name}`}>⋯</button>
+          </span>
         </div>
-        <div onClick={e => e.stopPropagation()} style={{ display:"flex", alignItems:"center", gap:8 }}>
-          {on && <QtyChip ing={ing} />}
-          <button style={{ background:"none", border:"none", color:editId === ing.id ? C.primary : C.faint, fontSize:18, cursor:"pointer", minWidth:36, minHeight:44, padding:0 }} onClick={() => openPanel(ing.id)} aria-label={`Edit ${ing.name}`}>⋯</button>
-        </div>
+        {editId === ing.id && (
+          <div className="cf-panel">
+            <ItemEditPanel ing={ing} thisWeek={quantities[ing.id]} onUpdate={patch => updateItem(ing.id, patch)} pending={pending} setPending={setPending}
+              onClose={extra => { applyPending(extra); setEditId(null); }} onDetails={onOpenItem ? extra => { applyPending(extra); onOpenItem(ing.id); } : null} />
+          </div>
+        )}
       </div>
-      {editId === ing.id && <ItemEditPanel ing={ing} thisWeek={quantities[ing.id]} onUpdate={patch => updateItem(ing.id, patch)} pending={pending} setPending={setPending}
-        onClose={extra => { applyPending(extra); setEditId(null); }} onDetails={onOpenItem ? extra => { applyPending(extra); onOpenItem(ing.id); } : null} />}
-      </>
     );
   };
   // Items typed in on this step: the same Check; unchecked ones stay, dimmed (addedOff).
   const AddedRow = ({ item, flat }) => {
     const on = !addedOff.includes(item);
     return (
-      <div style={{ display:"flex", alignItems:"center", gap:10, padding:"11px 0", borderBottom:`1px solid ${C.border}`, opacity:on?1:0.45, cursor:"pointer" }} onClick={() => toggleAdded(item)}>
-        <Check checked={on} onChange={() => toggleAdded(item)} label={`Order ${item}`} />
-        <div style={{ flex:1, fontSize:14 }}>{item}{flat && <span style={{ fontSize:11, color:C.faint }}> (added)</span>}</div>
+      <div className="cf-item">
+        <div className={on ? "cf-row" : "cf-row is-off"} onClick={() => toggleAdded(item)}>
+          <Check checked={on} onChange={() => toggleAdded(item)} label={`Order ${item}`} />
+          <span className="cf-text"><span className="cf-name">{item}</span>{flat && <span className="cf-sub">Added</span>}</span>
+        </div>
       </div>
     );
   };
+  // A sticky grey label over a white card (Confirm groups stick, 24 above, 12 to the card).
+  const CfGroup = ({ label, children }) => (
+    <section className="cf-group">
+      {label && <div className="ui-section-label cf-label">{label}</div>}
+      <div className="cf-card">{children}</div>
+    </section>
+  );
+
+  // Order risk (brief §5, Ruling 17.1): planned home-cooked dishes with nothing on their
+  // ingredient list, in one amber card at the top; each opens its meal page.
+  const weekStart = activePlan?.weekStartDate;
+  const nothingToBuy = (days || []).flatMap((d, i) => (mealPlan[d] || []).map(n => ({ d, i, name: n.trim(), meal: meals.find(m => m.name === n) })))
+    .filter(x => x.meal && !(x.meal.ingredients || []).length && !notHomeCooked(x.meal));
+  const addItem = () => { const v = newItem.trim(); if (v) { setAddedItems(prev => [...prev, v]); setNewItem(""); } };
+  const flatRows = [
+    ...allListed.map(i => ({ key: i.id, name: i.name, ing: i })),
+    ...addedItems.map((item, idx) => ({ key: "added" + idx, name: item, added: item })),
+  ].sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: "base" }));
 
   return (
     <div>
       {mode === "confirm" && <>
-      <div style={S.card}>
-        <div style={S.sectionLabel}>Confirm & adjust</div>
-        <div style={S.h2}>{activeCount} items to buy</div>
-        <div style={{ display:"flex", gap:8, marginTop:8 }}>
-          <button style={{ ...S.btnSm, flex:1, background:view==="meal"?C.primary:"#F3F4F6", color:view==="meal"?"#fff":C.muted }} onClick={() => setView("meal")}>By meal</button>
-          <button style={{ ...S.btnSm, flex:1, background:view==="flat"?C.primary:"#F3F4F6", color:view==="flat"?"#fff":C.muted }} onClick={() => setView("flat")}>A–Z</button>
-        </div>
-      </div>
-
-      {showKeepCard && (
-        <div style={{ ...S.card, padding:"0 16px" }}>
-          <div style={{ fontSize:14, fontWeight:700, padding:"12px 0 4px" }}>{changedAmounts.length} amount{changedAmounts.length === 1 ? "" : "s"} changed this week</div>
-          {changedAmounts.map(i => (
-            <div key={i.id} style={{ display:"flex", alignItems:"center", gap:10, minHeight:48, borderBottom:`1px solid ${C.border}` }}>
-              <div style={{ flex:1, minWidth:0, fontSize:14 }}>{i.name} <span style={{ color:C.muted }}>· {i.defaultQuantity || "none"} → {quantities[i.id] || "none"}</span></div>
-              <button type="button" style={{ ...S.btnSm, minHeight:36, background:"#fff", color:C.primary, border:`1.5px solid ${C.primary}`, fontWeight:700, flexShrink:0 }} onClick={() => keepAsUsual([i.id])}>Keep as usual</button>
-            </div>
-          ))}
-          <div style={{ display:"flex", gap:8, padding:"10px 0 12px" }}>
-            <button type="button" style={{ ...S.btnSm, flex:1, minHeight:40, background:"#F3F4F6", color:C.muted }} onClick={justThisWeek}>Just this week</button>
-            <button type="button" style={{ ...S.btnSm, flex:1, minHeight:40, background:C.primary, color:"#fff", fontWeight:700 }} onClick={() => keepAsUsual(changedAmounts.map(i => i.id))}>Keep all as usual</button>
+      {headSlot && createPortal(
+        <Segmented label="View" value={view} onChange={setView} options={[{ value: "meal", label: "By meal" }, { value: "flat", label: "A–Z" }]} />, headSlot)}
+      <div className="cf">
+        {nothingToBuy.length > 0 && (
+          <div className="cf-risk">
+            {nothingToBuy.map(x => (
+              <button key={x.d + x.name} type="button" className="cf-risk-row" onClick={() => onOpenMeal?.(x.meal.id)}>
+                <span className="cf-text">
+                  <span className="cf-risk-name">{x.name} · {weekStart ? dayTitle(addDaysISO(weekStart, x.i)) : x.d}</span>
+                  <span className="cf-risk-sub">Nothing to buy</span>
+                </span>
+                <RowChevron />
+              </button>
+            ))}
           </div>
-        </div>
-      )}
+        )}
 
-      {view === "meal" ? (
-        <>
-          {alwaysNeeded.length > 0 && (
-            <>
-              <div style={{ fontSize:12, fontWeight:700, color:C.accent, textTransform:"uppercase", letterSpacing:"0.06em", marginBottom:4 }}>Always</div>
-              <div style={{ ...S.card, padding:"0 16px", marginBottom:12 }}>{alwaysNeeded.map(i => <ItemRow key={i.id} ing={i} />)}</div>
-            </>
-          )}
-          {stapleNeeded.length > 0 && (
-            <>
-              <div style={{ fontSize:12, fontWeight:700, color:"#3730A3", textTransform:"uppercase", letterSpacing:"0.06em", marginBottom:4 }}>Staples - running low</div>
-              <div style={{ ...S.card, padding:"0 16px", marginBottom:12 }}>{stapleNeeded.map(i => <ItemRow key={i.id} ing={i} />)}</div>
-            </>
-          )}
-          {plannedMeals.map(meal => {
-            // The meal-specific buy: specialty items on the list when you arrived (always
-            // and staple items have their own sections above).
-            const ings = ingredients.filter(i => (meal.ingredients||[]).includes(i.id) && inArrival(i) && i.tier === "specialty");
-            if (!ings.length) return null;
-            return (
-              <div key={meal.id} style={{ marginBottom:12 }}>
-                <div style={{ background:C.primary, color:"#E8F5EE", padding:"8px 14px", borderRadius:10, fontSize:13, fontWeight:700, marginBottom:4 }}>{meal.name}</div>
-                <div style={{ ...S.card, padding:"0 16px" }}>{ings.map(i => <ItemRow key={i.id} ing={i} />)}</div>
+        {showKeepCard && (
+          <section className="cf-keep" aria-label="Amounts changed this week">
+            <div className="cf-keep-title">{changedAmounts.length} amount{changedAmounts.length === 1 ? "" : "s"} changed this week</div>
+            {changedAmounts.map(i => (
+              <div key={i.id} className="cf-keep-row">
+                <span className="cf-keep-name">{i.name} <span className="cf-keep-change">· {i.defaultQuantity || "none"} → {quantities[i.id] || "none"}</span></span>
+                <button type="button" className="cf-keep-btn" onClick={() => keepAsUsual([i.id])}>Keep as usual</button>
               </div>
-            );
-          })}
-          {addedItems.length > 0 && (
-            <div style={{ marginBottom:12 }}>
-              <div style={{ background:C.primary, color:"#E8F5EE", padding:"8px 14px", borderRadius:10, fontSize:13, fontWeight:700, marginBottom:4 }}>Added items</div>
-              <div style={{ ...S.card, padding:"0 16px" }}>
-                {addedItems.map((item, idx) => <AddedRow key={idx} item={item} />)}
-              </div>
+            ))}
+            <div className="cf-keep-foot">
+              <button type="button" className="cf-text-btn" onClick={justThisWeek}>Just this week</button>
+              <button type="button" className="cf-text-btn is-strong" onClick={() => keepAsUsual(changedAmounts.map(i => i.id))}>Keep all as usual</button>
             </div>
-          )}
-        </>
-      ) : (
-        <div style={{ ...S.card, padding:"0 16px" }}>
-          <div style={{ fontSize:11, color:C.faint, padding:"10px 0 6px", borderBottom:`1px solid ${C.border}` }}>{allListed.length + addedItems.length} items A–Z · tap a quantity to adjust for this week</div>
-          {[...allListed].sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity:"base" })).map(i => <ItemRow key={i.id} ing={i} flat />)}
-          {addedItems.map((item, idx) => <AddedRow key={idx} item={item} flat />)}
-          {allListed.length===0 && addedItems.length===0 && <div style={{ textAlign:"center", color:C.faint, padding:24 }}>No items — add ingredients to meals in Manage tab</div>}
-        </div>
-      )}
+          </section>
+        )}
 
-      {skippedRows.length > 0 && (
-        <div style={{ ...S.card, padding:"0 16px" }}>
-          <button style={{ display:"flex", alignItems:"center", width:"100%", gap:8, background:"none", border:"none", padding:"12px 0", cursor:"pointer", textAlign:"left" }} onClick={() => setShowSkipped(v => !v)} aria-expanded={showSkipped}>
-            <span style={{ flex:1 }}>
-              <span style={{ display:"block", fontSize:14, fontWeight:600, color:C.text }}>Skipped in Inventory ({skippedRows.length})</span>
-            </span>
-            <span style={{ fontSize:16, color:C.faint }}>{showSkipped ? "▾" : "▸"}</span>
-          </button>
-          {showSkipped && <div style={{ borderTop:`1px solid ${C.border}` }}>{skippedRows.map(i => <ItemRow key={i.id} ing={i} flat={view === "flat"} />)}</div>}
-        </div>
-      )}
+        {view === "meal" ? <>
+          {alwaysNeeded.length > 0 && <CfGroup label="Always buy">{alwaysNeeded.map(i => <ItemRow key={i.id} ing={i} />)}</CfGroup>}
+          {stapleNeeded.length > 0 && <CfGroup label="Staples">{stapleNeeded.map(i => <ItemRow key={i.id} ing={i} />)}</CfGroup>}
+          {plannedMeals.map(meal => {
+            // The meal-specific buy: specialty items on the list when you arrived (always and
+            // staple items have their own groups above).
+            const ings = ingredients.filter(i => (meal.ingredients || []).includes(i.id) && inArrival(i) && i.tier === "specialty");
+            return ings.length ? <CfGroup key={meal.id} label={meal.name}>{ings.map(i => <ItemRow key={i.id} ing={i} />)}</CfGroup> : null;
+          })}
+          {addedItems.length > 0 && <CfGroup label="Added">{addedItems.map((item, idx) => <AddedRow key={idx} item={item} />)}</CfGroup>}
+        </> : flatRows.length > 0 && (
+          <CfGroup>{flatRows.map(r => (r.ing ? <ItemRow key={r.key} ing={r.ing} flat /> : <AddedRow key={r.key} item={r.added} flat />))}</CfGroup>
+        )}
 
-      <div style={S.card}>
-        <div style={S.sectionLabel}>Add item</div>
-        <div style={{ display:"flex", gap:8 }}>
-          <input style={{ ...S.input, flex:1 }} placeholder="Type item name..." value={newItem} onChange={e => setNewItem(e.target.value)} onKeyDown={e => { if(e.key==="Enter"&&newItem.trim()){ setAddedItems(prev=>[...prev,newItem.trim()]); setNewItem(""); } }} />
-          <button style={{ ...S.btn, ...S.btnP, width:"auto", padding:"11px 16px", marginBottom:0 }} onClick={() => { if(newItem.trim()){ setAddedItems(prev=>[...prev,newItem.trim()]); setNewItem(""); } }}>Add</button>
-        </div>
+        {skippedRows.length > 0 && (
+          <CfGroup label="Skipped in Inventory">
+            <button type="button" className="cf-skipped" aria-expanded={showSkipped} onClick={() => setShowSkipped(v => !v)}>
+              <span className="cf-skipped-names">{showSkipped ? `${skippedRows.length} item${skippedRows.length === 1 ? "" : "s"}` : skippedRows.map(i => i.name).join(", ")}</span>
+              <span className={showSkipped ? "cf-skipped-chev is-open" : "cf-skipped-chev"} aria-hidden="true"><Icon name="chevron" size={18} /></span>
+            </button>
+            {showSkipped && skippedRows.map(i => <ItemRow key={i.id} ing={i} flat={view === "flat"} />)}
+          </CfGroup>
+        )}
+
+        {adding ? (
+          <div className="cf-add-field">
+            <input autoFocus className="cf-add-input" aria-label="Item name" placeholder="Item name" value={newItem} onChange={e => setNewItem(e.target.value)}
+              onKeyDown={e => { if (e.key === "Enter") addItem(); if (e.key === "Escape") { setNewItem(""); setAdding(false); } }}
+              onBlur={() => { if (!newItem.trim()) setAdding(false); }} />
+            <PillButton inline onClick={addItem}>Add</PillButton>
+          </div>
+        ) : <button type="button" className="cf-add" onClick={() => setAdding(true)}>+ Add an item</button>}
       </div>
 
       {!inFlow && <button style={{ ...S.btn, ...S.btnP }} onClick={() => onNext(orderSnapshot())}>Next: Order ›</button>}
