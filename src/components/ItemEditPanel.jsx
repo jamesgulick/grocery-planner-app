@@ -1,14 +1,12 @@
 // Split verbatim from grocery-app.jsx in polish Phase 1.5; see CLAUDE.md's file map.
 import { useState } from "react";
 import { INVENTORY_LOCS } from "../app/globals.js";
-import { C, S } from "../app/styles.js";
 import { BUY_OPTIONS, buyOf, buyPatch } from "../library/libraryModel.js";
-import { Chip } from "../ui/kit.jsx";
+import { Chip, PillButton } from "../ui/kit.jsx";
 
 // "⋯ edit item" (VALIDATION-LOG 10/27): fix an item's profile where it's noticed while
 // planning (Inventory, Confirm): how often it's bought, where it's kept, its USUAL
-// amount. Writes the item itself; this week's amount stays the amount button's job,
-// and the panel says so when the two differ.
+// amount. Writes the item itself; this week's amount stays the row's amount pill.
 // Inventory item panel (brief §5, 11/24): the panel is part of its row (no line between them;
 // the row's line goes under the panel), Buy uses the item page's words, chips are tag chips
 // (pale green + ✓ when chosen), and "All details ›" (when `onDetails` is given) opens the
@@ -16,7 +14,7 @@ import { Chip } from "../ui/kit.jsx";
 // With `pending` / `setPending` (Inventory, Confirm), Buy and Where it's kept are held as a choice and
 // the parent applies them when the panel closes, so the item only moves to its new section or
 // place after Done (11/24). Without them a chip saves at once.
-function ItemEditPanel({ ing, thisWeek, onUpdate, onClose, onDetails, pending, setPending }) {
+function ItemEditPanel({ ing, onUpdate, onClose, onDetails, pending, setPending }) {
   const cur = pending ? { ...ing, ...pending } : ing;
   const choose = patch => (setPending ? setPending({ ...(pending || {}), ...patch }) : onUpdate(patch));
   const [usual, setUsual] = useState(ing.defaultQuantity || "");
@@ -27,7 +25,7 @@ function ItemEditPanel({ ing, thisWeek, onUpdate, onClose, onDetails, pending, s
   const chip = (active, text, onClick) => <Chip key={text} on={active} onClick={onClick}>{text}</Chip>;
   const locs = ing.storageLocation === "Unassigned" ? ["Unassigned", ...INVENTORY_LOCS] : INVENTORY_LOCS;
   return (
-    <div className="item-panel" style={{ borderBottom:`1px solid ${C.border}` }}>
+    <div className="item-panel">
       <div className="item-panel-head">
         {label("Buy")}
         {onDetails && <button type="button" className="item-panel-details" onClick={() => { if (setPending) onDetails(usualPatch()); else { commitUsual(); onDetails(); } }}>All details ›</button>}
@@ -40,12 +38,9 @@ function ItemEditPanel({ ing, thisWeek, onUpdate, onClose, onDetails, pending, s
         {locs.map(l => chip(cur.storageLocation === l, l, () => choose({ storageLocation: l })))}
       </div>
       {label("Usual amount")}
-      <input style={{ ...S.input, marginBottom:0, fontSize:13, padding:"6px 8px" }} value={usual} placeholder="e.g. 2 cans" onChange={e => setUsual(e.target.value)} onBlur={commitUsual} onKeyDown={e => { if (e.key === "Enter") e.target.blur(); }} />
-      {thisWeek !== undefined && thisWeek !== (ing.defaultQuantity || "") && (
-        <div style={{ fontSize:11, color:C.faint, marginTop:4 }}>This week: {thisWeek || "none"}. That's set with the amount button and doesn't change the usual.</div>
-      )}
-      <div style={{ textAlign:"right", marginTop:8 }}>
-        <button style={{ ...S.btnSm, background:C.primary, color:"#fff" }} onClick={() => { if (setPending) onClose(usualPatch()); else { commitUsual(); onClose(); } }}>Done</button>
+      <input className="ui-input item-panel-input" aria-label="Usual amount" value={usual} placeholder="e.g. 2 cans" onChange={e => setUsual(e.target.value)} onBlur={commitUsual} onKeyDown={e => { if (e.key === "Enter") e.target.blur(); }} />
+      <div className="item-panel-foot">
+        <PillButton inline onClick={() => { if (setPending) onClose(usualPatch()); else { commitUsual(); onClose(); } }}>Done</PillButton>
       </div>
     </div>
   );

@@ -16,13 +16,16 @@ import { NO_PLACE, hasPlace, mealIngredientIds } from "./inventoryModel.js";
 import "./confirm.css";
 import "./inventory.css";
 
-function PlanInventory({ onOpenItem, loc, placed = {}, setPlaced, checkedIds, stapleFlags, setOrdering, quantities, setQuantities, mealPlan, meals, ingredients, onUpdateItem, keptIds = [] }) {
+function PlanInventory({ onOpenItem, registerHeld, loc, placed = {}, setPlaced, checkedIds, stapleFlags, setOrdering, quantities, setQuantities, mealPlan, meals, ingredients, onUpdateItem, keptIds = [] }) {
   const [editId, setEditId] = useState(null);     // item whose ⋯ panel is open
   const [pending, setPending] = useState({});     // its Buy / place choice, applied when the panel closes
   const [placeFor, setPlaceFor] = useState(null); // No place: the item whose "Kept in" sheet is open
   const [slowOpen, setSlowOpen] = useState(null); // slow staples card: null = decide from the data
   // Leaving the place with a panel open still keeps its choice.
   useEffect(() => { if (editId && Object.keys(pending).length) onUpdateItem?.(editId, pending); setPending({}); setEditId(null); setSlowOpen(null); setPlaceFor(null); }, [loc]);
+
+  // Leaving the step with a panel open (‹ Meals, Next: Confirm, the step bar) saves its held choice.
+  registerHeld?.(() => (editId && Object.keys(pending).length ? { id: editId, patch: pending } : null));
 
   const noPlace    = loc === NO_PLACE;
   const mealIngIds = mealIngredientIds(mealPlan, meals);
@@ -118,7 +121,7 @@ function PlanInventory({ onOpenItem, loc, placed = {}, setPlaced, checkedIds, st
         </div>
         {open && (
           <div className="cf-panel">
-            <ItemEditPanel ing={ing.realBuy ? { ...ing, ...ing.realBuy } : ing} thisWeek={quantities[ing.id]} onUpdate={patch => updateItem(ing, patch)} pending={pending} setPending={setPending}
+            <ItemEditPanel ing={ing.realBuy ? { ...ing, ...ing.realBuy } : ing} onUpdate={patch => updateItem(ing, patch)} pending={pending} setPending={setPending}
               onClose={extra => { applyPending(extra); setEditId(null); }} onDetails={onOpenItem ? extra => { applyPending(extra); onOpenItem(ing.id); } : null} />
           </div>
         )}

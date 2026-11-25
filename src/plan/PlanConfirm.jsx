@@ -298,7 +298,7 @@ function PlanConfirm({ headSlot, onOpenMeal, onOpenItem, registerHeld, inFlow, r
         </div>
         {editId === ing.id && (
           <div className="cf-panel">
-            <ItemEditPanel ing={ing.realBuy ? { ...ing, ...ing.realBuy } : ing} thisWeek={quantities[ing.id]} onUpdate={patch => updateItem(ing.id, patch)} pending={pending} setPending={setPending}
+            <ItemEditPanel ing={ing.realBuy ? { ...ing, ...ing.realBuy } : ing} onUpdate={patch => updateItem(ing.id, patch)} pending={pending} setPending={setPending}
               onClose={extra => { applyPending(extra); setEditId(null); }} onDetails={onOpenItem ? extra => { applyPending(extra); onOpenItem(ing.id); } : null} />
           </div>
         )}

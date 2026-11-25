@@ -73,3 +73,5 @@
 .item-panel-label { margin: var(--space-2) 0 var(--space-2); }
 .item-panel-details { min-height: var(--touch); margin: calc((var(--label-line) - var(--touch)) / 2) 0; padding: 0; border: 0; background: none; font: inherit; font-size: var(--body-size); font-weight: 600; color: var(--action); cursor: pointer; white-space: nowrap; }
 .item-panel-chips { display: flex; flex-wrap: wrap; gap: var(--space-2); }
+.item-panel .item-panel-input { min-height: var(--touch); }
+.item-panel-foot { display: flex; justify-content: flex-end; margin-top: var(--space-3); }
