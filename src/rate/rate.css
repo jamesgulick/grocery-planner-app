@@ -25,4 +25,4 @@
 .home-rate-names { font-size: var(--body-size); font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
 /* Week view: a past day to rate isn't dimmed; its Rate sits before the chevron. */
-.wv-tile .ui-row-action { align-self: center; }
+.wv-tile .ui-row-action { align-self: center; margin-right: var(--space-3); }   /* 12px before the chevron: separate tap targets (11/25) */
