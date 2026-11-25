@@ -10,12 +10,13 @@ import { showToast } from "../ui/toast.js";
 import { latestDB } from "../app/latestDB.js";
 import { isExplicitNo, isOrdering, isRelevant } from "./ordering.js";
 
-function PlanConfirm({ inFlow, registerNext, mode = "confirm", onUpdateItem, keptIds = [], checkedIds, setOrdering, addedOff = [], setAddedOff, addedItems, setAddedItems, stapleFlags, quantities = {}, setQuantities, mealPlan, meals, ingredients, onNext, onFinish, db, persistDB, days, daysFull }) {
+function PlanConfirm({ onOpenItem, inFlow, registerNext, mode = "confirm", onUpdateItem, keptIds = [], checkedIds, setOrdering, addedOff = [], setAddedOff, addedItems, setAddedItems, stapleFlags, quantities = {}, setQuantities, mealPlan, meals, ingredients, onNext, onFinish, db, persistDB, days, daysFull }) {
   const [newItem, setNewItem]   = useState("");
   const [view, setView]         = useState("meal");
   const [copied, setCopied]     = useState(false);
   const [manualBatch, setManualBatch] = useState(null); // { text } when clipboard fails
   const [editId, setEditId]     = useState(null);        // item whose "⋯ edit" panel is open
+  const [pending, setPending]   = useState({});          // its Buy / place choice, applied when the panel closes (11/24)
 
   const activePlan         = getActivePlan(db);
   const dismissedShared   = activePlan?.dismissedShared || [];
@@ -70,6 +71,14 @@ function PlanConfirm({ inFlow, registerNext, mode = "confirm", onUpdateItem, kep
   // "⋯ edit item": the item's profile (how often, where kept, usual amount), written to
   // the item itself. This week's amount stays the amount chip's job.
   const updateItem = (id, patch) => onUpdateItem ? onUpdateItem(id, patch) : persistDB({ ...db, ingredients: db.ingredients.map(i => i.id === id ? { ...i, ...patch } : i) });
+  // As on Inventory (11/24): the panel's Buy / place choice is held and applied in one save when
+  // the panel closes (Done, its ⋯, another item's ⋯, All details).
+  const applyPending = (extra = {}) => {
+    const patch = { ...pending, ...extra };
+    if (editId && Object.keys(patch).length) updateItem(editId, patch);
+    setPending({});
+  };
+  const openPanel = id => { applyPending(); setEditId(editId === id ? null : id); };
 
   // KEEP AS USUAL (VALIDATION-LOG 10/27): one card, only when this week's amounts differ
   // from the items' usual ones. Nothing is pre-ticked (most changes are one-offs).
@@ -270,10 +279,11 @@ function PlanConfirm({ inFlow, registerNext, mode = "confirm", onUpdateItem, kep
         </div>
         <div onClick={e => e.stopPropagation()} style={{ display:"flex", alignItems:"center", gap:8 }}>
           {on && <QtyChip ing={ing} />}
-          <button style={{ background:"none", border:"none", color:editId === ing.id ? C.primary : C.faint, fontSize:18, cursor:"pointer", minWidth:36, minHeight:44, padding:0 }} onClick={() => setEditId(editId === ing.id ? null : ing.id)} aria-label={`Edit ${ing.name}`}>⋯</button>
+          <button style={{ background:"none", border:"none", color:editId === ing.id ? C.primary : C.faint, fontSize:18, cursor:"pointer", minWidth:36, minHeight:44, padding:0 }} onClick={() => openPanel(ing.id)} aria-label={`Edit ${ing.name}`}>⋯</button>
         </div>
       </div>
-      {editId === ing.id && <ItemEditPanel ing={ing} thisWeek={quantities[ing.id]} onUpdate={patch => updateItem(ing.id, patch)} onClose={() => setEditId(null)} />}
+      {editId === ing.id && <ItemEditPanel ing={ing} thisWeek={quantities[ing.id]} onUpdate={patch => updateItem(ing.id, patch)} pending={pending} setPending={setPending}
+        onClose={extra => { applyPending(extra); setEditId(null); }} onDetails={onOpenItem ? extra => { applyPending(extra); onOpenItem(ing.id); } : null} />}
       </>
     );
   };

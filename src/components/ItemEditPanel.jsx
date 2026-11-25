@@ -13,9 +13,9 @@ import { Chip } from "../ui/kit.jsx";
 // the row's line goes under the panel), Buy uses the item page's words, chips are tag chips
 // (pale green + ✓ when chosen), and "All details ›" (when `onDetails` is given) opens the
 // item page.
-// With `pending` / `setPending` (Inventory), Buy and Where it's kept are held as a choice and
+// With `pending` / `setPending` (Inventory, Confirm), Buy and Where it's kept are held as a choice and
 // the parent applies them when the panel closes, so the item only moves to its new section or
-// place after Done (11/24). Without them (Confirm) a chip saves at once.
+// place after Done (11/24). Without them a chip saves at once.
 function ItemEditPanel({ ing, thisWeek, onUpdate, onClose, onDetails, pending, setPending }) {
   const cur = pending ? { ...ing, ...pending } : ing;
   const choose = patch => (setPending ? setPending({ ...(pending || {}), ...patch }) : onUpdate(patch));
