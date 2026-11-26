@@ -16,7 +16,7 @@
 // Engine text is shown verbatim (11/15). `seenThisSession` stays component-local by design.
 import { MAX_EXTRA_DAYS, MIN_EXTRA_DAYS, abbrOfISO, assembleComposeInputs, checkWeek, isExtraDay, mealRecency, platesFromCompose, presentOn, reasonsOf, runComposeWeek, seedTimeLevel } from "../engine/assembleInputs.js";
 import { composeWeek, evaluateWeek } from "../engine/composeWeek.js";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { copyToClipboard } from "../app/clipboard.js";
 import { draftPlanText } from "../app/shareText.js";
@@ -579,7 +579,10 @@ function PlateSheet({ iso, past, dishes, level, note, concerns, learnMode, setLe
 // ── Replace sheet (§4.5): Suggested · 3 from the engine's ranking, then Browse ─────────────
 function ChooseSheet({ choose, allMeals, recencyValue, recencyLabel, present, suggest, onTake, onPick, onCancel }) {
   const wantSide = choose.kind === "side";
-  const [sugg, setSugg] = useState(() => (suggest ? suggest([]) : null));
+  // Asked for just after the sheet mounts, before it paints: asking the engine updates the Meals
+  // step's seen list, which mustn't happen while this sheet is rendering (React warning, 11/25).
+  const [sugg, setSugg] = useState(null);
+  useLayoutEffect(() => { if (suggest) setSugg(suggest([])); }, []);
   const [q, setQ] = useState("");
   const more = () => {
     const shown = sugg.options.map(o => (o.side ? o.side.mealId : o.main.mealId));
