@@ -286,6 +286,11 @@ Pre-migration DBs carry two older single-slot concepts (db.planDraft live-editin
   `addedOff`. The old Confirm drop list `removedIds` is retired; the `_planOrderVer`
   migration folds any left on a plan into the decision.
 
+**Archiving a finished week (`autoRetirePlans`)** runs in `tidyForToday` (grocery-app.jsx): on load, when
+the app comes back to the screen on a new day (a Home Screen app resumes rather than restarts; never
+with a sheet open, it waits until none is), and before Plan starts a week, so Plan never does nothing
+because a finished week still holds its slot.
+
 **Rating (brief §2).** `meal.ratedAt` (ISO date, app-side only, never passed to the engine) is set
 only by a finished rate sheet. `preferences` may hold `"fine"` as well as likes/dislikes; no entry =
 never asked. The engine reads only likes/dislikes. `planTail` entries now also keep `presence`

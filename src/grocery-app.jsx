@@ -87,6 +87,17 @@ function computeDataStatus(db, storageOk) {
   return { severity:"calm", calm: asOf ? `Your data · as of ${asOf} · storage OK` : "Your data · storage OK", message:null, action:null, actionLabel:null };
 }
 
+// The day's tidy (load, and a return to the app on a new day): auto-retire promotes plans.next to
+// current once its weekStartDate has arrived, and away stretches that ended over two weeks ago
+// drop off (decided 11/16). Returns the same object when nothing changes.
+function tidyForToday(db) {
+  let out = autoRetirePlans(db);
+  const ranges = out?.settings?.awayRanges;
+  const kept = ranges && pruneEnded(ranges, todayLocalISO());
+  if (kept && kept !== ranges) out = { ...out, settings: { ...out.settings, awayRanges: kept } };
+  return out;
+}
+
 export default function App() {
   const [db, setDB]               = useState(null);
   const [tab, setTab]             = useState("home");
@@ -126,20 +137,16 @@ export default function App() {
   const [saveOk, setSaveOk]                     = useState(true);
   const [recovery, setRecovery]                 = useState(null); // { savedAt, db } awaiting restore
   const dbRef = useRef(null);
+  const tidiedOn = useRef(null);   // the day the last tidy ran (load or a return to the app)
   registerLatestDB(() => dbRef.current);   // Undo restores onto this (src/app/latestDB.js)
 
   useEffect(() => {
     (async () => {
       const loaded = await loadDB();
-      // Auto-retire runs once per load, never mid-session: promotes plans.next
-      // to current if its weekStartDate has arrived. Persist immediately if it
-      // fired, so a reload doesn't re-archive the same outgoing week.
-      let retired = autoRetirePlans(loaded);
-      // Away stretches that ended over two weeks ago drop off (decided 11/16), in the same
-      // background save.
-      const ranges = retired?.settings?.awayRanges;
-      const kept = ranges && pruneEnded(ranges, todayLocalISO());
-      if (kept && kept !== ranges) retired = { ...retired, settings: { ...retired.settings, awayRanges: kept } };
+      // The day's tidy, on load (and again when the app comes back on a new day, below).
+      // Persist immediately if it fired, so a reload doesn't re-archive the same week.
+      const retired = tidyForToday(loaded);
+      tidiedOn.current = todayLocalISO();
       if (retired !== loaded) {
         persistDB(retired, { background: true });
       } else {
@@ -198,6 +205,25 @@ export default function App() {
     dbRef.current = stamped;
     saveDB(stamped).then(ok => setSaveOk(ok)).catch(() => setSaveOk(false));
   };
+  // A Home Screen app resumes rather than restarts, so the load-time tidy can be a day late and a
+  // finished week keeps its slot (11/26: Plan did nothing). When the app comes back on a new
+  // day, tidy again, but never with a sheet open (it could close one mid-edit): wait until none is.
+  useEffect(() => {
+    let timer = null;
+    const tidyNow = () => {
+      timer = null;
+      const today = todayLocalISO();
+      if (!dbRef.current || tidiedOn.current === today) return;
+      if (document.querySelector("[role=dialog]")) { timer = setTimeout(tidyNow, 1500); return; }
+      tidiedOn.current = today;
+      const tidied = tidyForToday(dbRef.current);
+      if (tidied !== dbRef.current) persistDB(tidied, { background: true });
+    };
+    const onVis = () => { if (document.visibilityState === "visible" && !timer) tidyNow(); };
+    document.addEventListener("visibilitychange", onVis);
+    return () => { document.removeEventListener("visibilitychange", onVis); if (timer) clearTimeout(timer); };
+  }, []);
+
 
   const acceptRecovery = () => {
     persistDB(recovery.db, { background: true }); // a restore isn't an edit; the snapshot keeps its own time
@@ -253,8 +279,11 @@ export default function App() {
     setWeekView(null);
     const plans = db.plans || {};
     if (!key || !plans[key]) {
-      const next = start && startPlan(db, start);
-      if (next) persistDB(next);
+      // Backstop (11/26): a finished week still in its slot is archived first, so Plan never does nothing.
+      const base = tidyForToday(db);
+      if (base !== db) tidiedOn.current = todayLocalISO();
+      const next = start && startPlan(base, start);
+      if (next) persistDB(next); else if (base !== db) persistDB(base, { background: true });
       setTab("plan"); return;
     }
     const p = plans[key];
