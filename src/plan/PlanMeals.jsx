@@ -22,7 +22,6 @@ import { copyToClipboard } from "../app/clipboard.js";
 import { draftPlanText } from "../app/shareText.js";
 import { addDaysISO, todayLocalISO, weekLabel } from "../app/globals.js";
 import { engineGrillOk } from "../app/pills.js";
-import { SEED_MEALS } from "../app/seed.js";
 import { fetchLiveForecast } from "../app/weather.js";
 import { absenceLines } from "../app/absence.js";
 import { mealMatches } from "../manage/MealEditor.jsx";
@@ -57,7 +56,7 @@ const longTitle = iso => { const d = new Date(iso + "T12:00:00"); return `${LONG
 const SHORTLIST_SIZE = 3;
 
 function PlanMeals({ mealPlan, plates, setMealPlan, restoreMeals, commitMealToPlan, timeLevels, presence, weekStartDate, adventurousWeek, meals, days, daysFull, dayNotes, dayPills, setDayNotes, setDayPills, setPresence, setTimeLevels, db, persistDB, extraDays = 0, canExtend = false, setExtraDays, headSlot, onOpenMeal, orderedMeals, openDay = null, onPlateClose = null, pastWeek = false }) {
-  const allMeals = meals.length > 0 ? meals : SEED_MEALS;
+  const allMeals = meals;   // no example-meal fallback: an empty device has no meals here either (11/25)
   const today = todayLocalISO();
   const roster = (db.settings?.familyContacts || []).map(f => f.name);
   const awayRanges = db.settings?.awayRanges || [];
