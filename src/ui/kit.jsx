@@ -62,7 +62,7 @@ export function Row({ title, sub, value, onClick, trailing, dim, strong, problem
   const body = (
     <>
       {icon && <span className="ui-row-icon" aria-hidden="true"><Icon name={icon} size={22} /></span>}
-      <span className="ui-row-main"><span className={icon ? "ui-row-action" : strong ? "ui-strong" : undefined}>{title}</span>{sub && <span className={problem ? "ui-meta ui-problem" : "ui-meta"}>{sub}</span>}</span>
+      <span className="ui-row-main"><span className={icon ? "ui-row-link" : strong ? "ui-strong" : undefined}>{title}</span>{sub && <span className={problem ? "ui-meta ui-problem" : "ui-meta"}>{sub}</span>}</span>
       {value != null && <span className="ui-row-value">{value}</span>}
       {trailing}
       {chevron && <RowChevron top={!!sub} />}
@@ -192,6 +192,7 @@ export const Segmented = ({ options, value, onChange, label }) => (
 // `onBack` shows a back chevron for a page pushed inside the sheet; with `backLabel` it is the
 // green "‹ Settings" line above the title instead (board "Settings, reviewed").
 // `onCancel`: a typed sheet (Cancel · Done); `doneDisabled` greys Done out.
+// `titleAfter`: small text right after the title (the rate sheet's "2 of 3").
 // `sub` is a line under the title; with `subBelow` it runs the sheet's full width under the
 // header row, and the header's buttons sit level with the title's first line (the rate sheet); `footer` is pinned under the scrolling body (a primary action).
 // `onInfo`: an ⓘ after the title, for a sheet that is one field (Who eats it, How often).
@@ -203,7 +204,7 @@ export const Segmented = ({ options, value, onChange, label }) => (
 // sheets, ⓘ, Pickup, speed bumps). A sheet opened over another sits 12px lower.
 const SheetDepth = createContext(0);
 const openSheets = [];   // Escape closes only the top one
-export function Sheet({ title, sub, subBelow, onClose, onBack, backLabel, onCancel, onDone, doneDisabled, doneLabel = "Done", footer, onInfo, headerExtra, noDone, tall, children }) {
+export function Sheet({ title, titleAfter, sub, subBelow, onClose, onBack, backLabel, onCancel, onDone, doneDisabled, doneLabel = "Done", footer, onInfo, headerExtra, noDone, tall, children }) {
   const [drag, setDrag] = useState(0);
   const start = useRef(null);
   const depth = useContext(SheetDepth);
@@ -232,7 +233,7 @@ export function Sheet({ title, sub, subBelow, onClose, onBack, backLabel, onCanc
             {onBack && !backLabel && <span className="ui-sheet-back"><IconButton icon="back" label="Back" onClick={onBack} /></span>}
             {sub && !subBelow ? <div className="ui-sheet-titles"><h2 className="ui-heading">{title}</h2><span className="ui-meta">{sub}</span></div>
               : onInfo ? <div className="ui-sheet-titles ui-sheet-title-info"><h2 className="ui-heading">{title}</h2><InfoButton label={title} onClick={onInfo} /></div>
-              : <h2 className="ui-heading">{title}</h2>}
+              : <h2 className="ui-heading">{title}{titleAfter}</h2>}
             {headerExtra}
             {onCancel && <button type="button" className="ui-sheet-done ui-sheet-cancel" onClick={onCancel}>Cancel</button>}
             {!noDone && <button type="button" className="ui-sheet-done" disabled={doneDisabled} onClick={onDone || onClose}>{doneLabel}</button>}

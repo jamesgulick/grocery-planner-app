@@ -9,11 +9,9 @@ import { useState } from "react";
 import { todayLocalISO } from "../app/globals.js";
 import { BlockButton, Clocks, OutlineButton, Section, Segmented, Sheet } from "../ui/kit.jsx";
 import { showToast } from "../ui/toast.js";
-import { CADENCE_OPTIONS, EFFORT_OPTIONS, PREF_OPTIONS, mealHistoryIndex, monthDay, withField } from "../library/libraryModel.js";
+import { CADENCE_OPTIONS, EFFORT_OPTIONS, PREF_OPTIONS, dayShort, withField } from "../library/libraryModel.js";
 import "./rate.css";
 
-const WD = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-const dateWords = iso => `${WD[new Date(iso + "T12:00:00").getDay()]} ${monthDay(iso)}`;
 
 /** `items`: [{ mealId, iso, out, why }]; `why` is the subline ("First try" / "Missing …"), none from Rate any time. */
 export function RateSheet({ db, persistDB, items, onClose, onOpenMeal }) {
@@ -24,8 +22,6 @@ export function RateSheet({ db, persistDB, items, onClose, onOpenMeal }) {
   const today = todayLocalISO();
   const family = (db.settings?.familyContacts || []).map(f => f.name);
   const out = new Set(item.out || []);
-  const cooked = mealHistoryIndex(db, today).count(meal.name) + (item.iso === today ? 1 : 0);
-  const meta = [dateWords(item.iso), `cooked ${cooked} time${cooked === 1 ? "" : "s"}`].filter(Boolean).join(" · ");
   const isNew = meal.rotation === "experimental";
 
   const save = fn => persistDB({ ...db, meals: db.meals.map(m => (m.id === meal.id ? fn(m) : m)) });
@@ -51,19 +47,17 @@ export function RateSheet({ db, persistDB, items, onClose, onOpenMeal }) {
 
   return (
     <Sheet tall title={`How did ${meal.name} go?`} doneLabel="Close" onClose={onClose} footer={footer} subBelow
-      headerExtra={items.length > 1 ? <span className="rate-step">{at + 1} of {items.length}</span> : null}
-      sub={<>{meta}{(item.why || onOpenMeal) && (
-        <span className="rate-why">
-          {item.why && <span className="rate-why-text">{item.why}</span>}
-          {item.why && onOpenMeal && <span aria-hidden="true">&nbsp;·&nbsp;</span>}
-          {onOpenMeal && <button type="button" className="rate-details" onClick={() => { onClose(); onOpenMeal(meal.id); }}>All details ›</button>}
-        </span>
-      )}</>}>
+      titleAfter={items.length > 1 ? <span className="rate-step">{at + 1} of {items.length}</span> : null}
+      // One line (audit 11/25): the night judged, why it's here, All details: "Tue 17 · First try · All details ›".
+      sub={<span className="rate-why">
+        <span className="rate-why-text">{[dayShort(item.iso), item.why].filter(Boolean).join(" · ")}</span>
+        {onOpenMeal && <><span aria-hidden="true">&nbsp;·&nbsp;</span><button type="button" className="rate-details" onClick={() => { onClose(); onOpenMeal(meal.id); }}>All details ›</button></>}
+      </span>}>
       <div className="rate" key={meal.id}>
         <Section label="Who eats it">
           <div className="rate-card">
             {family.map(name => (out.has(name) ? (
-              <div key={name} className="rate-person is-out"><span className="rate-name">{name}</span><span className="rate-out">Out that night</span></div>
+              <div key={name} className="rate-person is-out"><span className="rate-name">{name}</span><span className="rate-out">out that night</span></div>
             ) : (
               <div key={name} className="rate-person">
                 <span className={prefOf(name) ? "rate-name" : "rate-name is-unset"}>{name}</span>

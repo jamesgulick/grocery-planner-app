@@ -98,7 +98,6 @@ function weekFinder(plans, shoppingDay) {
 function weekState(w, today) {
   if (!w.plan || !hasMeals(w.plan)) return { kind: "unplanned" };
   if (w.plan.orderedAt) return { kind: "ordered" };
-  if (w.start <= today) return { kind: "running" };
   const reached = Math.min(Math.max(w.plan.maxStep ?? w.plan.step ?? 0, 0), STEP_BAR.length - 1);
   return { kind: "progress", next: reached };
 }
@@ -113,7 +112,6 @@ const pickupWords = (iso, today) => iso === today ? "pickup today"
 function WeekRow({ week, state, today, pickup, planFrom, main, onOpen, onContinue }) {
   const withPickup = s => pickup ? `${s} · ${pickupWords(pickup, today)}` : s;
   const status = state.kind === "unplanned" ? withPickup("Not planned")
-    : state.kind === "progress" ? `Up next: ${STEP_BAR[state.next]}`
     : state.kind === "ordered" ? withPickup("Ordered")
     : null;
   return (
@@ -171,7 +169,7 @@ export function HomeScreen({ db, dataDot, onOpenData, onOpenSettings, onOpenPlan
   // The one upcoming pickup, and its cart (src/app/pickup.js).
   const upcoming = useMemo(() => upcomingPickup(db, today), [db, today]);
   const [pickupOpen, setPickupOpen] = useState(false);
-  const cart = iso => iso === upcoming.date ? (
+  const cart = iso => !empty && iso === upcoming.date ? (
     <span role="button" tabIndex={0} className="home-cart" aria-label="Pickup"
       onClick={e => { e.stopPropagation(); setPickupOpen(true); }}
       onKeyDown={e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); e.stopPropagation(); setPickupOpen(true); } }}>
@@ -296,7 +294,7 @@ export function HomeScreen({ db, dataDot, onOpenData, onOpenSettings, onOpenPlan
               <span className="home-rate-title">Meals to rate · {toRate.length}</span>
               <span className="home-rate-names">{toRate.map(q => q.meal.name).join(", ")}</span>
             </span>
-            <PillButton inline outline onClick={() => setRating(toRate.map(q => ({ mealId: q.meal.id, iso: q.iso, out: q.out, why: q.why })))}>Rate</PillButton>
+            <button type="button" className="ui-pill ui-pill-outline home-rate-pill" onClick={() => setRating(toRate.map(q => ({ mealId: q.meal.id, iso: q.iso, out: q.out, why: q.why })))}>Rate</button>
             <button type="button" className="home-pending-x" aria-label="Dismiss" onClick={() => { rateBannerHidden = true; setRateHidden(true); }}><Icon name="close" size={16} /></button>
           </div>
         )}

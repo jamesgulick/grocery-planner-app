@@ -32,6 +32,14 @@ export function ToastHost() {
   // Measured after the screen has updated (before paint): an action that shows a bar and closes
   // its sheet in the same tap must place the bar for the screen left behind, not the sheet.
   useLayoutEffect(() => { if (toast) setBottom(bottomOffset()); }, [toast]);
+  // While it shows, a sheet opening or closing moves it (audit 11/25): a bar fired in a sheet that
+  // then closes drops to its page position, 8px above the floating pills or the tab bar.
+  useEffect(() => {
+    if (!toast) return;
+    const obs = new MutationObserver(() => setBottom(bottomOffset()));
+    obs.observe(document.body, { childList: true, subtree: true });
+    return () => obs.disconnect();
+  }, [toast]);
   useEffect(() => {
     if (!toast) return;
     const timer = setTimeout(() => setToast(null), toast.undo ? UNDO_MS : PLAIN_MS);

@@ -59,7 +59,7 @@ class ErrorBoundary extends React.Component {
 // real to begin with. No dismiss controls: a state clears itself the moment
 // its underlying condition resolves (storage recovers, a real import lands,
 // a backup happens).
-const BACKUP_OVERDUE_DAYS = 4;
+const BACKUP_OVERDUE_DAYS = 7;   // brief §8 / §13.15: amber when > 7 days old and changed since
 function computeDataStatus(db, storageOk) {
   const changed  = db.dataChangedAt  ? new Date(db.dataChangedAt)  : null;
   const exported = db.lastExportedAt ? new Date(db.lastExportedAt) : null;

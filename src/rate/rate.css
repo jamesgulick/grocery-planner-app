@@ -3,13 +3,18 @@
 /* "First try · All details ›": one line; the reason is cut off with … and the link stays (11/25). */
 .rate-why { display: flex; align-items: center; min-width: 0; font-size: var(--label-size); color: var(--text-muted); white-space: nowrap; }
 .rate-why-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
-.rate-step { flex: none; align-self: flex-start; line-height: var(--touch); font-size: var(--label-size); font-weight: 600; color: var(--text-muted); }
-.rate-card { display: flex; flex-direction: column; gap: var(--space-2); padding: var(--space-2) var(--space-3); background: var(--surface); border-radius: var(--radius-group); }
-.rate-person { display: flex; align-items: center; gap: var(--space-2); min-height: var(--touch); }
+.rate-step { margin-left: var(--space-2); font-size: var(--label-size); font-weight: 400; color: var(--text-muted); white-space: nowrap; }   /* "2 of 3" right after the title (board "Rating (11/25)") */
+/* Who eats it (board "Rating (11/25)"): full-width lines between people; names 15px regular,
+   never-asked muted; 13px segment text; someone out is struck through, "out that night" on the right. */
+.rate-card { display: flex; flex-direction: column; background: var(--surface); border-radius: var(--radius-group); }
+.rate-person { display: flex; align-items: center; gap: var(--space-2); min-height: var(--rate-row-h); padding: 0 var(--space-3) 0 var(--space-4); }
+.rate-person + .rate-person { border-top: 1px solid var(--divider); }
 .rate-person .ui-seg { flex: 1; min-width: 0; }
-.rate-name { flex: none; width: var(--rate-name-w); font-size: var(--body-size); font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.rate-name.is-unset, .rate-person.is-out .rate-name { color: var(--text-muted); font-weight: 400; }
-.rate-out { flex: 1; font-size: var(--meta-size); color: var(--text-muted); }
+.rate-person .ui-seg button { font-size: var(--label-size); }
+.rate-name { flex: none; width: var(--rate-name-w); font-size: var(--body-size); font-weight: 400; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rate-name.is-unset, .rate-person.is-out .rate-name { color: var(--text-muted); }
+.rate-person.is-out .rate-name { text-decoration: line-through; }
+.rate-out { flex: 1; text-align: right; font-size: var(--label-size); color: var(--text-muted); }
 .rate-details { position: relative; flex: none; padding: 0; border: 0; background: none; font: inherit; font-size: var(--label-size); font-weight: 600; color: var(--action); cursor: pointer; }
 .rate-details::after { content: ""; position: absolute; left: 0; right: 0; top: calc((var(--label-line) - var(--touch)) / 2); bottom: calc((var(--label-line) - var(--touch)) / 2); }
 /* Footer tray, New meal: Move to hand-picked above; Add to rotation (white) left, Keep as new (dark) right. */
@@ -21,8 +26,10 @@
 /* Home: "Meals to rate · N", the names, Rate, × (above Tonight). */
 .home-rate { display: flex; align-items: center; gap: var(--space-2); min-height: var(--rate-banner-h); padding: var(--space-1) var(--space-1) var(--space-1) var(--space-4); background: var(--surface); border-radius: var(--radius-group); }
 .home-rate-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: var(--space-half); }
-.home-rate-title { font-size: var(--label-size); font-weight: 600; color: var(--text-muted); }
-.home-rate-names { font-size: var(--body-size); font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.home-rate-title { font-size: var(--body-size); line-height: var(--body-line); font-weight: 700; color: var(--text); }   /* board "Rating (11/25)": title 15 bold, names 13 muted */
+.home-rate-names { font-size: var(--label-size); line-height: var(--label-line); color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ui-pill.home-rate-pill { position: relative; min-height: var(--pill-height); padding: 0 var(--space-4); }   /* 32px white secondary; 44px tap */
+.ui-pill.home-rate-pill::after { content: ""; position: absolute; left: 0; right: 0; top: calc((var(--pill-height) - var(--touch)) / 2); bottom: calc((var(--pill-height) - var(--touch)) / 2); }
 
 /* Week view: a past day to rate isn't dimmed; its Rate sits before the chevron. */
 .wv-tile .ui-row-action { align-self: center; margin-right: var(--space-3); }   /* 12px before the chevron: separate tap targets (11/25) */

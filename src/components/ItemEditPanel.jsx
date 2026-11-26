@@ -2,7 +2,7 @@
 import { useState } from "react";
 import { INVENTORY_LOCS } from "../app/globals.js";
 import { BUY_OPTIONS, buyOf, buyPatch } from "../library/libraryModel.js";
-import { Chip, PillButton } from "../ui/kit.jsx";
+import { Chip, RowAction } from "../ui/kit.jsx";
 
 // "⋯ edit item" (VALIDATION-LOG 10/27): fix an item's profile where it's noticed while
 // planning (Inventory, Confirm): how often it's bought, where it's kept, its USUAL
@@ -40,7 +40,7 @@ function ItemEditPanel({ ing, onUpdate, onClose, onDetails, pending, setPending 
       {label("Usual amount")}
       <input className="ui-input item-panel-input" aria-label="Usual amount" value={usual} placeholder="e.g. 2 cans" onChange={e => setUsual(e.target.value)} onBlur={commitUsual} onKeyDown={e => { if (e.key === "Enter") e.target.blur(); }} />
       <div className="item-panel-foot">
-        <PillButton inline onClick={() => { if (setPending) onClose(usualPatch()); else { commitUsual(); onClose(); } }}>Done</PillButton>
+        <RowAction onClick={() => { if (setPending) onClose(usualPatch()); else { commitUsual(); onClose(); } }}>Done</RowAction>
       </div>
     </div>
   );

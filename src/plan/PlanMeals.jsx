@@ -343,6 +343,7 @@ function PlanMeals({ mealPlan, plates, setMealPlan, restoreMeals, commitMealToPl
   );
   const [choose, setChoose] = useState(null);     // { day, idx|null, kind: "main"|"side", title }
   const [moveFrom, setMoveFrom] = useState(null);
+  const [removeAsk, setRemoveAsk] = useState(null);   // the last day, while "Remove Thu 3?" is open (audit 11/25)
   const [checkOpen, setCheckOpen] = useState(false);
 
   // ── Compact: drag a night onto another to swap them (11/12) ───────────────────────
@@ -455,13 +456,13 @@ function PlanMeals({ mealPlan, plates, setMealPlan, restoreMeals, commitMealToPl
         <div className="wv-extend">
           {extraDays > MIN_EXTRA_DAYS && (() => {
             const last = days[days.length - 1];   // 5–9 days (RULING 15): down to the 5th day
-            return <button type="button" className="wv-remove-day" onClick={() => { if (!(mealPlan[last] || []).length || window.confirm(`Remove ${dayTitle(dateOfDay[last])}? Its meals and notes go with it.`)) setExtraDays(extraDays - 1); }}>Remove {dayTitle(dateOfDay[last])}</button>;
+            return <button type="button" className="wv-remove-day" onClick={() => { if ((mealPlan[last] || []).length) setRemoveAsk(last); else setExtraDays(extraDays - 1); }}>Remove {dayTitle(dateOfDay[last])}</button>;
           })()}
           {extraDays < MAX_EXTRA_DAYS && <button type="button" className="wv-add-day" onClick={() => setExtraDays(extraDays + 1)}>+ Add {dayTitle(addDaysISO(weekStartDate, 7 + extraDays))}</button>}
         </div>
       )}
       {/* Where the next plan starts (board "Pickup day"): "Next: Week of Nov 25 · Wed 25". */}
-      {canExtend && weekStartDate && <div className="wv-next-week">Next: {weekLabel(addDaysISO(weekStartDate, 7 + extraDays))} · {dayTitle(addDaysISO(weekStartDate, 7 + extraDays))}</div>}
+      {canExtend && weekStartDate && <div className="wv-next-week">Next: {weekLabel(addDaysISO(weekStartDate, 7 + extraDays))} · <Icon name="cart" size={14} /> {dayTitle(addDaysISO(weekStartDate, 7 + extraDays))}</div>}
 
       {detail && !detail.stacked && daySheet}
       {plateDay && (
@@ -486,6 +487,20 @@ function PlanMeals({ mealPlan, plates, setMealPlan, restoreMeals, commitMealToPl
           onTake={o => { if (o.side) takeSideOption(choose.day, choose.idx, o.side); else takeMainOption(choose.day, choose.idx, o); setChoose(null); }}
           onPick={(name, isNew) => { if (choose.idx == null) addMeal(choose.day, name, isNew); else replaceMeal(choose.day, choose.idx, name, isNew); setChoose(null); }}
           onCancel={() => setChoose(null)} />
+      )}
+      {/* Removing a day with meals (brief §13.14): our own fit sheet, not the browser's confirm. Its
+          dishes and note as plain rows; Cancel (white) and Remove (red outline). No helper sentence. */}
+      {removeAsk && (
+        <Sheet title={`Remove ${dayTitle(dateOfDay[removeAsk])}?`} onClose={() => setRemoveAsk(null)} noDone>
+          <Group>
+            {dishesOf(removeAsk).map(d => <div key={d.idx} className="ui-row"><span className={d.role === "main" ? "ui-row-main ui-strong" : "ui-row-main"}>{d.name.trim()}</span></div>)}
+            {(dayNotes?.[removeAsk] || "").trim() && <div className="ui-row"><span className="ui-row-main">{dayNotes[removeAsk].trim()}</span></div>}
+          </Group>
+          <div className="data-pair data-erase">
+            <button type="button" className="ui-block-button ui-block-plain" onClick={() => setRemoveAsk(null)}>Cancel</button>
+            <button type="button" className="ui-block-button ui-block-delete" onClick={() => { setRemoveAsk(null); setExtraDays(extraDays - 1); }}>Remove</button>
+          </div>
+        </Sheet>
       )}
       {moveFrom && (
         <MoveSheet from={moveFrom} title={`Move from ${longTitle(dateOfDay[moveFrom])}`} dishes={dishesOf(moveFrom)} mealRec={mealRec}

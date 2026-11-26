@@ -14,7 +14,7 @@
 .lib-filters .ui-sort-button { gap: var(--space-1); font-size: var(--meta-size); padding: 0; }
 /* Sticky headings (11/16): 24 above the heading's text (.lib gap), 12 from its text box to its card. */
 .lib-list-group { display: flex; flex-direction: column; gap: var(--space-3); }
-.ui-section-label.lib-sticky { position: sticky; z-index: 40; background: var(--bg); padding: var(--space-2) 0; margin: calc(-1 * var(--space-2)) 0; }
+.ui-section-label.lib-sticky { position: sticky; z-index: 40; background: var(--bg); padding: var(--space-2) 0 var(--space-3); margin: calc(-1 * var(--space-2)) 0 calc(-1 * var(--space-3)); }   /* 12px text → card, stuck or not (audit 11/25) */
 
 /* ── Pages ────────────────────────────────────────────────────────────── */
 .lib-page { padding: 0 var(--gutter) var(--space-5); display: flex; flex-direction: column; gap: var(--space-3); }
@@ -34,7 +34,8 @@
 .lib-group { display: flex; flex-direction: column; gap: var(--space-4); }
 /* 24 above the heading's text: the page's 12 gap + the divider + 11; 12 from its text box to
    the first card: 8 padding + the group's 16 gap - 12. */
-.lib-group-head { position: sticky; top: calc(var(--safe-top) + var(--topbar-height)); z-index: 40; margin: 0 calc(-1 * var(--gutter)) calc(var(--space-3) - var(--space-2) - var(--space-4)); padding: calc(var(--space-3) - 1px) var(--gutter) var(--space-2); background: var(--bg); font-size: var(--heading-size); line-height: var(--heading-line); font-weight: var(--heading-weight); border-top: 1px solid var(--divider); }
+/* 12px from the heading text to its card, stuck or not (audit 11/25); the 1px makes up the 20px text in its 25px line. */
+.lib-group-head { position: sticky; top: calc(var(--safe-top) + var(--topbar-height)); z-index: 40; margin: 0 calc(-1 * var(--gutter)) calc(-1 * var(--space-4)); padding: calc(var(--space-3) - 1px) var(--gutter) calc(var(--space-3) + 1px); background: var(--bg); font-size: var(--heading-size); line-height: var(--heading-line); font-weight: var(--heading-weight); border-top: 1px solid var(--divider); }
 .lib-section { display: flex; flex-direction: column; gap: var(--space-2); }
 .lib-card { display: flex; align-items: center; gap: var(--space-3); width: 100%; box-sizing: border-box; min-height: var(--row-height); padding: var(--space-3) var(--space-4); border: 0; border-radius: var(--radius-group); background: var(--surface); font: inherit; font-size: var(--body-size); line-height: var(--body-line); color: var(--text); text-align: left; cursor: pointer; }
 .lib-card:active { background: var(--pressed); }

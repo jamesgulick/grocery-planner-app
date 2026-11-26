@@ -19,7 +19,7 @@
 button.ui-row { cursor: pointer; }
 button.ui-row:active { background: var(--pressed); }
 .ui-row-icon { flex: none; display: inline-flex; color: var(--action); }
-.ui-row-action { color: var(--action); font-weight: 600; }
+.ui-row-link { color: var(--action); font-weight: 600; }   /* a row's green action title (renamed from ui-row-action, audit 11/25) */
 .ui-row-main { flex: 1; min-width: 0; display: flex; flex-direction: column; padding: var(--space-3) 0; }
 .ui-row-value { color: var(--text-muted); font-size: var(--meta-size); }
 .ui-chevron { color: var(--control-border); flex: none; display: flex; }
@@ -92,6 +92,7 @@ button.ui-row:active { background: var(--pressed); }
 .ui-sheet-body { overflow-y: auto; padding: var(--space-2) var(--space-4) var(--space-5); display: flex; flex-direction: column; gap: var(--space-5); -webkit-overflow-scrolling: touch; }
 /* A long list in a sheet must scroll, not squeeze what sits above it (the 44px search bar). */
 .ui-sheet-body > * { flex-shrink: 0; }
+.ui-sheet.is-tall .ui-sheet-body { flex: 1; }   /* the footer sits on the bottom whatever the content (audit 11/25) */
 
 /* ── Tab bar (option F3, 11/20; grey capsule and motion 11/22): a frosted capsule floating
    over the page, no full-width bar. A soft fade in the page colour sits behind it. ── */

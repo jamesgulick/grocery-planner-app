@@ -45,7 +45,7 @@ export function FirstRunCard({ db, persistDB }) {
         <span className="firstrun-counts">0 meals · 0 items · 0 plans</span>
         <BlockButton onClick={() => fileRef.current?.click()}>Load a file</BlockButton>
         <OutlineButton onClick={pasteData}>Paste data</OutlineButton>
-        <button type="button" className="firstrun-example" onClick={() => persistDB(DEFAULT_DB, { background: true })}>Start with example data</button>
+        <button type="button" className="firstrun-example" onClick={() => { persistDB(DEFAULT_DB, { background: true }); showToast("Example data loaded"); }}>Start with example data</button>
         {error && <div className="ui-problem">{error}</div>}
       </div>
       <input ref={fileRef} type="file" accept=".json,.txt,application/json,text/plain,text/*" hidden

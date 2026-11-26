@@ -5,7 +5,8 @@
 
 /* Groups: a sticky grey label (under the Plan header) over a white card, 12 between them. */
 .cf-group { display: flex; flex-direction: column; gap: var(--space-3); }
-.cf-label { position: sticky; top: calc(var(--safe-top) + var(--plan-head-h, 0px)); z-index: 40; background: var(--bg); padding: var(--space-2) 0; margin: calc(-1 * var(--space-2)) 0; }
+.ui-section-label.cf-label { position: sticky; top: calc(var(--safe-top) + var(--plan-head-h, 0px)); z-index: 40; background: var(--bg); padding: var(--space-2) 0 var(--space-3); margin: calc(-1 * var(--space-2)) 0 calc(-1 * var(--space-3)); }   /* 12px text → card, stuck or not (audit 11/25) */
+.cf > .cf-group:first-child { margin-top: var(--space-1); }   /* the first heading starts at the sticky line, so it never covers its card's top corners */
 .cf-card { background: var(--surface); border-radius: var(--radius-group); overflow: hidden; }
 /* Full-width lines between items; an open ⋯ panel is part of its item. */
 .cf-card > * + * { border-top: 1px solid var(--divider); }
@@ -67,6 +68,7 @@
 /* Plan › Order (boards "Plan, order", "Send to Sparky"; 11/17): one row per Sparky text. */
 .ord-row { box-sizing: border-box; width: 100%; min-height: var(--ord-row-h); display: flex; align-items: center; gap: var(--space-3); padding: var(--space-2) var(--space-3) var(--space-2) var(--space-4); border: 0; background: none; font: inherit; text-align: left; color: var(--text); cursor: pointer; }
 .ord-row:active { background-color: var(--pressed); }
+.cf-card > .ord-row + .ord-row { border-top: 1px solid var(--divider); }   /* full-width lines between rows (brief §12; audit 11/25) */
 .ord-row.is-next { background: var(--tint); }
 .ord-label { font-size: var(--card-title-size); line-height: var(--card-title-line); font-weight: 700; }
 .ord-row.is-sent .ord-label, .ord-row.is-sent .cf-sub { color: var(--text-muted); font-weight: 600; }
