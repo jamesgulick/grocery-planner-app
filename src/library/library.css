@@ -99,3 +99,8 @@
 
 /* Main or side (11/16): a one-row card above Planning, no heading; the control is small, not a tab bar. */
 .lib-type-seg { width: 148px; flex-shrink: 0; }
+/* "To finish" heading (audit 11/25 ruling): the 32px Send to AI / Re-import pill and the ⓘ's tap area
+   are centred on the heading's text line and overhang it, so the row keeps the text's height and
+   the card sits 12px below the text. */
+.ui-section-label.lib-sticky-row .lib-ai-pill { margin: calc((var(--label-line) - var(--pill-height)) / 2) 0; }
+.ui-section-label.lib-sticky-row .ui-info { margin-top: calc((var(--label-line) - var(--info-tap)) / 2); margin-bottom: calc((var(--label-line) - var(--info-tap)) / 2); }

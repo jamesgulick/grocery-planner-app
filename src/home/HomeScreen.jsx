@@ -283,7 +283,7 @@ export function HomeScreen({ db, dataDot, onOpenData, onOpenSettings, onOpenPlan
           <Group>
             <div className="home-firstrun">
               <span>Showing example data.</span>
-              <PillButton inline onClick={onOpenData}>Import your file</PillButton>
+              <PillButton inline outline onClick={onOpenData}>Import your file</PillButton>
             </div>
           </Group>
         )}
