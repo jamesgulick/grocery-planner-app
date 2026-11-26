@@ -427,17 +427,42 @@ function PlanMeals({ mealPlan, plates, setMealPlan, restoreMeals, commitMealToPl
                   <RowAction onClick={() => fillDay(day)}>Suggest</RowAction>
                 </>}
               </div>
+            ) : !compact ? (
+              // Detailed (brief §4, board "Plan › Meals rows" B + C): one row per dish, full-width lines,
+              // main bold, sides regular, the meal's notes under its name (2 lines). Quiet ↻ and × on the
+              // right do what the day sheet's do; tapping a name opens the day's meals sheet.
+              <div className={concerns.length || changed ? "wv-tile is-rows has-problem" : "wv-tile is-rows"}>
+                {[...mains, ...sides].map(d => {
+                  const note = (mealRec(d.name)?.notes || "").trim();
+                  return (
+                    <div key={d.idx} className="wv-row">
+                      <button type="button" className="wv-row-body" onClick={() => setPlateDay(day)}>
+                        <span className={d.role === "main" ? "wv-row-name is-main" : "wv-row-name"}>{d.name.trim()}</span>
+                        {note && <span className="wv-row-note">{note}</span>}
+                      </button>
+                      {d === mains[0] && rateMain && <RowAction onClick={() => setRating([{ mealId: rateMain.meal.id, iso, out: outOf(day), why: rateMain.why }])}>Rate</RowAction>}
+                      {!past && <>
+                        <button type="button" className="wv-row-icon" aria-label={`Replace ${d.name.trim()}`} onClick={() => setChoose({ day, idx: d.idx, kind: d.role, title: `Replace ${d.name.trim()}` })}><Icon name="replace" size={20} /></button>
+                        <button type="button" className="wv-row-icon" aria-label={`Remove ${d.name.trim()}`} onClick={() => removeMeal(day, d.idx)}><Icon name="close" size={18} /></button>
+                      </>}
+                    </div>
+                  );
+                })}
+                {(leftovers.length > 0 || concerns.length > 0 || changed) && (
+                  <button type="button" className="wv-row-foot" onClick={() => setPlateDay(day)}>
+                    {leftovers.map((t, k) => <span key={k} className="wv-sides">{t}</span>)}
+                    {concerns.map((o, k) => <span key={k} className="wv-concern">{o.text}</span>)}
+                    {changed && <span className="wv-concern">Check ingredients</span>}
+                  </button>
+                )}
+              </div>
             ) : (
               <div className={concerns.length || changed ? "wv-tile has-problem" : "wv-tile"}
                 style={isDragged ? { transform: `translateY(${drag.dy}px)` } : undefined}>
                 <button type="button" className="wv-tile-body" onClick={() => setPlateDay(day)}>
-                  {compact ? (
+                  {(
                     <span className="wv-tile-line"><span className="wv-mains">{mains.map(d => d.name).join(", ") || "—"}</span>{sides.length > 0 && <span className="wv-sides">  + {sides.map(d => d.name).join(", ")}</span>}</span>
-                  ) : <>
-                    <span className="wv-mains">{mains.map(d => d.name).join(", ") || "—"}</span>
-                    {sides.length > 0 && <span className="wv-sides">+ {sides.map(d => d.name).join(", ")}</span>}
-                    {leftovers.map((t, k) => <span key={k} className="wv-sides">{t}</span>)}
-                  </>}
+                  )}
                   {concerns.map((o, k) => <span key={k} className="wv-concern">{o.text}</span>)}
                   {changed && <span className="wv-concern">Check ingredients</span>}
                 </button>
