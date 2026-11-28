@@ -117,3 +117,10 @@
 .wv-row-note { font-size: var(--label-size); line-height: var(--label-line); color: var(--text-muted); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .wv-row-icon { flex: none; display: inline-flex; align-items: center; justify-content: center; width: var(--touch); height: var(--touch); padding: 0; border: 0; background: none; color: var(--text-muted); cursor: pointer; }
 .wv-row-foot { display: flex; flex-direction: column; gap: var(--space-half); padding: var(--space-2) var(--space-4) var(--space-3); border: 0; background: none; font: inherit; text-align: left; cursor: pointer; }
+
+/* Compact: swipe a day left to reveal Clear (dark grey, not red), behind the tile. */
+.wv-swipe { position: relative; overflow: hidden; border-radius: var(--radius-control); }   /* the slide stays inside the row */
+.wv-swipe > .wv-tile { position: relative; z-index: 1; transition: transform 0.2s ease; }
+.wv.is-compact .wv-tile-body { touch-action: pan-y; }
+.wv-swipe-clear { position: absolute; top: 0; right: 0; bottom: 0; width: calc(var(--swipe-clear-w) + var(--radius-control)); padding-left: var(--radius-control); border: 0; border-radius: var(--radius-control); background: var(--swipe-clear); color: var(--on-action); font: inherit; font-size: var(--body-size); font-weight: 600; cursor: pointer; }
+@media (prefers-reduced-motion: reduce) { .wv-swipe > .wv-tile { transition: none; } }

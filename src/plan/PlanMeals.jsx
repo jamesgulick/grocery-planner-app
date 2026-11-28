@@ -349,6 +349,33 @@ function PlanMeals({ mealPlan, plates, setMealPlan, restoreMeals, commitMealToPl
   // ── Compact: drag a night onto another to swap them (11/12) ───────────────────────
   const [drag, setDrag] = useState(null);   // { from, over, dy, y0 }
   const dragRef = useRef(null);
+  // Compact: swipe a day left to reveal Clear (brief §4, board "Plan › Meals rows" C). One day open
+  // at a time; a swipe past most of the tile clears at once. Horizontal moves only, so the page
+  // still scrolls; the drag handle keeps its own gesture.
+  const [swipe, setSwipe] = useState(null);   // { day, dx, open, moving }
+  const swipeRef = useRef(null);
+  const SWIPE_CLEAR_W = 88;
+  const onSwipeDown = (e, day) => {
+    swipeRef.current = { day, x0: e.clientX, y0: e.clientY, base: swipe?.day === day && swipe.open ? -SWIPE_CLEAR_W : 0, horiz: null, w: e.currentTarget.getBoundingClientRect().width };
+  };
+  const onSwipeMove = e => {
+    const s = swipeRef.current; if (!s) return;
+    const dx = e.clientX - s.x0, dy = e.clientY - s.y0;
+    if (s.horiz == null && (Math.abs(dx) > 8 || Math.abs(dy) > 8)) {
+      s.horiz = Math.abs(dx) > Math.abs(dy);
+      if (s.horiz) e.currentTarget.setPointerCapture?.(e.pointerId);
+    }
+    if (s.horiz) { s.pos = Math.min(0, s.base + dx); setSwipe({ day: s.day, dx: s.pos, open: false, moving: true }); }
+  };
+  const onSwipeUp = () => {
+    const s = swipeRef.current; swipeRef.current = null;
+    if (!s || !s.horiz) return;
+    s.suppress = true; swipeClick.current = s.day;
+    if (s.pos < -s.w * 0.6) { setSwipe(null); clearDay(s.day); }
+    else if (s.pos < -SWIPE_CLEAR_W / 2) setSwipe({ day: s.day, dx: -SWIPE_CLEAR_W, open: true });
+    else setSwipe(null);
+  };
+  const swipeClick = useRef(null);   // the day whose swipe just ended: its click doesn't open the sheet
   const onHandleDown = (e, day) => {
     if (locked(day)) return;
     e.preventDefault();
@@ -457,9 +484,18 @@ function PlanMeals({ mealPlan, plates, setMealPlan, restoreMeals, commitMealToPl
                 )}
               </div>
             ) : (
+              <div className="wv-swipe">
+              {!past && swipe?.day === day && <button type="button" className="wv-swipe-clear" tabIndex={swipe?.day === day && swipe.open ? 0 : -1}
+                onClick={() => { setSwipe(null); clearDay(day); }}>Clear</button>}
               <div className={concerns.length || changed ? "wv-tile has-problem" : "wv-tile"}
-                style={isDragged ? { transform: `translateY(${drag.dy}px)` } : undefined}>
-                <button type="button" className="wv-tile-body" onClick={() => setPlateDay(day)}>
+                style={{ transform: `translate(${swipe?.day === day ? swipe.dx : 0}px, ${isDragged ? drag.dy : 0}px)`, transition: swipe?.day === day && swipe.moving ? "none" : undefined }}>
+                <button type="button" className="wv-tile-body"
+                  onPointerDown={past ? undefined : e => onSwipeDown(e, day)} onPointerMove={past ? undefined : onSwipeMove} onPointerUp={past ? undefined : onSwipeUp} onPointerCancel={past ? undefined : onSwipeUp}
+                  onClick={() => {
+                    if (swipeClick.current === day) { swipeClick.current = null; return; }
+                    if (swipe?.day === day && swipe.open) { setSwipe(null); return; }
+                    setPlateDay(day);
+                  }}>
                   {(
                     <span className="wv-tile-line"><span className="wv-mains">{mains.map(d => d.name).join(", ") || "—"}</span>{sides.length > 0 && <span className="wv-sides">  + {sides.map(d => d.name).join(", ")}</span>}</span>
                   )}
@@ -470,6 +506,7 @@ function PlanMeals({ mealPlan, plates, setMealPlan, restoreMeals, commitMealToPl
                 {compact ? (!past && <span className="wv-handle" role="button" tabIndex={-1} aria-label="Drag to another day"
                   onPointerDown={e => onHandleDown(e, day)} onPointerMove={onHandleMove} onPointerUp={onHandleUp} onPointerCancel={onHandleUp}><Icon name="handle" size={18} /></span>)
                   : <RowChevron />}
+              </div>
               </div>
             )}
           </section>
