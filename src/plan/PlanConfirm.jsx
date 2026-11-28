@@ -336,7 +336,7 @@ function PlanConfirm({ headSlot, onOpenMeal, onOpenItem, registerHeld, inFlow, r
   // matches, Add "<text>" adds free text as before. Nothing new goes into the Library here.
   const query = newItem.trim().toLowerCase();
   const matches = !query ? [] : ingredients
-    .filter(i => query.split(/s+/).every(w => i.name.toLowerCase().includes(w)))
+    .filter(i => query.split(/\s+/).every(w => i.name.toLowerCase().includes(w)))
     .sort((a, b) => (b.name.toLowerCase().startsWith(query) - a.name.toLowerCase().startsWith(query)) || a.name.localeCompare(b.name, undefined, { sensitivity: "base" }))
     .slice(0, 8);
   const placeOf = i => i.storageLocation && i.storageLocation !== "Unassigned" ? i.storageLocation : "No place";
