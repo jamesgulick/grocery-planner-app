@@ -3,7 +3,7 @@
 /* ── Frame: title, step bar, the step's header control; fixed Prev / Next ── */
 .plan { padding: 0 var(--gutter); }
 .plan-head { position: sticky; top: var(--safe-top); z-index: 50; margin: 0 calc(-1 * var(--gutter)); padding: 0 var(--gutter) var(--space-3); background: var(--bg); display: flex; flex-direction: column; gap: var(--space-3); }
-.plan-head.is-tight { padding-bottom: var(--space-1); }   /* Meals: Week check scrolls below the header, 20px under the step bar (11/28) */
+.plan-head.is-tight { padding-bottom: var(--space-2); }   /* Meals: + the body's 4px = 12px from the step bar to Week check, as on the Week screens (11/28) */
 .plan-title-row { display: flex; align-items: center; gap: var(--space-2); min-height: var(--topbar-height); }
 .plan-title-row .ui-screen-title { flex: 1; min-width: 0; margin: 0; }
 .plan-steps { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: var(--space-1); }

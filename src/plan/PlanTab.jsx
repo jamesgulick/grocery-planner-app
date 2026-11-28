@@ -385,7 +385,6 @@ function PlanTab({ db, persistDB, headerIcons, onDone, onOpenMeal: openMealPage,
           <div className="plan-title-row"><h1 className="ui-screen-title">{weekLabel(draft.weekStartDate)}</h1><HeaderButtons>{headerIcons}</HeaderButtons></div>
           {spanRow}
           {weekTabs}
-          <div ref={setHeadSlot} />
         </header>
         <div className="plan-body">
           <PlanMeals key="plan" mealPlan={mealPlan} plates={plates} setMealPlan={setMealPlanP} restoreMeals={restoreMeals} commitMealToPlan={commitMealToPlan} timeLevels={timeLevels} presence={presence}
@@ -411,7 +410,7 @@ function PlanTab({ db, persistDB, headerIcons, onDone, onOpenMeal: openMealPage,
             options={SUBS.map((l, i) => ({ value: i, label: <span className="plan-sub">{i <= weekSubMax && i !== weekSub && <span className="plan-sub-done" aria-label="done">✓</span>}{l}</span> }))} />
         )}
         {step === 2 && <LocTabs locs={LOCS} value={locAt} doneUpTo={locMax} onChange={goLoc} />}
-        {(step === 1 || step === 3) && <div ref={setHeadSlot} />}
+        {step === 3 && <div ref={setHeadSlot} />}
       </header>
       <div className="plan-body">
         {step === 0 && <WeekStep sub={weekSub} db={db} persistDB={persistDB} days={days} dates={dates} dayNotes={dayNotes} setDayNotes={setDayNotesP}
