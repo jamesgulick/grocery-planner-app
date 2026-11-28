@@ -380,7 +380,7 @@ function PlanTab({ db, persistDB, headerIcons, onDone, onOpenMeal: openMealPage,
     }
     return (
       <div className="plan">
-        <header className="plan-head" ref={headRef}>
+        <header className="plan-head is-tight" ref={headRef}>
           <button type="button" className="lib-back plan-back" onClick={onBack}><span aria-hidden="true">‹</span> Home</button>
           <div className="plan-title-row"><h1 className="ui-screen-title">{weekLabel(draft.weekStartDate)}</h1><HeaderButtons>{headerIcons}</HeaderButtons></div>
           {spanRow}
@@ -402,7 +402,7 @@ function PlanTab({ db, persistDB, headerIcons, onDone, onOpenMeal: openMealPage,
 
   return (
     <div className="plan">
-      <header className="plan-head" ref={headRef}>
+      <header className={step === 1 ? "plan-head is-tight" : "plan-head"} ref={headRef}>
         <div className="plan-title-row"><h1 className="ui-screen-title">{weekLabel(draft.weekStartDate)}</h1><HeaderButtons>{headerIcons}</HeaderButtons></div>
         {spanRow}
         <StepBar step={step} maxStep={maxStep} onGo={i => (i === 0 ? goSub(weekSub) : goToStep(i))} />
