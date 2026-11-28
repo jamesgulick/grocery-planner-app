@@ -2,6 +2,7 @@
 // only by class names in ui.css, which reads tokens.css; the lint rule bans raw colours
 // and sizes here. Real <button>s wherever something can be acted on.
 import React, { createContext, useContext, useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 
 // ── Icons: inline stroke SVG, currentColor ────────────────────────────────────
 const PATHS = {
@@ -220,7 +221,9 @@ export function Sheet({ title, titleAfter, sub, subBelow, onClose, onBack, backL
   const onTouchStart = e => { start.current = e.touches[0].clientY; };
   const onTouchMove  = e => { if (start.current != null) setDrag(Math.max(0, e.touches[0].clientY - start.current)); };
   const onTouchEnd   = () => { if (drag > 80) onClose(); setDrag(0); start.current = null; };
-  return (
+  // Drawn at the top of the page (11/28): a sheet opened from inside a sticky heading was trapped in
+  // that heading's layer, so later sticky headings painted over its backdrop and the sheet itself.
+  return createPortal(
     <div className="ui-sheet-scrim" onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
       <section role="dialog" aria-modal="true" aria-label={title} className={tall ? "ui-sheet is-tall" : "ui-sheet"}
         style={{ "--sheet-depth": depth, ...(drag ? { transform: `translateY(${drag}px)`, transition: "none" } : null) }}>
@@ -245,7 +248,8 @@ export function Sheet({ title, titleAfter, sub, subBelow, onClose, onBack, backL
           {footer && <div className="ui-sheet-footer">{footer}</div>}
         </SheetDepth.Provider>
       </section>
-    </div>
+    </div>,
+    document.body
   );
 }
 
