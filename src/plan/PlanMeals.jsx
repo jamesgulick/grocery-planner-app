@@ -1,8 +1,8 @@
 // The Meals step: the week view (phase 2 stage 4b, SPEC-plan-flow-v2 §4; boards "Week view ·
 // DETAILED", "Week view · COMPACT", "Plate sheet", "Replace sheet", "Move sheet", "Rationale B";
 // Decisions 11/12–11/14).
-//   Header (in the frame's sticky header, through `headSlot`): the Week check pill, Suggest all,
-//     the share icon and the Compact switch.
+//   Header (at the top of the scrolling list, 11/28: only the title, dates and pickup row and
+//     step bar stay pinned): the Week check pill, Suggest all, the share icon, the view toggle.
 //   Days: a date header ABOVE the plate (day, clocks, who's out, forecast and grill ok, labels,
 //     the note), then a white tile (mains bold, "+ sides", leftovers, plate concerns in amber)
 //     or a dashed open tile (Open → pick, Suggest → the engine's pick). Compact: one-line
@@ -17,7 +17,6 @@
 import { MAX_EXTRA_DAYS, MIN_EXTRA_DAYS, abbrOfISO, assembleComposeInputs, checkWeek, isExtraDay, mealRecency, platesFromCompose, presentOn, reasonsOf, runComposeWeek, seedTimeLevel } from "../engine/assembleInputs.js";
 import { composeWeek, evaluateWeek } from "../engine/composeWeek.js";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { createPortal } from "react-dom";
 import { copyToClipboard } from "../app/clipboard.js";
 import { draftPlanText } from "../app/shareText.js";
 import { addDaysISO, todayLocalISO, weekLabel } from "../app/globals.js";
@@ -55,7 +54,7 @@ const LONG_WD = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday
 const longTitle = iso => { const d = new Date(iso + "T12:00:00"); return `${LONG_WD[d.getDay()]} ${d.getDate()}`; };
 const SHORTLIST_SIZE = 3;
 
-function PlanMeals({ mealPlan, plates, setMealPlan, restoreMeals, commitMealToPlan, timeLevels, presence, weekStartDate, adventurousWeek, meals, days, daysFull, dayNotes, dayPills, setDayNotes, setDayPills, setPresence, setTimeLevels, db, persistDB, extraDays = 0, canExtend = false, setExtraDays, headSlot, onOpenMeal, orderedMeals, openDay = null, onPlateClose = null, pastWeek = false }) {
+function PlanMeals({ mealPlan, plates, setMealPlan, restoreMeals, commitMealToPlan, timeLevels, presence, weekStartDate, adventurousWeek, meals, days, daysFull, dayNotes, dayPills, setDayNotes, setDayPills, setPresence, setTimeLevels, db, persistDB, extraDays = 0, canExtend = false, setExtraDays, onOpenMeal, orderedMeals, openDay = null, onPlateClose = null, pastWeek = false }) {
   const allMeals = meals;   // no example-meal fallback: an empty device has no meals here either (11/25)
   const today = todayLocalISO();
   const roster = (db.settings?.familyContacts || []).map(f => f.name);
@@ -418,7 +417,7 @@ function PlanMeals({ mealPlan, plates, setMealPlan, restoreMeals, commitMealToPl
 
   return (
     <div className={compact ? "wv is-compact" : "wv"}>
-      {!pastWeek && (headSlot ? createPortal(header, headSlot) : header)}
+      {!pastWeek && header}
       {days.map(day => {
         const iso = dateOfDay[day];
         const dishes = dishesOf(day);
