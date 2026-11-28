@@ -141,19 +141,20 @@ split mechanically into modules (no behavior change; see the file map).
   the repo name. Don't change this to an absolute base unless you also fix the paths.
 - **Data persistence:** browser `localStorage` under the key `grocery_db`. There is
   no backend. JSON export/import (the data sheet, from the data icon) moves data between devices.
-- **Preview deploy:** while the `integration/composeWeek` branch exists, every deploy
-  (always run from `main`) also builds that branch into `/preview/`, best-effort — a
-  broken preview never blocks production. A push to the branch triggers
-  `.github/workflows/preview-trigger.yml`, which dispatches the `main` deploy. The
-  preview shares an origin (and so `localStorage`) with the live app, so preview builds
-  (`VITE_PREVIEW=1`) suffix every storage key with `_preview`, seed from the live DB
-  read-only, and show a PREVIEW banner; the workflow refuses to publish a preview
-  build that lacks this isolation.
-- **Fallback after the polish cutover (2026-11-12):** while the `v1-final` tag exists,
-  every deploy also builds it into `/v1/` with `VITE_LEGACY=1`: the pre-cutover app with
-  an "Old version (fallback)" banner, deliberately on the LIVE storage keys so it opens
-  on real data. Never edit in both at once. Retire it by deleting the tag (planned after
-  2–3 real weeks). The `/v2/` slot is retired: it builds only while a `v2` branch exists.
+- **Only `main` deploys (since 2026-11-28).** Phase 2 was built on a `v2` branch at `/v2/`
+  and cut over to `main` on 2026-11-28 (fast-forward to 1e19e96; the pre-cutover `main` was
+  b3e1ae4). The same day the `v2` branch, the `v1-final` tag (the `/v1/` fallback) and the
+  `integration/composeWeek` branch (`/preview/`) were deleted, so the live site is the only
+  deployed copy. Work happens on `main` directly; check it in the dev server first.
+- **Dormant slots in the workflow:** `deploy.yml` still has best-effort steps that build a
+  `integration/composeWeek` branch into `/preview/`, a `v2` branch into `/v2/` and a
+  `v1-final` tag into `/v1/`; they skip themselves while those don't exist.
+  `preview-trigger.yml` re-runs the deploy on a push to the preview branch. Bringing a slot
+  back means pushing that branch or tag. Preview and v2 builds keep their storage behind a
+  key suffix (`VITE_PREVIEW=1` → `_preview`, `VITE_PREVIEW=v2` → `_v2`), seed from the live DB
+  read-only and show a banner; the workflow refuses to publish one without that isolation.
+  A `/v1/` build (`VITE_LEGACY=1`) would run on the LIVE keys, and its code predates the
+  data migrations now on live data, so don't revive it.
 
 ### File map
 
@@ -168,9 +169,9 @@ src/app/weather.js           ← Open-Meteo forecast (FORECAST_LAT / FORECAST_LO
 src/app/pills.js, styles.js  ← day pills; the C colours and S styles
 src/app/clipboard.js, fridgeReport.js ← copy helper; the printable fridge report
 src/components/              ← shared bits: Toggle, SearchBar, FieldGroup, PillSelect, WeekSelector, AutoGrowTextarea, RefreshReminder, ItemEditPanel
-src/plan/                    ← PlanTab (+ Welcome), PlanMeals, PlanInventory, PlanConfirm
-src/manage/                  ← ManageMeals, MealEditor (+ engine facets, recipe paste), ManageItems (shown in Library), ManageHelp (Settings › Help), ManageConfig (only AwayPeriods and formatAsOf are still used), ManageTab (unused)
-src/tonight/TonightTab.jsx   ← (unused since the cutover; Home replaced it; kept for the /v1/ era, delete with it)
+src/plan/                    ← PlanTab (frame, step flow, standalone week view), WeekStep (Calendar / Who's home / Time), PlanMeals, DaySheet, PlanInventory (+ inventoryModel, LocTabs), PlanConfirm (Confirm + Order)
+src/manage/                  ← ManageMeals, MealEditor (+ engine facets, recipe paste), ManageItems (shown in Library), ManageHelp (Settings › Help), ManageConfig (only AwayPeriods and formatAsOf are still used), ManageTab (unused; safe to delete now that /v1/ is retired)
+src/tonight/TonightTab.jsx   ← (unused since the 11/12 cutover; Home replaced it; safe to delete now that /v1/ is retired)
 src/ui/tokens.css            ← design tokens (polish Phase 1.6): the only src/ui file with raw colours/sizes; primitives join src/ui as Phase 2 needs them
 src/ui/kit.jsx, ui.css       ← primitives (v2): Icon, Section/Group/Row, PillButton, Switch, Segmented, Sheet, TabBar, TopBar
 src/home/HomeScreen.jsx      ← Home (v2 shell): date title, Tonight, rest of the week, Next week, share
@@ -184,8 +185,8 @@ src/main.jsx                 ← mounts <App/> to #root
 src/index.css                ← base styles
 index.html                   ← Vite entry
 vite.config.js               ← React plugin + relative base
-.github/workflows/deploy.yml ← Pages CI (production at /, preview branch at /preview/, v1-final tag at /v1/)
-.github/workflows/preview-trigger.yml ← a push to the preview branch re-runs the main deploy
+.github/workflows/deploy.yml ← Pages CI (production at /; dormant /preview/, /v2/, /v1/ steps, see above)
+.github/workflows/preview-trigger.yml ← a push to the (now deleted) preview branch re-runs the main deploy
 ```
 
 The engine's offline validation harness lives in the untracked `engine/` workspace
@@ -194,41 +195,45 @@ The engine's offline validation harness lives in the untracked `engine/` workspa
 
 ## The app's workflow
 
-**Shell (live since the polish cutover, 2026-11-12):** bottom tabs **Home · Plan · Library**;
-the header's data icon (dot when a backup is due) opens the data sheet (backup, import
-with a "Load this data?" confirm, reset), the gear opens Settings (Family, Away dates,
-Grill season, Plans start on, Help). **Home** shows today's date, Tonight, the rest of the
-week (or the next planned week under "Coming up" when no week covers today), the Next
-week row, Fridge report and Share with family; its taps open the week's Meals step.
-**Library** is Meals | Items. The Plan tab is the flow below.
+**Shell (phase 1 live 2026-11-12; phase 2 live 2026-11-28):** bottom tabs **Home · Plan ·
+Library** and a round **+** (Grab: quick capture of a meal or item). The header capsule holds the
+data icon (amber dot when the last backup is over 7 days old and something changed since) and the
+gear. The data sheet: Import | Back up, Calendar sync (① Send to AI › ② Re-import), Paste data,
+Erase this device. Settings: Usual shopping day, Grill season, Family (read-only), Away dates,
+Instructions for AI, Help. **Home** shows today's date, a "Meals to rate" banner when any (src/rate),
+the Tonight card, then one card per week for every planned day from tonight on, then the next
+unplanned week's card; its taps open the week view (This / Next / Last week) with "‹ Home". An empty
+device shows the first-run card (src/shell/FirstRun.jsx). **Library** is Meals | Items with meal and
+item pages; every schema field is editable there. The Plan tab is the flow below.
 
 Five-step weekly flow, tracked by the `PLAN_STEPS` constant and a `step` index:
 
 ```
-Welcome → Meals → Inventory → Confirm → Order
+Week → Meals → Inventory → Confirm → Order
 ```
 
 (Receipt reconcile is no longer a step; it was folded out in step-flow v4.)
 
-- **Meals** — each day is a PLATE: a main, then sides labelled "covers" (a
-  floor-fill for someone who won't eat the main) or "goes with" (an accompaniment),
-  or "side" if placed by hand, with the engine's reason under each. Per day: a
-  three-level **time to cook** (none / some / much — only "much" allows involved
-  meals; seeded Sat/Sun much, Mon/Tue none, Wed–Fri some), a **Home** row with a
-  chip per family member (tap = away that night), day notes, a read-only "grill ok"
-  tag, the live forecast, and carried-leftover notes. Actions: **Fill empty days**
-  (global; empty days only), **Fill this day**, **⟳** on a main (opens a shortlist of the
-  next 3 mains in the engine's ranking, best first, each with its sides; "More options"
-  continues down the ranking; built by re-asking with each pick marked seen, so showing
-  them marks them seen; sides placed by hand stay) or on a side (swap just it),
-  **Suggest sides** / **More sides** (repeatable: sides already on the plate go in as
-  seen, so each tap brings the next ones). The manual pick list (Change / + Add meal)
-  shows each meal's last-served or planned date (`mealRecency`), sorts by it, and lists
-  mains or sides first by context; meal search also matches facets, type and notes
-  (`mealMatches`). An **Adventurous week** toggle asks the engine to place one untried meal.
-  A **Week check** panel shows the engine's observations for the plan as built
-  (concerns always, "ok" briefly, the rest folded), and **Show reasoning** (learn
-  mode) shows every reason with its tier and role.
+- **Week** (`src/plan/WeekStep.jsx`) — three sub-steps: Calendar (Calendar sync, each day's note and
+  labels) › Who's home (a chip per person per night; away dates show dashed) › Time (Little / Some /
+  Lots per day, and Try something new). The span row reads "Thu 3 – Tue 8 · 6 days" with the Pickup pill.
+- **Meals** (the week view, `src/plan/PlanMeals.jsx`; the same module is the standalone week view
+  from Home, with This / Next / Last week tabs) — each day is a grey day bar (day, clocks for
+  Little / Some / Lots time, forecast, who's out, labels, note; tap = the day details sheet) over its
+  plate. Detailed: one row per dish (main bold, sides regular, the meal's notes under its name),
+  quiet ↻ Replace and × Remove on each row. Compact: one line per day, a drag handle that swaps whole
+  nights, and swipe left to reveal Clear. An open day has Open (pick) and Suggest (the engine's pick).
+  Week check (a pill → sheet of the engine's observations, today onward) and the toolbar (Suggest all,
+  share, detailed/compact) sit at the top of the list and scroll away; only the title, dates and
+  pickup row and step bar stay pinned. Tapping a dish opens the day's meals (plate) sheet: each dish
+  with the engine's reasons (a Reasons switch shows all), ↻ / ×, + Add main / + Add side, Move to
+  another day (Swap / Add), Clear this day, and Rate on past dishes. Sides on a plate are "covers"
+  (floor-fill for someone who won't eat the main) or "goes with" (accompaniment), or hand-placed;
+  the engine adds them only when one of those applies. The Replace sheet shows the next 3 mains in
+  the engine's ranking ("More options" continues; showing them marks them seen); the manual pick
+  list sorts by last-served / planned date (`mealRecency`) and search matches facets, type and
+  notes (`mealMatches`). Try something new (`adventurousWeek`) is on the Week step's Time screen.
+  Past days are read-only and carry no amber; a past day whose main needs rating shows Rate.
 - **Inventory** — walk storage locations; checked = buying (see "Checked = buying"
   below). Sections: Always buy · Weekly staples · For this week's meals · Slow staples
   (collapsed to one line of names). Multi-meal ingredients get a badge.
