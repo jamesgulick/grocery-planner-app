@@ -413,6 +413,12 @@ instead and leave it on disk as a working file.
 `src/engine/composeWeek.js` and `src/engine/assembleInputs.js`; its harness, adapter
 and merge scripts stay in the untracked `engine/` workspace.
 
+**The one exception — public docs (approved 2026-11-28):** `README.md`, `CONTRIBUTING.md`,
+`docs/*.md` and `docs/images/*` may be committed although the app doesn't need them. They are
+built from the example data only ("Start with example data", placeholder names), never from a real
+export, and the blocking real-name check runs on every commit that touches them, as on any other.
+Nothing else rides on this exception: design docs, briefs and audits stay untracked.
+
 **Never, whatever a past instruction said:** the tagged corpus (`meal-tags.json`),
 scenario fixtures (`scenarios.json`), the validation harness, design and model docs
 (`MODEL-*.md`, `CONTRACT-*.md`, `HANDOFF.md`, `SPEC-*.md`, `*-BRIEF-*.md`), exported

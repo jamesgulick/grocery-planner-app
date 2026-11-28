@@ -1,106 +1,77 @@
 # Grocery Planner
 
-A React grocery-planning web app for composing a week of dinners and turning it into
-a grocery pickup order. Built with [Vite](https://vitejs.dev/); deploys to GitHub
-Pages automatically on push.
+Plan a week of family dinners, check what's in the cupboards, and turn it into a grocery pickup order — on your phone, with no account and no server.
 
-## What it does
+<p align="center"><img src="docs/images/home.png" width="270" alt="Home: tonight's dinner and the week ahead"> <img src="docs/images/meals.png" width="270" alt="Plan › Meals: each day with its dishes"> <img src="docs/images/inventory.png" width="270" alt="Plan › Inventory: walking the pantry"></p>
 
-A five-step weekly workflow: **Welcome → Meals → Inventory → Confirm → Sparky.**
+**Try it:** open **https://jamesgulick.github.io/grocery-planner-app/** on your phone and tap **Start with example data**. Everything you do stays in your own browser.
 
-- **Meals** — the week is composed plate by plate: a main, plus suggested sides,
-  each labelled with why it's there ("covers" someone who won't eat the main, or
-  "goes with" it). For each day you set how much time you have to cook (none /
-  some / much — only "much" allows involved meals) and who's home; longer absences
-  are date-range away periods. Fill every empty day at once, or work one day at a
-  time: fill a day, ⟳ a main (its sides follow), ⟳ a single side, or suggest sides
-  for a main. A week check reports the week as you built it — whether everyone has
-  something they'll eat each night (counting leftovers), spacing, effort, meals
-  drifting out of rotation — quiet by default, with a "Show reasoning" mode that
-  explains every pick. Uses a **live weather forecast** (Open-Meteo, no API key)
-  and a grill-season switch.
-- **Inventory** — walk your storage locations and check off what's in stock.
-- **Confirm** — a "used across multiple meals" check on top, then the shopping list
-  with per-item quantity tuning and drop-toggles.
-- **Sparky** — copy the list (batched) to hand off to a cart-building assistant,
-  plus a shared-item quantity-check prompt.
+---
 
-Design principle: **the app nudges, it never gates your judgment.** You can put
-anything on any day; the planner cross-checks what you built and suggests, but
-never blocks or silently corrects it.
+## Who it's for
+
+- A household that plans dinners a week at a time and orders groceries for pickup.
+- People who want the app to **cross-check** the week (who's home, who won't eat what, what's already in the fridge) while they make the decisions.
+- Tinkerers comfortable forking a repo, if you want to make it yours.
+
+It's a personal project, built for one family and shared as is. It isn't a hosted service, and there's no support promise.
+
+## How a week goes
+
+<p align="center"><img src="docs/images/planning.gif" width="300" alt="A planning pass, from Week to Order"></p>
+
+1. **Week** — note what's on each day, who's home, and how much time there is to cook.
+2. **Meals** — suggest the whole week or one day at a time, swap anything, and add your own. Each night is a main plus sides; the planner makes sure everyone home has something they'll eat, counting leftovers.
+3. **Inventory** — walk each storage place and tick what you need. Staples and anything a planned meal calls for come up on their own.
+4. **Confirm** — the whole order in one list: amounts, items shared across meals, last-minute additions.
+5. **Order** — the list in batches, ready to paste or share into whatever builds your cart.
+
+Afterwards, **Home** shows tonight and the rest of the week, and asks you to rate meals you've just tried so suggestions get better.
+
+More detail, with screenshots: [docs/planning-week.md](docs/planning-week.md).
+
+## Your data
+
+- Everything lives in your browser's local storage. There's no backend, no account, no tracking.
+- **Back up** saves the whole thing as one file, `grocery_db.json`. **Import** loads a file, and shows you every change before anything loads.
+- Moving between phone and laptop is a file you carry over (iCloud Drive, a shared folder, anything).
+- The file format: [docs/data-file.md](docs/data-file.md).
 
 ## How suggestions work
 
-Suggestions come from a small, deterministic week-composition engine
-(`src/engine/composeWeek.js`), not from random weighted picks. It composes the week
-under a fixed priority order:
+Suggestions come from a small, deterministic engine (`src/engine/composeWeek.js`), not random picks. It composes the week under a fixed order of priorities:
 
-1. **The floor** — every person who's home has something acceptable to eat each
-   night, counting leftovers carried from earlier meals. A "dislike" means "won't eat
-   it"; the engine works around it (a side that feeds them, or leftovers) rather than
-   banning the meal.
-2. **Spacing** — similar meals (same dish form, or back-to-back takeout) aren't
-   clustered.
-3. **Freshness and cadence** — meals come back on their own rhythm (weekly,
-   biweekly, or occasional) without repeating too soon.
-4. **Small leans** — effort vs. the day's time, weather, and what people like.
+1. **Everyone eats.** Each person home that night has something they'll eat, counting leftovers. "Won't eat" is a fact the planner works around — a side that can be their dinner, or leftovers — not a ban.
+2. **Spacing.** Similar meals (same kind of dish, back-to-back takeout) aren't bunched together.
+3. **Freshness.** Meals come back on their own rhythm — weekly, every two weeks, or occasionally.
+4. **Small leans.** Effort against the time you have, the weather forecast, and what people like.
 
-Randomness only breaks ties. A second entry point, `evaluateWeek`, checks a week as
-built without changing anything; it drives the week check. The engine is pure (data
-in, data out) and is validated offline against real judgments before it ships.
-`src/engine/assembleInputs.js` turns app state into its inputs.
+Randomness only breaks ties. The planner suggests; you decide. It never blocks or silently changes what you put on a day, and a **Week check** tells you what it noticed.
 
-## Local development
+## Make it yours
 
-Requires [Node.js](https://nodejs.org/) 18+.
+Fork the repo, turn on GitHub Pages, and set your household, location and storage places. Step by step: [docs/setup.md](docs/setup.md).
+
+## Optional: AI helpers
+
+The app can hand its data file to an AI chat of your choice and take it back: to fill in each day's notes from your calendar, to add a recipe from a link, or to fill in missing details on your meals. You see every change before it loads. None of this is required. How it works: [docs/ai-round-trips.md](docs/ai-round-trips.md).
+
+## Develop
+
+Requires Node.js 18+.
 
 ```bash
-npm install     # install dependencies
-npm run dev     # start the dev server (hot reload) at http://localhost:5173
-npm run build   # produce a production build in dist/
-npm run preview # preview the production build locally
+npm install
+npm run dev     # http://localhost:5173
+npm run check   # lint + production build
 ```
 
-The UI lives in **`src/grocery-app.jsx`**; the engine and its input assembly live in
-**`src/engine/`**. `src/main.jsx` just mounts the app.
+`src/grocery-app.jsx` is the app's root; screens live in `src/home`, `src/plan`, `src/library` and `src/shell`; the engine lives in `src/engine`. Pushing to `main` deploys to GitHub Pages through `.github/workflows/deploy.yml`.
 
-## Deploying to GitHub Pages
+## Contributing
 
-This repo ships a GitHub Actions workflow (`.github/workflows/deploy.yml`) that
-builds and deploys on every push to `main`. To turn it on:
-
-1. Push this project to a GitHub repository (branch `main`).
-2. In **Settings → Pages**, set **Source** to **GitHub Actions**.
-3. Push any commit (or use the "Run workflow" button on the Actions tab). The site
-   publishes at `https://<username>.github.io/<repo-name>/`.
-
-The build uses a relative asset base, so it works at either a project subpath or a
-user/organization root without extra config.
-
-The workflow can also publish a work-in-progress branch at `/preview/` alongside
-the live site. A preview build keeps its data under separate storage keys (it copies
-the live data in once, read-only) and shows a PREVIEW banner, so trying changes
-there never touches the live app's data.
-
-## Configuration
-
-- **Location for weather:** edit `FORECAST_LAT` / `FORECAST_LON` near the top of
-  `src/grocery-app.jsx`. The default is a neutral placeholder.
-- **Data:** stored in the browser's `localStorage` under `grocery_db`. Export/import
-  JSON from the Manage tab to move data between devices.
-- **Meals & ingredients:** ship as a small seed set; edit them in the Manage tab.
-  Meals carry the tags the engine reads (rotation, cadence, effort, dish form,
-  plate traits, pairings for sides, leftovers, cost, per-person likes/dislikes).
-- **Family, away periods, grill season:** Manage → Config.
-
-## Notes
-
-- Weather uses the free [Open-Meteo](https://open-meteo.com/) API (no key, CORS-
-  enabled). If a fetch fails, the app treats every day as weather-neutral and holds
-  back grilling — nothing breaks.
-- Some in-app conveniences (iOS Shortcuts hooks for iCloud sync) are specific to a
-  mobile setup and are optional.
+Issues and ideas are welcome. Pull requests may not be merged — see [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## License
 
-MIT — see [LICENSE](LICENSE).
+[MIT](LICENSE)
